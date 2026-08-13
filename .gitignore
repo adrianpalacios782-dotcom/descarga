@@ -1,0 +1,100 @@
+# ============================================================
+# osvaldoDownloaderPro — .gitignore
+# ============================================================
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+htmlcov/
+.coverage
+.coverage.*
+*.coverage
+
+# ---------- Secrets / Credenciales ----------
+.env
+.env.*
+!.env.example
+*.secret
+secrets/
+credentials/
+cookies.txt
+cookies*.txt
+*_cookie.txt
+client_secret*.json
+*.pem
+*.key
+*.p12
+*.pfx
+netrc
+.netrc
+
+# ---------- Bases de datos locales ----------
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+
+# ---------- Temporales / descargas a medio terminar ----------
+*.tmp
+*.temp
+*.part
+*.download
+*.crdownload
+*.ytdl
+*.aria2
+*~
+
+# ---------- Multimedia descargada ----------
+*.mp4
+*.mkv
+*.webm
+*.avi
+*.mov
+*.mp3
+*.m4a
+*.wav
+*.flac
+*.ogg
+*.opus
+*.3gp
+*.m3u8
+
+# ---------- Logs ----------
+*.log
+logs/
+
+# ---------- IDE / Editor ----------
+.vscode/
+.idea/
+*.suo
+*.user
+*.swp
+
+# ---------- OpenCode / temporales del asistente ----------
+.opencode/
+.temp/
+.tmp-opencode/
+opencode-temp/
+*.opencode.tmp
+
+# ---------- Sistema ----------
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.bak
+*.orig
