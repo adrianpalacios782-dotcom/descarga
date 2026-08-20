@@ -36,3 +36,8 @@ class FormatNotFoundError(DomainError):
 class TaskNotFoundError(DomainError):
     """Lanzada cuando no se encuentra la tarea de descarga especificada."""
     pass
+
+
+class QualityDegradationError(DomainError):
+    """Lanzada cuando la calidad descargada es significativamente inferior a la solicitada."""
+    pass

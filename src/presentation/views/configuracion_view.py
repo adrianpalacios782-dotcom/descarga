@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QSpinBox, QComboBox, QFrame
+    QPushButton, QSpinBox, QComboBox, QFrame, QMessageBox
 )
 
 
@@ -35,6 +35,21 @@ class ConfiguracionView(QWidget):
         row1.addStretch()
         card_layout.addLayout(row1)
 
+        # Navegador para cookies
+        row_cookies = QHBoxLayout()
+        lbl_cookies = QLabel("Navegador para cookies (Contenido restringido):")
+        lbl_cookies.setStyleSheet("font-size: 14px; font-weight: 600;")
+        self.combo_browser = QComboBox()
+        self.combo_browser.addItem("Desactivado (Recomendado)", userData="")
+        self.combo_browser.addItem("Chrome", userData="chrome")
+        self.combo_browser.addItem("Edge", userData="edge")
+        self.combo_browser.addItem("Firefox", userData="firefox")
+        self.combo_browser.addItem("Brave", userData="brave")
+        row_cookies.addWidget(lbl_cookies)
+        row_cookies.addWidget(self.combo_browser)
+        row_cookies.addStretch()
+        card_layout.addLayout(row_cookies)
+
         # Tema visual
         row2 = QHBoxLayout()
         lbl_theme = QLabel("Tema Visual:")
@@ -49,7 +64,11 @@ class ConfiguracionView(QWidget):
         # Guardar
         btn_save = QPushButton("Guardar Preferencias")
         btn_save.setObjectName("PrimaryButton")
+        btn_save.clicked.connect(self._on_save_clicked)
         card_layout.addWidget(btn_save)
 
         layout.addWidget(card)
         layout.addStretch()
+
+    def _on_save_clicked(self) -> None:
+        QMessageBox.information(self, "Configuración", "Las preferencias han sido guardadas correctamente.")
