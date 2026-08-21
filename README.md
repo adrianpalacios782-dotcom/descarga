@@ -6,6 +6,22 @@ Aplicación de escritorio nativa para Windows 10/11 diseñada para la descarga, 
 
 ---
 
+## Compatibilidad
+
+**Sistemas operativos compatibles:**
+
+- Windows 10 x64 versión 1809 o superior
+- Windows 11 x64
+
+**No se garantiza compatibilidad con:**
+
+- Windows 10 LTSB/LTSC 2016 o anteriores
+- Windows 32-bit
+
+> La compatibilidad fue auditada estáticamente sobre los componentes, dependencias y binarios empaquetados (Qt 6.11 requiere Windows 10 1809+; Python 3.13 requiere Windows 10+). La ejecución del EXE empaquetado en un equipo físico con Windows 10 queda como prueba ambiental pendiente, no disponible en el entorno de desarrollo.
+
+---
+
 ## Plataformas soportadas
 
 - YouTube
