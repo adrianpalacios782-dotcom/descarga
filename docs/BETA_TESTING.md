@@ -4,6 +4,20 @@ Gracias por probar la beta. Esta guía explica cómo instalar la aplicación, de
 
 ---
 
+## 0. Requisitos del sistema
+
+**Sistemas operativos compatibles:**
+
+- Windows 10 x64 versión 1809 o superior
+- Windows 11 x64
+
+**No se garantiza compatibilidad con:**
+
+- Windows 10 LTSB/LTSC 2016 o anteriores
+- Windows 32-bit
+
+---
+
 ## 1. Descargar el instalador
 
 1. Abre la página del repositorio en GitHub.
