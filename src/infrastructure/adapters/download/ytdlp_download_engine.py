@@ -30,6 +30,8 @@ from src.infrastructure.event_bus.in_process_event_bus import InProcessEventBus
 
 logger = logging.getLogger(__name__)
 
+_SAFE_FORMAT_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
+
 
 class YtDlpDownloadEngine(IDownloadEngine):
     """Motor de descargas real basado en yt-dlp como librería."""
@@ -118,6 +120,8 @@ class YtDlpDownloadEngine(IDownloadEngine):
         fmt = task.selected_format
         dest_dir, base, _ = self._split_destination(task.destination_path)
         os.makedirs(dest_dir, exist_ok=True)
+
+        self._validate_destination_path(task.destination_path)
 
         is_audio = fmt.is_audio_only or fmt.download_type == DownloadType.AUDIO
 
@@ -312,6 +316,36 @@ class YtDlpDownloadEngine(IDownloadEngine):
             )
 
     @staticmethod
+    def _sanitize_format_id(raw: str) -> str:
+        """Sanitiza un format_id para evitar inyección en el spec de yt-dlp.
+
+        Solo permite caracteres alfanuméricos, guiones y guiones bajos.
+        Si el format_id contiene caracteres peligrosos, retorna cadena vacía.
+        """
+        if not raw or not _SAFE_FORMAT_ID_RE.match(raw):
+            return ""
+        return raw
+
+    @staticmethod
+    def _validate_destination_path(destination_path: str) -> None:
+        """Valida que la ruta de destino no contenga traversal peligroso.
+
+        Verifica que la ruta resuelta no escape de directorios del sistema.
+        """
+        abs_path = os.path.abspath(destination_path)
+        if os.name == "nt":
+            lower = abs_path.lower().replace("\\", "/")
+            blocked = (
+                "/windows/", "/windows/system32/", "/program files/",
+                "/programdata/", "/$recycle.bin/",
+            )
+            for b in blocked:
+                if lower.startswith(b) or b in lower:
+                    raise RuntimeError(
+                        f"La ruta de destino '{destination_path}' apunta a una ubicación del sistema."
+                    )
+
+    @staticmethod
     def _build_video_format_spec(fmt) -> str:
         """Construye la especificación de formato para yt-dlp.
 
@@ -339,13 +373,14 @@ class YtDlpDownloadEngine(IDownloadEngine):
             )
 
         is_raw_id = fmt.format_id and fmt.format_id.isdigit()
+        safe_id = YtDlpDownloadEngine._sanitize_format_id(fmt.format_id) if fmt.format_id else ""
 
         if fmt.height and fmt.height > 0:
             h = fmt.height
-            if is_raw_id:
+            if is_raw_id and safe_id:
                 return (
-                    f"{fmt.format_id}+bestaudio[acodec^=mp4a]"
-                    f"/{fmt.format_id}+bestaudio"
+                    f"{safe_id}+bestaudio[acodec^=mp4a]"
+                    f"/{safe_id}+bestaudio"
                     f"/bestvideo[height<={h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
                     f"/bestvideo[height<={h}]+bestaudio[acodec^=mp4a]"
                     f"/bestvideo[height<={h}]+bestaudio"
@@ -360,8 +395,8 @@ class YtDlpDownloadEngine(IDownloadEngine):
                 f"/best"
             )
 
-        if is_raw_id:
-            return f"{fmt.format_id}/bestvideo+bestaudio/best"
+        if is_raw_id and safe_id:
+            return f"{safe_id}/bestvideo+bestaudio/best"
 
         return "bestvideo+bestaudio/best"
 
@@ -509,10 +544,12 @@ class YtDlpDownloadEngine(IDownloadEngine):
         requested = info.get("requested_downloads") or []
         if requested:
             filepath = requested[0].get("filepath")
-            if filepath and os.path.exists(filepath):
-                return filepath
-            if filepath and os.path.exists(filepath.replace(".part", "")):
-                return filepath.replace(".part", "")
+            if filepath:
+                resolved = self._ensure_within_dest(filepath, dest_dir)
+                if resolved and os.path.exists(resolved):
+                    return resolved
+                if resolved and os.path.exists(resolved.replace(".part", "")):
+                    return resolved.replace(".part", "")
 
         if os.path.isdir(dest_dir):
             candidates = [
@@ -525,6 +562,22 @@ class YtDlpDownloadEngine(IDownloadEngine):
                 candidates.sort(key=lambda p: os.path.getsize(p), reverse=True)
                 return candidates[0]
         return None
+
+    @staticmethod
+    def _ensure_within_dest(filepath: str, dest_dir: str) -> Optional[str]:
+        """Verifica que un filepath retornado por yt-dlp esté dentro de dest_dir.
+
+        Si el archivo está fuera del directorio, retorna None para que
+        el caller busque en los candidatos del directorio.
+        """
+        abs_file = os.path.abspath(filepath)
+        abs_dest = os.path.abspath(dest_dir)
+        if not abs_file.startswith(abs_dest + os.sep) and abs_file != abs_dest:
+            logger.warning(
+                f"yt-dlp reportó archivo fuera del destino: {filepath} (destino={dest_dir})"
+            )
+            return None
+        return filepath
 
     def _canonicalize_final_path(self, final_path: str, task: DownloadTask) -> str:
         dest = task.destination_path
@@ -554,8 +607,17 @@ class YtDlpDownloadEngine(IDownloadEngine):
 
     @staticmethod
     def _sanitize_filename(name: str) -> str:
+        """Sanitiza un nombre de archivo eliminando caracteres peligrosos.
+
+        Remueve caracteres de control, caracteres no permitidos en nombres de archivo
+        de Windows y Linux, y limita la longitud para prevenir overflow.
+        """
+        if not name:
+            return "descarga"
         cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name)
         cleaned = cleaned.strip().rstrip(".")
+        if not cleaned:
+            return "descarga"
         return cleaned[:180]
 
     def _cleanup_task_files(self, destination_path: str) -> None:

@@ -5,9 +5,16 @@ import re
 
 
 def sanitize_log_message(message: str) -> str:
-    """Sanitiza mensajes de log eliminando tokens o información sensible."""
-    # Oculta tokens de sesión o parámetros clave en URLs
-    sanitized = re.sub(r"(token|auth|key|secret)=[^&]+", r"\1=***REDACTED***", message, flags=re.IGNORECASE)
+    """Sanitiza mensajes de log eliminando tokens e información sensible.
+
+    Cubre: tokens de URL, Bearer tokens, cookies, session IDs,
+    auth headers y caracteres de control de terminal.
+    """
+    sanitized = re.sub(r"(token|auth|key|secret|password|cookie|session)=[^\s&\"'<>]+", r"\1=***REDACTED***", message, flags=re.IGNORECASE)
+    sanitized = re.sub(r"Bearer\s+[A-Za-z0-9\-._~+/]+=*", "Bearer ***REDACTED***", sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r"Authorization:\s*\S+(?:\s+\S+)?", "Authorization: ***REDACTED***", sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r"Cookie:\s*[^\s]+", "Cookie: ***REDACTED***", sanitized, flags=re.IGNORECASE)
+    sanitized = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", sanitized)
     return sanitized
 
 

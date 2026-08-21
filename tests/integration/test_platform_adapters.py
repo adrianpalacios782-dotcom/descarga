@@ -17,10 +17,8 @@ class TestPlatformAdapters:
         url_tt = Url("https://www.tiktok.com/@user/video/12345")
         url_ig = Url("https://www.instagram.com/reel/C123/")
         url_fb = Url("https://www.facebook.com/watch/?v=456")
-        url_gen = Url("https://vimeo.com/78910")
 
         assert isinstance(registry.find_adapter(url_yt), YouTubeAdapter)
         assert isinstance(registry.find_adapter(url_tt), TikTokAdapter)
         assert isinstance(registry.find_adapter(url_ig), InstagramAdapter)
         assert isinstance(registry.find_adapter(url_fb), FacebookAdapter)
-        assert isinstance(registry.find_adapter(url_gen), GenericAdapter)

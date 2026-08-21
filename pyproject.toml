@@ -4,19 +4,25 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "osvaldo-downloader-pro"
-version = "0.1.0"
+version = "1.0.0"
 description = "Aplicación de escritorio para la descarga y organización multimedia de múltiples plataformas."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
     { name = "osvaldoDownloaderPro Team" }
 ]
-dependencies = []
+dependencies = [
+    "yt-dlp>=2026.8.19",
+    "PySide6>=6.11.1",
+    "imageio-ffmpeg>=0.6.0",
+    "curl_cffi>=0.16.0",
+]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    "pytest-cov>=7.1.0",
     "mypy>=1.8.0",
 ]
 
