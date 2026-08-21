@@ -66,7 +66,8 @@ class CreateDownloadUseCase:
                 is_best_quality=True,
                 needs_ffmpeg_merge=True,
                 audio_format_id=vqo.audio_format_id,
-                filesize_bytes=vqo.estimated_size_bytes
+                filesize_bytes=vqo.estimated_size_bytes,
+                height_estimated=getattr(vqo, "height_estimated", False)
             )
 
         try:
@@ -94,7 +95,8 @@ class CreateDownloadUseCase:
             is_video_only=needs_merge,
             needs_ffmpeg_merge=needs_merge,
             audio_format_id=vqo.audio_format_id,
-            filesize_bytes=vqo.estimated_size_bytes
+            filesize_bytes=vqo.estimated_size_bytes,
+            height_estimated=getattr(vqo, "height_estimated", False)
         )
 
     @staticmethod

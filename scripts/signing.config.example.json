@@ -1,0 +1,19 @@
+{
+  "_comentario": "Copiar a scripts\\signing.config.json SOLO cuando se adquiera el certificado real. La password del PFX NUNCA va en este archivo: se lee de la variable de entorno indicada en pfx_password_env.",
+
+  "signtool_path": "",
+  "timestamp_url": "http://timestamp.digicert.com",
+
+  "certificate": {
+    "type": "store",
+    "thumbprint": "",
+    "subject": "",
+    "machine_store": false
+  },
+
+  "_ejemplo_pfx": {
+    "type": "pfx",
+    "pfx_path": "C:\\ruta\\a\\certificado.pfx",
+    "pfx_password_env": "ODP_PFX_PASSWORD"
+  }
+}

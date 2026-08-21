@@ -39,6 +39,16 @@ class FFmpegProcessAdapter:
                 candidates.append(self.custom_binary_path)
             else:
                 logger.warning(f"Binario personalizado rechazado (nombre inesperado): {self.custom_binary_path}")
+
+        import sys
+        if getattr(sys, "frozen", False):
+            app_dir = os.path.dirname(sys.executable)
+            candidates.append(os.path.join(app_dir, "ffmpeg.exe"))
+            candidates.append(os.path.join(app_dir, "ffmpeg"))
+            internal_dir = os.path.join(app_dir, "_internal")
+            candidates.append(os.path.join(internal_dir, "ffmpeg.exe"))
+            candidates.append(os.path.join(internal_dir, "ffmpeg"))
+
         candidates.append(os.path.join(os.getcwd(), "bin", "ffmpeg.exe"))
         candidates.append(os.path.join(os.getcwd(), "bin", "ffmpeg"))
 

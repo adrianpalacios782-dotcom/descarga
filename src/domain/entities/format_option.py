@@ -32,6 +32,7 @@ class VideoQualityOption:
     video_codec: Optional[str] = None
     audio_codec: Optional[str] = None
     is_best_quality: bool = False
+    height_estimated: bool = False
 
     def get_display_label(self) -> str:
         if self.badge:
@@ -81,6 +82,7 @@ class VideoFormat:
     audio_format_id: Optional[str] = None
     filesize_bytes: Optional[int] = None
     is_best_quality: bool = False
+    height_estimated: bool = False
 
     def get_human_filesize(self) -> str:
         if self.filesize_bytes is None or self.filesize_bytes <= 0:
@@ -167,6 +169,7 @@ class FormatOption:
     audio_format_id: Optional[str] = None
     filesize_bytes: Optional[int] = None
     bitrate_kbps: Optional[float] = None
+    height_estimated: bool = False
 
     def __post_init__(self) -> None:
         if not self.format_id or not isinstance(self.format_id, str):
@@ -192,7 +195,8 @@ class FormatOption:
             is_best_quality=vf.is_best_quality,
             needs_ffmpeg_merge=vf.needs_ffmpeg_merge,
             audio_format_id=vf.audio_format_id,
-            filesize_bytes=vf.filesize_bytes
+            filesize_bytes=vf.filesize_bytes,
+            height_estimated=vf.height_estimated
         )
 
     @classmethod
