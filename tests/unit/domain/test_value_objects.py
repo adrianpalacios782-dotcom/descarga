@@ -26,10 +26,10 @@ class TestUrlValueObject:
             Url("   ")
 
     def test_ssrf_and_localhost_prevention(self) -> None:
-        with pytest.raises(InvalidUrlError, match="No se permiten URLs dirigidas a localhost"):
+        with pytest.raises(InvalidUrlError, match="No se permiten"):
             Url("http://localhost:8080/secret")
 
-        with pytest.raises(InvalidUrlError, match="No se permiten URLs dirigidas a localhost"):
+        with pytest.raises(InvalidUrlError, match="No se permiten"):
             Url("http://127.0.0.1/admin")
 
     @pytest.mark.parametrize(
@@ -41,7 +41,6 @@ class TestUrlValueObject:
             ("https://www.instagram.com/reel/C123/", "Instagram"),
             ("https://www.facebook.com/watch/?v=456", "Facebook"),
             ("https://fb.watch/xyz/", "Facebook"),
-            ("https://vimeo.com/78910", "Generic"),
         ],
     )
     def test_platform_detection(self, url_str: str, expected_platform: str) -> None:

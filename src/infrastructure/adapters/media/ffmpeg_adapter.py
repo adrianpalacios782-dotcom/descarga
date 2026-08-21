@@ -9,6 +9,9 @@ from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+_EXPECTED_FFMPEG_NAMES = ("ffmpeg", "ffmpeg.exe")
+_EXPECTED_FFPROBE_NAMES = ("ffprobe", "ffprobe.exe")
+
 
 class CancelledOperationError(RuntimeError):
     """Se eleva cuando una operación FFmpeg es abortada por cancelación del usuario."""
@@ -23,36 +26,48 @@ class FFmpegProcessAdapter:
         self._cached_version: Optional[str] = None
 
     def get_ffmpeg_executable(self) -> str:
-        """Determina la ruta del ejecutable FFmpeg (embebido local, binario pip o PATH del sistema)."""
+        """Determina la ruta del ejecutable FFmpeg (embebido local, binario pip o PATH del sistema).
+
+        Valida que el ejecutable sea un nombre esperado para prevenir ejecución de binarios arbitrarios.
+        """
         if self._cached_executable:
             return self._cached_executable
 
         candidates: List[str] = []
         if self.custom_binary_path:
-            candidates.append(self.custom_binary_path)
+            if self._is_safe_binary(self.custom_binary_path):
+                candidates.append(self.custom_binary_path)
+            else:
+                logger.warning(f"Binario personalizado rechazado (nombre inesperado): {self.custom_binary_path}")
         candidates.append(os.path.join(os.getcwd(), "bin", "ffmpeg.exe"))
         candidates.append(os.path.join(os.getcwd(), "bin", "ffmpeg"))
 
         for candidate in candidates:
-            if candidate and os.path.exists(candidate):
+            if candidate and os.path.exists(candidate) and self._is_safe_binary(candidate):
                 self._cached_executable = candidate
                 return candidate
 
         system_ffmpeg = shutil.which("ffmpeg")
-        if system_ffmpeg:
+        if system_ffmpeg and self._is_safe_binary(system_ffmpeg):
             self._cached_executable = system_ffmpeg
             return system_ffmpeg
 
         try:
             import imageio_ffmpeg
             bundled = imageio_ffmpeg.get_ffmpeg_exe()
-            if bundled and os.path.exists(bundled):
+            if bundled and os.path.exists(bundled) and self._is_safe_binary(bundled):
                 self._cached_executable = bundled
                 return bundled
         except ImportError:
             logger.debug("imageio-ffmpeg no está instalado; se usará el comando 'ffmpeg' del sistema.")
 
         return "ffmpeg"
+
+    @staticmethod
+    def _is_safe_binary(path: str) -> bool:
+        """Verifica que un binario tenga un nombre esperado (ffmpeg o ffmpeg.exe)."""
+        basename = os.path.basename(path).lower()
+        return basename in _EXPECTED_FFMPEG_NAMES
 
     def get_ffmpeg_version(self) -> str:
         """Retorna la versión de FFmpeg detectada o un mensaje de no disponible."""

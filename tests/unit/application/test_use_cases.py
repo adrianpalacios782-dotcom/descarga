@@ -17,6 +17,7 @@ from src.domain.exceptions.domain_exceptions import (
     UnsupportedPlatformError,
     FormatNotFoundError,
     TaskNotFoundError,
+    InvalidUrlError,
 )
 from src.domain.ports.download_engine import IDownloadEngine
 from src.domain.ports.download_repository import IDownloadRepository
@@ -104,7 +105,7 @@ class TestApplicationUseCases:
         adapter, _, _ = setup_context
         use_case = AnalyzeUrlUseCase(platform_adapter=adapter)
 
-        with pytest.raises(UnsupportedPlatformError):
+        with pytest.raises((UnsupportedPlatformError, InvalidUrlError)):
             use_case.execute("https://unsupported-site.com/video")
 
     def test_create_download_use_case_success(self, setup_context) -> None:

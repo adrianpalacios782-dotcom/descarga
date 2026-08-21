@@ -304,6 +304,11 @@ class InicioView(QWidget):
             return
 
         dest_dir = self.txt_dest.text().strip()
+
+        if not os.path.isdir(dest_dir):
+            QMessageBox.warning(self, "Ruta Inválida", "La carpeta de destino no existe o no es válida.")
+            return
+
         title = self._sanitize_filename(self.current_metadata.title)
 
         if self.selected_type == DownloadType.VIDEO:
@@ -333,7 +338,15 @@ class InicioView(QWidget):
 
     @staticmethod
     def _sanitize_filename(name: str) -> str:
+        """Sanitiza un nombre de archivo eliminando caracteres peligrosos.
+
+        Usa la misma lógica que el download engine para consistencia.
+        """
         import re
+        if not name:
+            return "descarga"
         cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name)
         cleaned = cleaned.strip().rstrip(".")
-        return cleaned[:180] if cleaned else "descarga"
+        if not cleaned:
+            return "descarga"
+        return cleaned[:180]
