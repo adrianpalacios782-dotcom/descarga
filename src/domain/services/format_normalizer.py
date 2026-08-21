@@ -44,8 +44,12 @@ class FormatNormalizer:
         format_name = str(f.get("format") or "").lower()
         resolution = str(f.get("resolution") or "").lower()
 
-        vcodec = str(f.get("vcodec") or "none").lower()
-        acodec = str(f.get("acodec") or "none").lower()
+        # Codecs ausentes (None/"") significan "no reportados por el extractor"
+        # (ej. Facebook sd/hd); NO deben confundirse con "none" explícito (sin flujo).
+        vcodec_raw = f.get("vcodec")
+        acodec_raw = f.get("acodec")
+        vcodec = str(vcodec_raw).lower() if vcodec_raw else ""
+        acodec = str(acodec_raw).lower() if acodec_raw else ""
 
         # 1. Ningún flujo de audio ni video (metadata-only / none/none / thumbnails)
         if vcodec == "none" and acodec == "none":
@@ -82,6 +86,45 @@ class FormatNormalizer:
             return True
 
         return False
+
+    # Etiquetas frecuentes de extractores que no reportan altura numérica
+    # (format_id / format_note / resolution). Convención Facebook: hd=720p, sd=360p.
+    _LABEL_HEIGHT_RULES: List[Tuple[Tuple[str, ...], int]] = [
+        (("2160", "4k"), 2160),
+        (("1440", "2k"), 1440),
+        (("1080", "fhd", "fullhd"), 1080),
+        (("720", "hd"), 720),
+        (("480",), 480),
+        (("360", "sd"), 360),
+        (("240",), 240),
+        (("144",), 144),
+    ]
+
+    @classmethod
+    def infer_standard_height(cls, f: Dict[str, Any]) -> int:
+        """Deduce la altura estándar de un formato incluso sin `height` numérico.
+
+        Orden de evidencia: height real > etiquetas en format_id/format_note/resolution.
+        Retorna 0 si no hay evidencia suficiente.
+        """
+        raw_height = f.get("height") or 0
+        if raw_height > 0:
+            return cls.get_standard_height(raw_height)
+
+        haystacks = (
+            str(f.get("format_id") or ""),
+            str(f.get("format_note") or ""),
+            str(f.get("resolution") or ""),
+            str(f.get("format") or ""),
+        )
+        for text in haystacks:
+            t = text.lower()
+            if not t:
+                continue
+            for needles, std_h in cls._LABEL_HEIGHT_RULES:
+                if any(n in t for n in needles):
+                    return std_h
+        return 0
 
     @classmethod
     def normalize_video_quality_options(cls, raw_formats: List[Dict[str, Any]]) -> List[VideoQualityOption]:
@@ -122,7 +165,8 @@ class FormatNormalizer:
                     extension=best_vf.extension,
                     width=best_vf.width,
                     video_codec=best_vf.video_codec,
-                    is_best_quality=True
+                    is_best_quality=True,
+                    height_estimated=best_vf.height_estimated
                 )
             )
 
@@ -156,6 +200,7 @@ class FormatNormalizer:
                     extension=best_vf.extension,
                     width=best_vf.width,
                     video_codec=best_vf.video_codec,
+                    height_estimated=best_vf.height_estimated,
                 )
             )
 
@@ -171,16 +216,20 @@ class FormatNormalizer:
             if cls.is_auxiliary_format(f):
                 continue
 
-            vcodec = f.get("vcodec")
-            if not vcodec or vcodec == "none":
-                continue  # Descartar solo-audio
+            vcodec_raw = f.get("vcodec")
+            vcodec_s = str(vcodec_raw).lower() if vcodec_raw else ""
+            if vcodec_s == "none":
+                continue  # Descartar solo-audio (vcodec explícitamente "none")
 
-            acodec = f.get("acodec")
-            has_audio = acodec is not None and acodec != "none"
+            acodec_raw = f.get("acodec")
+            acodec_s = str(acodec_raw).lower() if acodec_raw else ""
+            # Codec de video no reportado ("") se trata como video real progresivo
+            # (extractores como Facebook solo exponen format_id sd/hd sin codecs).
+            has_audio = acodec_s != "none"
             fmt_id = str(f.get("format_id") or "")
             ext = str(f.get("ext") or "mp4")
-            raw_height = f.get("height") or 0
-            std_height = cls.get_standard_height(raw_height)
+            raw_height_present = bool(f.get("height"))
+            std_height = cls.infer_standard_height(f)
             fps = float(f.get("fps")) if f.get("fps") else 0.0
             res = str(f.get("format_note") or f.get("resolution") or "")
             if not res and std_height:
@@ -195,11 +244,12 @@ class FormatNormalizer:
                 width=f.get("width"),
                 height=std_height if std_height > 0 else None,
                 fps=fps if fps > 0 else None,
-                video_codec=str(vcodec),
+                video_codec=str(vcodec_raw) if vcodec_raw else "",
                 has_audio=has_audio,
                 needs_ffmpeg_merge=not has_audio,
                 audio_format_id=best_audio_id if not has_audio else None,
-                filesize_bytes=filesize
+                filesize_bytes=filesize,
+                height_estimated=not raw_height_present and std_height > 0
             )
 
             dedup_key = (std_height, int(fps), ext.lower())

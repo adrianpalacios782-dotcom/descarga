@@ -1,57 +1,90 @@
 # osvaldoDownloaderPro
 
-Aplicación de escritorio nativa para Windows 10/11 diseñada para la descarga, conversión y organización de contenido multimedia desde múltiples plataformas web (YouTube, TikTok, Instagram, Facebook).
+**Versión 1.0.0 · Estado: BETA**
+
+Aplicación de escritorio nativa para Windows 10/11 diseñada para la descarga, conversión y organización de contenido multimedia desde múltiples plataformas web.
 
 ---
 
-## 🌟 Características Principales
+## Plataformas soportadas
 
-- **Arquitectura Hexagonal + Event-Driven Modular Monolith:** Estricto desacoplamiento en 4 capas (Domain, Application, Infrastructure, Presentation).
-- **Rediseño UI/UX Multimedia Oscuro:** Inspirado en aplicaciones modernas (estilo Spotify), con paleta de acento verde esmeralda (`#1db954`), tarjetas elevadas y cero emojis.
-- **Normalización Inteligente de Formatos:** Exclusión total de storyboards, MHTML, thumbnails y duplicados.
-- **Selección Dinámica VIDEO / AUDIO:**
-  - **Modo Video:** Muestra únicamente resoluciones reales, FPS, contenedor, indicación de audio y tamaño estimado.
-  - **Modo Audio:** Oculta resoluciones de video y permite elegir formato (`MP3`, `M4A`, `WAV`) y tasa de bits (`320`, `256`, `192`, `128` kbps).
-- **Procesamiento Sidecar FFmpeg:** Fusionado transparente de flujos DASH (video + audio sin re-codificación) y extracción/conversión de audio.
-- **Persistencia Relacional SQLite WAL:** Historial completo, favoritos y configuración sin bloqueos de concurrencia.
-- **Análisis Asíncrono no Bloqueante:** Operaciones de red en segundo plano que mantienen la GUI fluida a 60 FPS.
+- YouTube
+- TikTok
+- Instagram
+- Facebook
 
----
+## Características
 
-## 🚀 Instalación y Ejecución
+- Descarga de **video** con selección dinámica de calidad (144p hasta la máxima disponible, según el contenido).
+- Descarga de **audio MP3** (también M4A y WAV) con selección de tasa de bits (320 / 256 / 192 / 128 kbps).
+- **Selección de calidad** real basada en los formatos que el servidor ofrece para cada URL.
+- Procesamiento con **FFmpeg** embebido: fusión de flujos DASH (video + audio) sin re-codificación y extracción de audio.
+- Persistencia local con **SQLite** (modo WAL): historial, favoritos y configuración.
+- Arquitectura Hexagonal + Event-Driven: capas Domain, Application, Infrastructure y Presentation estrictamente desacopladas.
+- Interfaz moderna en modo oscuro construida con PySide6.
 
-### Requisitos Previos
-- Python 3.11 o superior.
-- PySide6, yt-dlp, pytest.
+## Seguridad
 
-### Ejecución Directa
+El proyecto incorpora las siguientes protecciones, cubiertas por una suite automatizada de pruebas:
+
+- **Protección SSRF:** bloqueo de localhost, direcciones IP privadas, loopback IPv6, rangos reservados y puertos peligrosos.
+- **Allowlist de dominios:** solo se aceptan URLs de las plataformas soportadas.
+- **Protección contra path traversal:** validación de rutas de destino y contención de archivos resultantes.
+- **Validación de formatos:** sanitización de `format_id` y nombres de archivo contra inyección.
+- **Validación del binario FFmpeg:** solo se ejecutan binarios con nombre esperado ubicados en rutas controladas.
+- **Sanitización de logs:** tokens, credenciales y cabeceras sensibles se redactan antes de escribirse al log.
+- **SQLite parametrizado:** todas las consultas usan consultas preparadas.
+
+Nota: el software se ofrece como BETA. Analiza siempre los resultados de tus descargas y úsalo respetando los términos de servicio de cada plataforma.
+
+## Instalación (usuarios)
+
+1. Ve a la sección [Releases](../../releases) del repositorio.
+2. Descarga `osvaldoDownloaderPro-1.0.0-Setup.exe`.
+3. Ejecuta el instalador y sigue el asistente (no requiere permisos de administrador).
+4. Guía completa paso a paso: [`docs/BETA_TESTING.md`](docs/BETA_TESTING.md).
+
+> **Nota:** el instalador de la beta no está firmado digitalmente. Windows SmartScreen puede mostrar un aviso ("Windows protegió tu PC"); usa "Más información" → "Ejecutar de todas formas". En Windows 11 con Smart App Control en modo de enforcement, la ejecución de aplicaciones sin firma puede bloquearse por política del sistema.
+>
+> Installer currently unsigned. Code-signing certificate required for production distribution.
+
+Los datos de la aplicación (base de datos y logs) se guardan en `%USERPROFILE%\.osvaldoDownloaderPro\`. Las descargas, por defecto, en la carpeta `Downloads` del usuario.
+
+## Desarrollo
+
+### Requisitos previos
+
+- Python 3.11 o superior
+- FFmpeg y ffprobe accesibles (colocar `ffmpeg.exe` y `ffprobe.exe` en `bin\`, o disponibles en PATH)
+
+### Puesta en marcha
 
 ```powershell
+pip install -e ".[dev]"
 python src/main.py
 ```
 
-o:
+### Suite de pruebas
 
-```powershell
-python -m src.main
-```
-
----
-
-## 🧪 Suite de Pruebas (`pytest`)
-
-Para ejecutar los 50 tests unitarios, de integración y E2E de la GUI:
+166 tests unitarios, de integración y E2E (incluye 83 tests de seguridad):
 
 ```powershell
 python -m pytest
 ```
 
----
+### Build del instalador
 
-## 📚 Documentación Técnica
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1
+```
 
-- [`docs/AUDIT_REPORT.md`](file:///d:/osvaldoDownloaderPro/docs/AUDIT_REPORT.md): Informe de Auditoría Integral.
-- [`docs/ARCHITECTURE.md`](file:///d:/osvaldoDownloaderPro/docs/ARCHITECTURE.md): Especificación de Arquitectura de Capas.
-- [`docs/TESTING.md`](file:///d:/osvaldoDownloaderPro/docs/TESTING.md): Estrategia y Cobertura de Pruebas.
-- [`docs/TROUBLESHOOTING.md`](file:///d:/osvaldoDownloaderPro/docs/TROUBLESHOOTING.md): Solución de Problemas Frecuentes.
-- [`docs/CHANGELOG.md`](file:///d:/osvaldoDownloaderPro/docs/CHANGELOG.md): Historial de Cambios.
+Pipeline: tests → PyInstaller (`osvaldoDownloaderPro.spec`) → verificación de artefactos → firma opcional → Inno Setup (`installer.iss`). Sin certificado configurado, el pipeline se detiene antes de firmar con código de salida 3.
+
+## Documentación técnica
+
+- [`docs/BETA_TESTING.md`](docs/BETA_TESTING.md): guía de prueba para beta testers.
+- [`docs/AUDIT_REPORT.md`](docs/AUDIT_REPORT.md): informe de auditoría integral.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): especificación de arquitectura de capas.
+- [`docs/TESTING.md`](docs/TESTING.md): estrategia y cobertura de pruebas.
+- [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md): solución de problemas frecuentes.
+- [`docs/CHANGELOG.md`](docs/CHANGELOG.md): historial de cambios.

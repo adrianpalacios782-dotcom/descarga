@@ -40,6 +40,21 @@ client_secret*.json
 netrc
 .netrc
 
+# Configuracion REAL de firma de codigo (contiene thumbprint del certificado).
+# Nunca commitear. Plantilla segura: scripts/signing.config.example.json
+scripts/signing.config.json
+
+# Certificados sueltos adicionales
+*.crt
+*.cer
+
+# ---------- Binarios grandes / artefactos de instalador ----------
+# ffmpeg.exe y ffprobe.exe (~98 MB c/u): se obtienen localmente, no van al repo.
+# Ver docs/BETA_TESTING.md y scripts/build_release.ps1 para reproducir el build.
+/bin/
+# Salida del compilador Inno Setup (Setup.exe): va como Release Asset de GitHub.
+/installer/
+
 # ---------- Bases de datos locales ----------
 *.db
 *.db-journal

@@ -1,0 +1,158 @@
+# ============================================================
+# osvaldoDownloaderPro - Build de release
+# Pipeline completo: tests -> PyInstaller -> firma (opcional) -> Inno Setup
+#
+# Uso:
+#   powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1
+#
+# Comportamiento sin certificado:
+#   Ejecuta tests, construye y verifica artefactos, y se DETIENE antes de la
+#   etapa de firma con el mensaje:
+#     "CERTIFICATE NOT CONFIGURED - BUILD PREPARED BUT RELEASE SIGNING NOT PERFORMED."
+#   (codigo de salida 3). No compila el instalador en ese estado.
+#
+# Codigos de salida:
+#   0 = release firmado y verificado
+#   1 = error de build/tests
+#   3 = preparado pero SIN firma (certificado no configurado)
+# ============================================================
+
+$ErrorActionPreference = "Stop"
+
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+$DistDir     = Join-Path $ProjectRoot "dist"
+$BuildDir    = Join-Path $ProjectRoot "build"
+$AppDir      = Join-Path $DistDir "osvaldoDownloaderPro"
+$IsccPath    = Join-Path $Env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"
+$IssPath     = Join-Path $ProjectRoot "installer.iss"
+$SetupExe    = Join-Path $ProjectRoot "installer\osvaldoDownloaderPro-1.0.0-Setup.exe"
+$ReleaseDir  = Join-Path $BuildDir "release"
+
+function Write-Step($msg) { Write-Host "[BUILD] $msg" -ForegroundColor Cyan }
+function Write-Fail($msg) { Write-Host "[BUILD][ERROR] $msg" -ForegroundColor Red }
+
+Set-Location -LiteralPath $ProjectRoot
+
+# --- 0. Herramientas ---
+if (-not (Test-Path -LiteralPath $IsccPath)) {
+    Write-Fail "ISCC.exe no encontrado en: $IsccPath"
+    exit 1
+}
+
+# --- 1. Tests completos ---
+Write-Step "Paso 1/8: Tests completos (pytest)"
+python -m pytest --tb=short -q
+if ($LASTEXITCODE -ne 0) { Write-Fail "Tests fallaron. Build abortado."; exit 1 }
+
+# --- 2. Tests de seguridad ---
+Write-Step "Paso 2/8: Tests de seguridad (tests/unit/domain/test_security.py)"
+python -m pytest tests\unit\domain\test_security.py --tb=short -q
+if ($LASTEXITCODE -ne 0) { Write-Fail "Tests de seguridad fallaron. Build abortado."; exit 1 }
+
+# --- 3. Limpieza ---
+Write-Step "Paso 3/8: Limpieza de build/ y dist/"
+foreach ($dir in @($BuildDir, $DistDir)) {
+    if (Test-Path -LiteralPath $dir) {
+        Remove-Item -LiteralPath $dir -Recurse -Force
+        if (Test-Path -LiteralPath $dir) { Write-Fail "No se pudo limpiar: $dir"; exit 1 }
+    }
+}
+
+# --- 4. PyInstaller ---
+Write-Step "Paso 4/8: PyInstaller (osvaldoDownloaderPro.spec)"
+python -m PyInstaller osvaldoDownloaderPro.spec --noconfirm
+if ($LASTEXITCODE -ne 0) { Write-Fail "PyInstaller fallo."; exit 1 }
+
+# --- 5. Verificacion de artefactos ---
+Write-Step "Paso 5/8: Verificacion de artefactos"
+if (-not (Test-Path -LiteralPath (Join-Path $AppDir "osvaldoDownloaderPro.exe"))) {
+    Write-Fail "Falta osvaldoDownloaderPro.exe"; exit 1
+}
+if (-not (Test-Path -LiteralPath (Join-Path $AppDir "_internal"))) {
+    Write-Fail "Falta _internal\"; exit 1
+}
+
+# Proveer ffmpeg/ffprobe en la raiz de dist (layout conocido-bueno que espera installer.iss).
+# PyInstaller los coloca dentro de _internal; el instalador y FFmpegProcessAdapter
+# los esperan tambien junto al exe. Fuente de verdad: bin\
+foreach ($bin in @("ffmpeg.exe", "ffprobe.exe")) {
+    $src = Join-Path $ProjectRoot "bin\$bin"
+    $dst = Join-Path $AppDir $bin
+    if (-not (Test-Path -LiteralPath $src)) { Write-Fail "Falta binario fuente: $src"; exit 1 }
+    Copy-Item -LiteralPath $src -Destination $dst -Force
+}
+foreach ($r in @("ffmpeg.exe", "ffprobe.exe")) {
+    if (-not (Test-Path -LiteralPath (Join-Path $AppDir $r))) { Write-Fail "Falta artefacto requerido: $r"; exit 1 }
+}
+Write-Step "Artefactos OK (exe + ffmpeg + ffprobe + _internal)"
+
+# --- 6. Firma del exe de la app (solo si hay certificado) ---
+Write-Step "Paso 6/8: Firma de osvaldoDownloaderPro.exe"
+$signScript = Join-Path $PSScriptRoot "sign_release.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File $signScript
+$signExit = $LASTEXITCODE
+
+if ($signExit -eq 2) {
+    # Certificado no configurado: estado esperado pre-compra.
+    Write-Host ""
+    Write-Host "CERTIFICATE NOT CONFIGURED - BUILD PREPARED BUT RELEASE SIGNING NOT PERFORMED." -ForegroundColor Yellow
+    Write-Host "Pipeline detenido ANTES de compilar el instalador (el instalador no se genera sin firma verificada)."
+    New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
+    @"
+# RELEASE REPORT - osvaldoDownloaderPro 1.0.0 (NO FIRMADO)
+Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+Tests: PASS (completos + seguridad)
+PyInstaller: OK
+Artefactos verificados: osvaldoDownloaderPro.exe / ffmpeg.exe / ffprobe.exe / _internal
+Firma: NO REALIZADA - certificado no configurado
+Instalador: NO COMPILADO (requiere firma)
+"@ | Set-Content -LiteralPath (Join-Path $ReleaseDir "RELEASE_REPORT.md") -Encoding UTF8
+    exit 3
+}
+if ($signExit -ne 0) { Write-Fail "La etapa de firma fallo (codigo $signExit). Build abortado."; exit 1 }
+Write-Step "osvaldoDownloaderPro.exe firmado y verificado"
+
+# --- 7. Compilar instalador con SignTool activo ---
+Write-Step "Paso 7/8: Compilando instalador (Inno Setup + USE_SIGNTOOL)"
+$TimestampUrl = "http://timestamp.digicert.com"
+$configFile = Join-Path $PSScriptRoot "signing.config.json"
+if (Test-Path -LiteralPath $configFile) {
+    try {
+        $cfg = Get-Content -LiteralPath $configFile -Raw | ConvertFrom-Json
+        if ($cfg.timestamp_url) { $TimestampUrl = $cfg.timestamp_url }
+    } catch { }
+}
+$signToolDef = '/SReleaseSigner=signtool.exe sign /fd SHA256 /tr ' + $TimestampUrl + ' /td SHA256 $f'
+& $IsccPath "/DUSE_SIGNTOOL" $signToolDef $IssPath
+if ($LASTEXITCODE -ne 0) { Write-Fail "Inno Setup fallo."; exit 1 }
+
+# --- 8. Verificaciones finales + reporte ---
+Write-Step "Paso 8/8: Verificacion final del instalador"
+if (-not (Test-Path -LiteralPath $SetupExe)) { Write-Fail "No se genero el Setup.exe"; exit 1 }
+
+$setupSig = Get-AuthenticodeSignature -FilePath $SetupExe
+if ($setupSig.Status -ne "Valid") {
+    Write-Fail "El Setup.exe NO tiene firma valida (Status=$($setupSig.Status))."
+    exit 1
+}
+Write-Step "Setup.exe firmado y verificado: $($setupSig.SignerCertificate.Subject)"
+
+New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
+$hashes = Get-FileHash -Path $SetupExe, (Join-Path $AppDir "osvaldoDownloaderPro.exe") -Algorithm SHA256
+$hashLines = $hashes | ForEach-Object { "$($_.Hash)  $(Split-Path $_.Path -Leaf)" }
+$hashLines | Set-Content -LiteralPath (Join-Path $ReleaseDir "SHA256SUMS.txt") -Encoding ASCII
+
+@"
+# RELEASE REPORT - osvaldoDownloaderPro 1.0.0 (FIRMADO)
+Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+Tests: PASS (completos + seguridad)
+PyInstaller: OK
+Firma app exe: VALIDA ($($setupSig.SignerCertificate.Subject))
+Instalador: $($SetupExe)
+Firma instalador: VALIDA
+SHA256:
+$($hashLines | ForEach-Object { "  $_" })
+"@ | Set-Content -LiteralPath (Join-Path $ReleaseDir "RELEASE_REPORT.md") -Encoding UTF8
+
+Write-Step "RELEASE COMPLETO Y FIRMADO. Reporte en: $ReleaseDir"
+exit 0

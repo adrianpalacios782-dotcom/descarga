@@ -286,12 +286,20 @@ class YtDlpDownloadEngine(IDownloadEngine):
             actual_label += f"@{int(actual_fps)}fps"
 
         if requested_height and actual_height and not fmt.is_best_quality:
-            self._validate_downloaded_quality(actual_height, requested_height, requested_label, actual_label)
+            if getattr(fmt, "height_estimated", False):
+                # Altura inferida por etiqueta (ej. Facebook 'sd'/'hd'): la plataforma
+                # no garantiza pixeles exactos, se informa sin invalidar la descarga.
+                logger.info(
+                    f"Calidad aproximada: se solicitó {requested_label} (estimada) y el "
+                    f"archivo resultante tiene {actual_label}."
+                )
+            else:
+                self._validate_downloaded_quality(actual_height, requested_height, requested_label, actual_label)
 
         if fmt.is_best_quality and actual_height and actual_height < (fmt.height or 0):
             logger.warning(
                 f"DEGRADACIÓN DE CALIDAD: 'Mejor calidad' solicitó hasta {requested_label} "
-                f"pero YouTube solo permitió {actual_label} ({video_codec})."
+                f"pero la plataforma solo permitió {actual_label} ({video_codec})."
             )
 
         logger.info(
@@ -387,6 +395,16 @@ class YtDlpDownloadEngine(IDownloadEngine):
                     f"/bestvideo+bestaudio"
                     f"/best"
                 )
+            if safe_id and not fmt.is_video_only:
+                # Formato progresivo con ID alfanumerico (ej. Facebook 'hd'/'sd'):
+                # ya incluye audio, se selecciona directamente sin combinaciones de merge.
+                return (
+                    f"{safe_id}"
+                    f"/bestvideo[height<={h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
+                    f"/bestvideo[height<={h}]+bestaudio[acodec^=mp4a]"
+                    f"/bestvideo[height<={h}]+bestaudio"
+                    f"/best"
+                )
             return (
                 f"bestvideo[height<={h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
                 f"/bestvideo[height<={h}]+bestaudio[acodec^=mp4a]"
@@ -396,6 +414,9 @@ class YtDlpDownloadEngine(IDownloadEngine):
             )
 
         if is_raw_id and safe_id:
+            return f"{safe_id}/bestvideo+bestaudio/best"
+
+        if safe_id and not fmt.is_video_only:
             return f"{safe_id}/bestvideo+bestaudio/best"
 
         return "bestvideo+bestaudio/best"
@@ -440,13 +461,11 @@ class YtDlpDownloadEngine(IDownloadEngine):
         heights: set = set()
         for f in formats:
             vcodec = f.get("vcodec")
-            if not vcodec or vcodec == "none":
+            if vcodec and str(vcodec).lower() == "none":
                 continue
-            raw_height = f.get("height") or 0
-            if raw_height > 0:
-                std_h = FormatNormalizer.get_standard_height(raw_height)
-                if std_h > 0:
-                    heights.add(std_h)
+            std_h = FormatNormalizer.infer_standard_height(f)
+            if std_h > 0:
+                heights.add(std_h)
         return sorted(heights, reverse=True)
 
     @staticmethod
