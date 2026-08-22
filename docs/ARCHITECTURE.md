@@ -26,7 +26,8 @@ src/
 │   │   ├── media/           # FFmpegProcessAdapter (Sidecar Process Manager: probe de medios, extracción de audio, merge)
 │   │   └── download/        # YtDlpDownloadEngine (yt-dlp 2026 + pre-probe de estrategias, cancelación real)
 │   ├── event_bus/           # InProcessEventBus (Thread-safe)
-│   └── logging/             # setup_logger y SensitiveDataFilter
+│   ├── logging/             # setup_logger y SensitiveDataFilter
+│   └── updater/             # Actualización automática (GitHub Releases oficial)
 └── presentation/            # Capa de Presentación Nativa PySide6 (Qt6)
     ├── main_window.py       # MainWindow (QStackedWidget + Sidebar)
     ├── view_models/         # MainViewModel (Conexión Signals/Slots y Casos de Uso)
@@ -75,3 +76,25 @@ src/
 - **Fallback y errores:** si una estrategia falla (403 intermitente) se reintenta con las demás;
   en caso de error persistente la tarea se persiste como `FAILED` con mensaje y se permite reintentar
   (`RetryDownloadUseCase`).
+
+---
+
+## 5. SISTEMA DE ACTUALIZACIÓN AUTOMÁTICA (src/infrastructure/updater)
+
+- **Fuente oficial única:** GitHub Releases (update_config.py fija owner/repo y allowlists
+  de hosts; ninguna URL proviene de entrada del usuario).
+- **Flujo:** al iniciar (una sola vez, con retraso) UpdateCoordinator consulta la API JSON
+  oficial en un hilo worker → CheckForUpdatesUseCase compara SemanticVersion (solo
+  upgrade, nunca downgrade, rechazo de versiones inválidas) → si hay versión superior se abre
+  UpdateDialog (estilo DARK_STYLE integrado, notas como texto plano) → descarga streaming a
+  %TEMP%\osvaldoDownloaderPro-update-*\*.part con SHA-256 incremental → re-verificación en
+  disco (tamaño + hash constant-time) → lanzamiento silencioso del instalador encadenado con
+  el reinicio de la app.
+- **Seguridad:** HTTPS obligatorio; guardia de redirecciones limitada a hosts permitidos;
+  SHA-256 obligatorio (SHA256SUMS.txt del release o campo digest); sin checksum no se ejecuta
+  nada; archivos .part nunca se ejecutan; temporales eliminados siempre; sin tokens ni
+  cookies ni datos personales; compatible con futura firma Authenticode.
+- **Resiliencia:** cualquier fallo (sin red, timeout, GitHub caído, hash incorrecto) deja la
+  aplicación actual plenamente funcional y limpia los temporales.
+- **Versión:** única fuente de verdad en src/__init__.py::__version__; pyproject la deriva
+  dinámica, installer.iss la recibe vía /DAPP_VERSION desde build_release.ps1.

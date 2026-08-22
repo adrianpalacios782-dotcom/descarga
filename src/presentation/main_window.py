@@ -1,9 +1,14 @@
+import logging
 import threading
-from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QStackedWidget
+
+from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QStackedWidget, QMessageBox
+from PySide6.QtCore import QTimer
 
 from src.presentation.components.sidebar import SidebarWidget
+from src.presentation.components.update_dialog import UpdateDialog
 from src.presentation.styles.styles import DARK_STYLE
 from src.presentation.view_models.main_view_model import MainViewModel
+from src.presentation.view_models.update_coordinator import UpdateCoordinator
 from src.presentation.views import (
     InicioView,
     DescargasView,
@@ -12,6 +17,12 @@ from src.presentation.views import (
     ConfiguracionView,
     AcercaDeView,
 )
+
+logger = logging.getLogger(__name__)
+
+# Retraso del primer chequeo de actualizaciones: deja respirar al arranque y
+# evita competir con la inicialización pesada (SQLite, FFmpeg, yt-dlp).
+STARTUP_UPDATE_CHECK_DELAY_MS = 2000
 
 
 class MainWindow(QMainWindow):
@@ -38,7 +49,7 @@ class MainWindow(QMainWindow):
 
         # Stacked Views
         self.stacked = QStackedWidget()
-        
+
         self.inicio_view = InicioView()
         self.descargas_view = DescargasView()
         self.historial_view = HistorialView()
@@ -62,6 +73,11 @@ class MainWindow(QMainWindow):
         # Conectar Signals del ViewModel
         self._connect_signals()
 
+        # Sistema de actualización (no bloqueante)
+        self.update_coordinator = UpdateCoordinator(parent=self)
+        self._update_dialog: UpdateDialog | None = None
+        self._connect_update_signals()
+
     def _connect_signals(self) -> None:
         # InicioView -> ViewModel
         self.inicio_view.analyze_requested.connect(self.view_model.analyze_url)
@@ -83,10 +99,134 @@ class MainWindow(QMainWindow):
         self.descargas_view.cancel_requested.connect(self.view_model.cancel_download)
         self.descargas_view.retry_requested.connect(self.view_model.retry_download)
 
+        # DescargasView -> acciones del explorador de Windows
+        self.descargas_view.open_file_requested.connect(self._open_in_explorer)
+        self.descargas_view.open_folder_requested.connect(self._open_folder)
+
+    def _connect_update_signals(self) -> None:
+        # Vistas manuales -> coordinador (con feedback visible)
+        self.configuracion_view.update_check_requested.connect(
+            lambda: self.update_coordinator.check_for_updates(manual=True)
+        )
+        self.acerca_de_view.update_check_requested.connect(
+            lambda: self.update_coordinator.check_for_updates(manual=True)
+        )
+
+        # Coordinador -> UI
+        self.update_coordinator.check_finished.connect(self._on_update_check_finished)
+        self.update_coordinator.download_progress.connect(self._on_download_progress)
+        self.update_coordinator.download_status.connect(self._on_download_status)
+        self.update_coordinator.ready_to_install.connect(self._on_ready_to_install)
+        self.update_coordinator.install_started.connect(self._on_install_started)
+        self.update_coordinator.update_failed.connect(self._on_update_failed)
+        self.update_coordinator.update_cancelled.connect(self._close_update_dialog)
+
+    # ------------------------------------------------- Actualizaciones
+    def schedule_startup_update_check(self) -> None:
+        """Chequeo ÚNICO al iniciar; cualquier falla es silenciosa."""
+        QTimer.singleShot(
+            STARTUP_UPDATE_CHECK_DELAY_MS,
+            self.update_coordinator.check_for_updates,
+        )
+
+    def _on_update_check_finished(self, result, manual: bool) -> None:
+        if result is None:
+            if manual:
+                QMessageBox.warning(
+                    self,
+                    "Actualizaciones",
+                    "No se pudo comprobar si hay actualizaciones.\n\n"
+                    "Comprueba tu conexión a Internet e inténtalo de nuevo. "
+                    "Puedes seguir usando la aplicación con normalidad.",
+                )
+            return  # fallo en chequeo automático de inicio: silencio total.
+        if not result.update_available:
+            if manual:
+                QMessageBox.information(
+                    self,
+                    "Actualizaciones",
+                    f"Ya estás usando la última versión "
+                    f"(v{result.current_version}).",
+                )
+            return  # al día o downgrade bloqueado: nada que mostrar.
+        if result.release is None or result.release.installer_asset is None:
+            logger.info("Actualización disponible pero sin instalador Windows; se ignora.")
+            return
+        if self._update_dialog is not None and self._update_dialog.isVisible():
+            return
+        self._open_update_dialog(result)
+
+    def _open_update_dialog(self, result) -> None:
+        dialog = UpdateDialog(result, parent=self)
+        dialog.update_accepted.connect(lambda: self.update_coordinator.begin_update(result))
+        dialog.later_requested.connect(dialog.reject)
+        dialog.cancel_requested.connect(self.update_coordinator.request_cancel)
+        self._update_dialog = dialog
+        dialog.exec()
+
+    def _close_update_dialog(self) -> None:
+        if self._update_dialog is not None:
+            self._update_dialog.reject()
+            self._update_dialog = None
+
+    def _on_download_progress(self, downloaded: int, total: int) -> None:
+        if self._update_dialog is not None:
+            self._update_dialog.on_download_progress(downloaded, total)
+
+    def _on_download_status(self, text: str) -> None:
+        if self._update_dialog is not None:
+            self._update_dialog.set_status(text)
+
+    def _on_ready_to_install(self) -> None:
+        if self._update_dialog is not None:
+            self._update_dialog.on_ready_to_install()
+
+    def _on_install_started(self) -> None:
+        """El instalador verificado ya fue lanzado: cerrar esta aplicación."""
+        logger.info("Actualización: cerrando la aplicación para completar la instalación.")
+        self.close()
+
+    def _on_update_failed(self, message: str) -> None:
+        """Fallo de actualización: mensaje claro y la app sigue funcionando."""
+        if self._update_dialog is not None and self._update_dialog.isVisible():
+            self._update_dialog.on_download_error(message)
+        else:
+            QMessageBox.warning(
+                self,
+                "Actualización",
+                f"No se pudo completar la actualización:\n\n{message}\n\n"
+                "Puedes seguir usando la versión actual.",
+            )
+
     def _on_download_requested(self, media, format_id: str, dest_path: str) -> None:
         self.view_model.create_and_start_download(media, format_id, dest_path)
         self.sidebar.button_group.button(1).setChecked(True)
         self.stacked.setCurrentIndex(1)
+
+    @staticmethod
+    def _open_in_explorer(file_path: str) -> None:
+        import os
+        import subprocess
+        try:
+            if os.path.isfile(file_path):
+                subprocess.Popen(["explorer", "/select,", os.path.normpath(file_path)])
+            else:
+                QMessageBox.warning(None, "Archivo", "El archivo no se encuentra en la ruta esperada.")
+        except OSError as ex:
+            logger.error("No se pudo abrir el explorador para '%s': %s", file_path, ex)
+
+    @staticmethod
+    def _open_folder(folder_path: str) -> None:
+        import os
+        import subprocess
+        folder = os.path.dirname(os.path.normpath(folder_path)) if os.path.isfile(folder_path) else folder_path
+        try:
+            if os.path.isdir(folder):
+                subprocess.Popen(["explorer", os.path.normpath(folder)])
+            else:
+                QMessageBox.warning(None, "Carpeta", "La carpeta de destino no existe.")
+        except OSError as ex:
+            logger.error("No se pudo abrir la carpeta '%s': %s", folder, ex)
 
     def _on_tab_changed(self, index: int) -> None:
         if index == 2:  # Historial

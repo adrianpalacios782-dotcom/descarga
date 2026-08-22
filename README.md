@@ -1,24 +1,43 @@
 # osvaldoDownloaderPro
 
-**Versión 1.0.0 · Estado: BETA**
-
 Aplicación de escritorio nativa para Windows 10/11 diseñada para la descarga, conversión y organización de contenido multimedia desde múltiples plataformas web.
 
 ---
 
-## Compatibilidad
+## 🚀 osvaldoDownloaderPro v1.0.0 BETA
 
-**Sistemas operativos compatibles:**
+## ⬇️ DESCARGAR PARA WINDOWS
+
+### [ DESCARGAR osvaldoDownloaderPro v1.0.0 ](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.0.0)
+
+En la página que se abre, busca la sección **Assets** (al final de la descripción) y haz clic en:
+
+> **`osvaldoDownloaderPro-1.0.0-Setup.exe`**
+
+Ese es el único archivo que necesitas.
+
+**Instalación en 4 pasos:**
+
+1. Haz clic en **DESCARGAR**.
+2. Descarga `osvaldoDownloaderPro-1.0.0-Setup.exe`.
+3. Ejecuta el archivo.
+4. Sigue el instalador.
+
+**Compatibilidad:**
 
 - Windows 10 x64 versión 1809 o superior
 - Windows 11 x64
 
-**No se garantiza compatibilidad con:**
+No compatible con: Windows 10 LTSB/LTSC 2016 o anteriores, ni Windows de 32 bits.
 
-- Windows 10 LTSB/LTSC 2016 o anteriores
-- Windows 32-bit
+**No requiere:**
 
-> La compatibilidad fue auditada estáticamente sobre los componentes, dependencias y binarios empaquetados (Qt 6.11 requiere Windows 10 1809+; Python 3.13 requiere Windows 10+). La ejecución del EXE empaquetado en un equipo físico con Windows 10 queda como prueba ambiental pendiente, no disponible en el entorno de desarrollo.
+- Python
+- FFmpeg
+- .NET
+- Instalar dependencias manualmente
+
+**⚠️ Aviso de Windows SmartScreen:** Windows puede mostrar una advertencia porque esta versión BETA todavía no tiene firma digital. Si aparece "Windows protegió tu PC", pulsa **Más información** y luego **Ejecutar de todas formas**. En Windows 11 con Smart App Control activado, el sistema puede bloquear aplicaciones sin firma y la aplicación no podrá abrirse.
 
 ---
 

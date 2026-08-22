@@ -12,6 +12,8 @@ class DescargasView(QWidget):
     resume_requested = Signal(str)
     cancel_requested = Signal(str)
     retry_requested = Signal(str)
+    open_file_requested = Signal(str)
+    open_folder_requested = Signal(str)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -47,6 +49,8 @@ class DescargasView(QWidget):
         card.resume_requested.connect(self.resume_requested.emit)
         card.cancel_requested.connect(self.cancel_requested.emit)
         card.retry_requested.connect(self.retry_requested.emit)
+        card.open_file_requested.connect(self.open_file_requested.emit)
+        card.open_folder_requested.connect(self.open_folder_requested.emit)
 
         self.cards[task.id.value] = card
         self.card_layout.insertWidget(self.card_layout.count() - 1, card)

@@ -81,6 +81,7 @@ class BasePlatformAdapter(IPlatformAdapter):
     def _parse_ytdlp_info(self, url: Url, info: Dict[str, Any], platform_name: str) -> MediaMetadata:
         title = info.get("title") or "Sin título"
         author = info.get("uploader") or info.get("channel") or info.get("uploader_id") or ""
+        description = info.get("description") or ""
         duration = float(info.get("duration") or 0.0)
         thumbnail = info.get("thumbnail") or ""
         upload_date = info.get("upload_date") or ""
@@ -106,6 +107,7 @@ class BasePlatformAdapter(IPlatformAdapter):
             platform=platform_name,
             title=title,
             author=author,
+            description=description,
             duration_seconds=duration,
             thumbnail_url=thumbnail,
             upload_date=upload_date,

@@ -1,9 +1,12 @@
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, QSize
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QPushButton, QLabel, QButtonGroup
+
+from src.presentation.components.app_icons import NAV_ICONS
 
 
 class SidebarWidget(QFrame):
-    """Barra lateral de navegación principal con las 6 secciones limpias sin emojis."""
+    """Barra lateral de navegación principal con iconos vectoriales y 6 secciones."""
+
     nav_changed = Signal(int)
 
     def __init__(self, parent=None) -> None:
@@ -16,7 +19,7 @@ class SidebarWidget(QFrame):
         layout.setSpacing(10)
 
         title_label = QLabel("osvaldoDownloaderPro")
-        title_label.setStyleSheet("font-size: 15px; font-weight: 800; color: #1db954; letter-spacing: 0.5px; padding-bottom: 16px;")
+        title_label.setObjectName("SidebarTitle")
         layout.addWidget(title_label)
 
         self.button_group = QButtonGroup(self)
@@ -35,6 +38,8 @@ class SidebarWidget(QFrame):
             btn = QPushButton(text)
             btn.setObjectName("NavButton")
             btn.setCheckable(True)
+            btn.setIcon(NAV_ICONS[index]("#1db954" if index == 0 else "#b3b3b3"))
+            btn.setIconSize(QSize(20, 20))
             if index == 0:
                 btn.setChecked(True)
             self.button_group.addButton(btn, index)
