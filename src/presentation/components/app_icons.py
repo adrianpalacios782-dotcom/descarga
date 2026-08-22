@@ -156,3 +156,157 @@ NAV_ICONS = {
     4: gear_icon,
     5: info_icon,
 }
+
+
+def _small_pixmap(size: int) -> tuple:
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    return pixmap, painter
+
+
+def _thin_pen(color: str, width: float) -> QPen:
+    pen = QPen(QColor(color))
+    pen.setWidthF(width)
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+    return pen
+
+
+def minimize_icon(color: str = "#a4a4ad", size: int = 16) -> QIcon:
+    pixmap, p = _small_pixmap(size)
+    p.setPen(_thin_pen(color, size * 0.09))
+    s = size / ICON_SIZE
+    y = 20.0 * s
+    p.drawLine(QPointF(12.0 * s, y), QPointF(28.0 * s, y))
+    p.end()
+    return QIcon(pixmap)
+
+
+def maximize_icon(color: str = "#a4a4ad", size: int = 16) -> QIcon:
+    pixmap, p = _small_pixmap(size)
+    p.setPen(_thin_pen(color, size * 0.08))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    s = size / ICON_SIZE
+    margin = 11.0 * s
+    side = size - 2 * margin
+    p.drawRoundedRect(QRectF(margin, margin, side, side), size * 0.12, size * 0.12)
+    p.end()
+    return QIcon(pixmap)
+
+
+def restore_icon(color: str = "#a4a4ad", size: int = 16) -> QIcon:
+    pixmap, p = _small_pixmap(size)
+    p.setPen(_thin_pen(color, size * 0.08))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    s = size / ICON_SIZE
+    back = QRectF(11.0 * s, 8.0 * s, 18.0 * s, 18.0 * s)
+    front = QRectF(8.0 * s, 11.0 * s, 18.0 * s, 18.0 * s)
+    # Rectángulo trasero parcial (dos lados superiores).
+    path = QPainterPath()
+    path.moveTo(back.left(), back.bottom())
+    path.lineTo(back.topLeft())
+    path.lineTo(back.topRight())
+    path.lineTo(back.right(), back.bottom())
+    p.drawPath(path)
+    p.drawRect(front)
+    p.end()
+    return QIcon(pixmap)
+
+
+def close_icon(color: str = "#a4a4ad", size: int = 16) -> QIcon:
+    pixmap, p = _small_pixmap(size)
+    p.setPen(_thin_pen(color, size * 0.09))
+    s = size / ICON_SIZE
+    a, b, c, d = 13.0 * s, 13.0 * s, 27.0 * s, 27.0 * s
+    p.drawLine(QPointF(a, a), QPointF(c, c))
+    p.drawLine(QPointF(c, a), QPointF(a, c))
+    p.end()
+    return QIcon(pixmap)
+
+
+def clipboard_icon(color: str = "#b3b3b3") -> QIcon:
+    pixmap, p = _base_pixmap()
+    p.setPen(_pen(color))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    clip = QPainterPath()
+    clip.addRoundedRect(QRectF(11.0, 9.0, 18.0, 24.0), 3.0, 3.0)
+    p.drawPath(clip)
+    tab = QPainterPath()
+    tab.addRoundedRect(QRectF(15.5, 6.5, 9.0, 6.0), 2.5, 2.5)
+    p.drawPath(tab)
+    line_pen = _pen(color)
+    line_pen.setWidthF(2.2)
+    p.setPen(line_pen)
+    p.drawLine(QPointF(15.0, 19.0), QPointF(25.0, 19.0))
+    p.drawLine(QPointF(15.0, 24.0), QPointF(22.0, 24.0))
+    return _finish(pixmap, p)
+
+
+def link_icon(color: str = "#b3b3b3") -> QIcon:
+    pixmap, p = _base_pixmap()
+    p.setPen(_pen(color))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    top = QPainterPath()
+    top.moveTo(23.5, 10.5)
+    top.lineTo(27.0, 7.0)
+    arc = QPainterPath()
+    arc.moveTo(17.0, 17.0)
+    arc.arcTo(QRectF(20.0, 6.0, 14.0, 14.0), 90.0, -180.0)
+    p.drawPath(arc)
+    bottom_arc = QPainterPath()
+    bottom_arc.moveTo(23.0, 23.0)
+    bottom_arc.arcTo(QRectF(6.0, 20.0, 14.0, 14.0), 270.0, -180.0)
+    p.drawPath(bottom_arc)
+    p.drawLine(QPointF(15.0, 25.0), QPointF(25.0, 15.0))
+    return _finish(pixmap, p)
+
+
+def heart_icon(color: str = "#b3b3b3", filled: bool = False) -> QIcon:
+    pixmap, p = _base_pixmap()
+    import math
+
+    cx, cy, r = 20.0, 22.0, 11.5
+    path = QPainterPath()
+    path.moveTo(cx, cy + r * 0.95)
+    path.cubicTo(cx - r * 1.75, cy - r * 0.15, cx - r * 0.55, cy - r * 1.45, cx, cy - r * 0.55)
+    path.cubicTo(cx + r * 0.55, cy - r * 1.45, cx + r * 1.75, cy - r * 0.15, cx, cy + r * 0.95)
+    path.closeSubpath()
+    if filled:
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(color))
+    else:
+        p.setPen(_pen(color))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawPath(path)
+    return _finish(pixmap, p)
+
+
+def folder_icon(color: str = "#b3b3b3") -> QIcon:
+    pixmap, p = _base_pixmap()
+    p.setPen(_pen(color))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    body = QPainterPath()
+    body.moveTo(8.0, 30.0)
+    body.lineTo(8.0, 12.0)
+    body.lineTo(17.0, 12.0)
+    body.lineTo(20.0, 16.0)
+    body.lineTo(32.0, 16.0)
+    body.lineTo(32.0, 30.0)
+    body.closeSubpath()
+    p.drawPath(body)
+    return _finish(pixmap, p)
+
+
+WINDOW_ICON_SIZE = 16
+
+
+def window_control_icons() -> dict:
+    """Crea los iconos de ventana bajo demanda (requiere QApplication activa)."""
+    return {
+        "minimize": minimize_icon(),
+        "maximize": maximize_icon(),
+        "restore": restore_icon(),
+        "close": close_icon(),
+    }

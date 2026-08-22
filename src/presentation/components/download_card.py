@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QLabel, QProgres
 
 from src.domain.entities.download_task import DownloadTask, DownloadState
 from src.presentation.components.status_labels import humanize_download_state
+from src.presentation.styles.styles import DARK_PALETTE
 
 
 PLATFORM_ACCENT = {
@@ -50,6 +51,15 @@ class DownloadCardWidget(QFrame):
         top_row.addWidget(self.platform_badge)
         body.addLayout(top_row)
 
+        # Línea de metadatos: plataforma · calidad · formato
+        fmt = task.selected_format
+        resolution = (fmt.resolution or "").strip() if fmt is not None else ""
+        extension = (fmt.extension or "").strip().upper() if fmt is not None else ""
+        meta_parts = [p for p in (task.media.platform, resolution, extension) if p]
+        self.meta_label = QLabel(" · ".join(meta_parts))
+        self.meta_label.setObjectName("DownloadMeta")
+        body.addWidget(self.meta_label)
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(int(task.progress_percent))
@@ -60,6 +70,9 @@ class DownloadCardWidget(QFrame):
         bottom_row = QHBoxLayout()
         self.status_label = QLabel(self._status_text(task.status))
         self.status_label.setObjectName("StatusLabel")
+        # Velocidad destacada: la métrica que el usuario más mira durante una descarga.
+        self.speed_label = QLabel("— MB/s")
+        self.speed_label.setObjectName("SpeedLabel")
         self.telemetry_label = QLabel("0.0 MB / 0.0 MB · 0.00 MB/s · ETA 00:00")
         self.telemetry_label.setObjectName("TelemetryLabel")
 
@@ -74,6 +87,7 @@ class DownloadCardWidget(QFrame):
 
         self.btn_cancel = QPushButton("Cancelar")
         self.btn_cancel.setObjectName("SecondaryButton")
+        self.btn_cancel.setProperty("danger", True)
         self.btn_cancel.clicked.connect(lambda: self.cancel_requested.emit(self.task_id))
 
         self.btn_retry = QPushButton("Reintentar")
@@ -96,6 +110,7 @@ class DownloadCardWidget(QFrame):
         )
 
         bottom_row.addWidget(self.status_label)
+        bottom_row.addWidget(self.speed_label)
         bottom_row.addWidget(self.telemetry_label)
         bottom_row.addStretch()
         bottom_row.addWidget(self.btn_show_file)
@@ -127,7 +142,7 @@ class DownloadCardWidget(QFrame):
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor("#1f2937"))
+        painter.setBrush(QColor(DARK_PALETTE.surface_active))
         painter.drawRoundedRect(0, 0, pixmap_size, pixmap_size, 10, 10)
         font = QFont("Segoe UI", int(pixmap_size * 0.42))
         font.setBold(True)
@@ -151,6 +166,8 @@ class DownloadCardWidget(QFrame):
         speed_mb = speed / (1024 * 1024)
         downloaded_mb = downloaded / (1024 * 1024)
         total_mb = total / (1024 * 1024)
+
+        self.speed_label.setText(f"{speed_mb:.1f} MB/s")
 
         total_sec = max(0, int(eta))
         mins = total_sec // 60

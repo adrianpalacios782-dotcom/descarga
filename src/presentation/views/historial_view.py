@@ -19,12 +19,15 @@ class HistorialView(QWidget):
         self._all_tasks: List[DownloadTask] = []
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 32, 32, 32)
-        layout.setSpacing(16)
+        layout.setContentsMargins(36, 30, 36, 28)
+        layout.setSpacing(14)
 
-        title = QLabel("Historial de Descargas")
+        title = QLabel("Historial")
         title.setObjectName("ViewTitle")
+        subtitle = QLabel("Todas tus descargas anteriores, con búsqueda y filtro por plataforma.")
+        subtitle.setObjectName("ViewSubtitle")
         layout.addWidget(title)
+        layout.addWidget(subtitle)
 
         filter_box = QHBoxLayout()
         filter_box.setSpacing(12)
@@ -51,6 +54,7 @@ class HistorialView(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(38)
         self.table.setShowGrid(False)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)

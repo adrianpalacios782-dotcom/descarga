@@ -19,11 +19,11 @@ from PySide6.QtWidgets import (
 )
 
 from src.application.use_cases.check_for_updates import UpdateCheckResult
-from src.presentation.styles.styles import DARK_STYLE
+from src.presentation.styles.styles import DARK_PALETTE, DARK_STYLE
 
-_COLOR_TEXT_DIM = "#b3b3b3"
-_COLOR_ACCENT = "#1db954"
-_COLOR_WARNING = "#f59e0b"
+_COLOR_TEXT_DIM = DARK_PALETTE.text_secondary
+_COLOR_ACCENT = DARK_PALETTE.accent
+_COLOR_WARNING = DARK_PALETTE.warning
 
 
 def _format_bytes(num_bytes: float) -> str:
@@ -57,7 +57,9 @@ class UpdateDialog(QDialog):
 
         # --- Título -----------------------------------------------------
         title = QLabel("Nueva actualización disponible")
-        title.setStyleSheet("font-size: 18px; font-weight: 800; color: #ffffff;")
+        title.setStyleSheet(
+            f"font-size: 19px; font-weight: 800; color: {DARK_PALETTE.text_primary};"
+        )
         layout.addWidget(title)
 
         subtitle = QLabel(
@@ -74,9 +76,9 @@ class UpdateDialog(QDialog):
 
         row_current = QHBoxLayout()
         lbl_cur = QLabel("Versión actual:")
-        lbl_cur.setStyleSheet("font-size: 14px; font-weight: 600;")
+        lbl_cur.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {DARK_PALETTE.text_secondary};")
         val_cur = QLabel(str(result.current_version))
-        val_cur.setStyleSheet("font-size: 14px; font-weight: 700; color: #ffffff;")
+        val_cur.setStyleSheet(f"font-size: 14px; font-weight: 700; color: {DARK_PALETTE.text_primary};")
         row_current.addWidget(lbl_cur)
         row_current.addWidget(val_cur)
         row_current.addStretch()
@@ -84,7 +86,7 @@ class UpdateDialog(QDialog):
 
         row_new = QHBoxLayout()
         lbl_new = QLabel("Nueva versión:")
-        lbl_new.setStyleSheet("font-size: 14px; font-weight: 600;")
+        lbl_new.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {DARK_PALETTE.text_secondary};")
         val_new = QLabel(str(result.latest_version))
         val_new.setStyleSheet(
             f"font-size: 14px; font-weight: 700; color: {_COLOR_ACCENT};"
@@ -101,14 +103,16 @@ class UpdateDialog(QDialog):
         if notes:
             notes_title = QLabel("Novedades de esta versión")
             notes_title.setStyleSheet(
-                f"font-size: 13px; font-weight: 700; color: {_COLOR_TEXT_DIM};"
+                f"font-size: 13px; font-weight: 700; color: {DARK_PALETTE.text_secondary};"
             )
             layout.addWidget(notes_title)
 
             notes_label = QLabel(notes[:8000])
             notes_label.setTextFormat(Qt.TextFormat.PlainText)
             notes_label.setWordWrap(True)
-            notes_label.setStyleSheet("font-size: 13px; color: #e6e6e6;")
+            notes_label.setStyleSheet(
+                f"font-size: 13px; color: {DARK_PALETTE.text_primary};"
+            )
 
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)

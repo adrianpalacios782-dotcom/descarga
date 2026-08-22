@@ -1,5 +1,8 @@
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFrame
+
+from src.presentation.components.app_icons import heart_icon
+from src.presentation.styles.styles import DARK_PALETTE
 
 
 class FavoritosView(QWidget):
@@ -22,8 +25,12 @@ class FavoritosView(QWidget):
         card = QFrame()
         card.setObjectName("EmptyStateCard")
         card_layout = QVBoxLayout(card)
-        card_layout.setSpacing(8)
+        card_layout.setSpacing(10)
         card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        lbl_icon = QLabel()
+        lbl_icon.setPixmap(heart_icon(DARK_PALETTE.text_tertiary).pixmap(QSize(44, 44)))
+        lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         lbl_title = QLabel("Aún no tienes favoritos")
         lbl_title.setObjectName("EmptyStateTitle")
@@ -37,6 +44,7 @@ class FavoritosView(QWidget):
         lbl_hint.setWordWrap(True)
         lbl_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        card_layout.addWidget(lbl_icon)
         card_layout.addWidget(lbl_title)
         card_layout.addWidget(lbl_hint)
 
