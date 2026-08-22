@@ -4,6 +4,22 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 
 ---
 
+## [1.0.1] - 2026-08-22
+
+### Añadido
+- **Presentación:** Rediseño visual integral de la interfaz: sistema de diseño con tokens (`src/presentation/styles/theme.py`), QSS generado por builder y paleta preparada para futuro modo claro.
+- **Presentación:** Barra de título personalizada (frameless) con controles minimizar/maximizar/cerrar y arrastre nativo de ventana.
+- **Presentación:** Sidebar rediseñado con grupos PRINCIPAL / BIBLIOTECA / SISTEMA, etiquetas de sección y pie con la versión.
+- **Presentación:** Inicio renovado: héroe "¿Qué quieres descargar?", campo URL grande con botón Pegar, validación en línea, banner de enlace del portapapeles y microinteracciones.
+- **Presentación:** Descargas con tarjetas modernas, velocidad destacada y estado vacío elegante; Historial, Favoritos, Configuración y Acerca de pulidos.
+- **Testing:** Suite ampliada a 349 pruebas (incluye 8 nuevas para el sistema visual).
+
+### Corregido
+- Estado de descarga fallida ahora se muestra como "Error".
+- Diálogo de actualización unificado al sistema de tokens.
+
+---
+
 ## [1.0.0] - 2026-08-12
 
 ### Añadido

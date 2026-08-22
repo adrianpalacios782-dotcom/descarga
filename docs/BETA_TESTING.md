@@ -1,4 +1,4 @@
-# Guía de Prueba Beta — osvaldoDownloaderPro 1.0.0
+# Guía de Prueba Beta — osvaldoDownloaderPro 1.0.1
 
 Gracias por probar la beta. Esta guía explica cómo instalar la aplicación, descargar contenido y reportar problemas.
 
@@ -25,14 +25,14 @@ Gracias por probar la beta. Esta guía explica cómo instalar la aplicación, de
 3. Descarga el archivo:
 
    ```
-   osvaldoDownloaderPro-1.0.0-Setup.exe
+   osvaldoDownloaderPro-1.0.1-Setup.exe
    ```
 
 4. (Opcional) Verifica que tu copia es idéntica a la publicada comparando el hash SHA256 con el valor publicado junto al release.
 
 ## 2. Instalar
 
-1. Haz doble clic en `osvaldoDownloaderPro-1.0.0-Setup.exe`.
+1. Haz doble clic en `osvaldoDownloaderPro-1.0.1-Setup.exe`.
 2. Sigue el asistente. **No necesita permisos de administrador** (se instala para tu usuario).
 3. Al terminar, la aplicación puede iniciarse sola si marcaste esa opción.
 
@@ -96,7 +96,7 @@ Envíame por el canal que uses (WhatsApp/Discord/correo) un mensaje breve con lo
 - **URL del contenido:** solo si es público y te parece apropiado compartirlo
 - **Calidad seleccionada:** ejemplo: "MP3 320 kbps" o "1080p"
 - **Mensaje de error exacto:** tal como apareció en pantalla
-- **Versión de la aplicación:** 1.0.0 (visible en la sección Acerca de)
+- **Versión de la aplicación:** 1.0.1 (visible en la sección Acerca de)
 - **Tu versión de Windows:** ejemplo: "Windows 11" o "Windows 10"
 
 No envíes capturas con datos personales, contraseñas ni contenido privado.
