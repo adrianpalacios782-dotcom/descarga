@@ -1,5 +1,5 @@
 from typing import Dict
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QScrollArea, QFrame
 
 from src.domain.entities.download_task import DownloadTask
@@ -23,9 +23,23 @@ class DescargasView(QWidget):
         layout.setContentsMargins(32, 32, 32, 32)
         layout.setSpacing(16)
 
-        title = QLabel("Descargas Activas y Cola")
-        title.setStyleSheet("font-size: 24px; font-weight: 800; color: #ffffff;")
+        title = QLabel("Descargas")
+        title.setObjectName("ViewTitle")
+        subtitle = QLabel("Progreso en tiempo real de tus descargas activas y en cola.")
+        subtitle.setObjectName("ViewSubtitle")
         layout.addWidget(title)
+        layout.addWidget(subtitle)
+
+        # Estado vacío de la biblioteca (se retira al llegar la primera tarjeta)
+        self.lbl_empty = QLabel(
+            "No hay descargas todavía.\n"
+            "Vuelve a Inicio, pega un enlace y pulsa Descargar."
+        )
+        self.lbl_empty.setObjectName("EmptyStateHint")
+        self.lbl_empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_empty.setWordWrap(True)
+        layout.addSpacing(24)
+        layout.addWidget(self.lbl_empty)
 
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -43,6 +57,9 @@ class DescargasView(QWidget):
     def add_task(self, task: DownloadTask) -> None:
         if task.id.value in self.cards:
             return
+
+        if not self.cards:
+            self.lbl_empty.hide()
 
         card = DownloadCardWidget(task)
         card.pause_requested.connect(self.pause_requested.emit)

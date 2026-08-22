@@ -11,7 +11,7 @@ STATUS_TEXT = {
     DownloadState.PAUSED: "Pausada",
     DownloadState.PROCESSING: "Procesando",
     DownloadState.COMPLETED: "Completada",
-    DownloadState.FAILED: "Fallida",
+    DownloadState.FAILED: "Error",
     DownloadState.CANCELLED: "Cancelada",
 }
 

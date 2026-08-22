@@ -1,14 +1,17 @@
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QSpinBox, QComboBox, QFrame, QMessageBox
+    QPushButton, QSpinBox, QComboBox, QFrame, QMessageBox,
+    QCheckBox,
 )
+import os
 
 
 class ConfiguracionView(QWidget):
-    """Vista de configuración global agrupada por secciones."""
+    """Vista de configuración global agrupada por paneles."""
 
     update_check_requested = Signal()
+    animations_enabled_changed = Signal(bool)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -22,15 +25,24 @@ class ConfiguracionView(QWidget):
         layout.addWidget(title)
 
         # ------------------------------------------------------ DESCARGAS
+        self.txt_default_dir = QLineEdit(os.path.join(os.path.expanduser("~"), "Downloads"))
+        self.chk_ask_destination = QCheckBox("Preguntar dónde guardar cada descarga")
+        self.chk_ask_destination.setChecked(False)
         layout.addWidget(self._build_section_card("DESCARGAS", [
-            self._row("Descargas Simultáneas Máximas:", self._spin_concurrent()),
+            self._row("Carpeta predeterminada:", self.txt_default_dir),
+            self.chk_ask_destination,
+            self._row("Descargas simultáneas máximas:", self._spin_concurrent()),
             self._hint("Número máximo de descargas ejecutándose a la vez."),
         ]))
 
         # ----------------------------------------------------- APARIENCIA
+        self.chk_animations = QCheckBox("Animaciones de la interfaz")
+        self.chk_animations.setChecked(True)
+        self.chk_animations.toggled.connect(self.animations_enabled_changed.emit)
         layout.addWidget(self._build_section_card("APARIENCIA", [
             self._row("Tema Visual:", self._combo_theme()),
             self._hint("Tema oscuro optimizado para contenido multimedia."),
+            self.chk_animations,
         ]))
 
         # ------------------------------------------------- ACTUALIZACIONES

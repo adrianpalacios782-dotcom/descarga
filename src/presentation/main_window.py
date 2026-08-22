@@ -1,10 +1,20 @@
 import logging
+import sys
 import threading
 
-from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QStackedWidget, QMessageBox
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from src.presentation.components.sidebar import SidebarWidget
+from src.presentation.components.title_bar import TitleBar
 from src.presentation.components.update_dialog import UpdateDialog
 from src.presentation.styles.styles import DARK_STYLE
 from src.presentation.view_models.main_view_model import MainViewModel
@@ -24,6 +34,18 @@ logger = logging.getLogger(__name__)
 # evita competir con la inicialización pesada (SQLite, FFmpeg, yt-dlp).
 STARTUP_UPDATE_CHECK_DELAY_MS = 2000
 
+# Zonas de redimensionado nativas de Windows (WM_NCHITTEST).
+_HT_CAPTION = 2
+_HT_LEFT = 10
+_HT_RIGHT = 11
+_HT_TOP = 12
+_HT_TOPLEFT = 13
+_HT_TOPRIGHT = 14
+_HT_BOTTOM = 15
+_HT_BOTTOMLEFT = 16
+_HT_BOTTOMRIGHT = 17
+_RESIZE_MARGIN = 6
+
 
 class MainWindow(QMainWindow):
     """Ventana principal de la aplicación osvaldoDownloaderPro."""
@@ -33,19 +55,37 @@ class MainWindow(QMainWindow):
         self.view_model = view_model
 
         self.setWindowTitle("osvaldoDownloaderPro")
-        self.resize(1020, 680)
+        self.resize(1160, 720)
+        # Mínimo pensado para que la previsualización completa quepa sin cortes
+        # en el escenario más pequeño soportado (portátiles 1366x768).
+        self.setMinimumSize(980, 700)
         self.setStyleSheet(DARK_STYLE)
 
-        # Widget central y layout
+        # Barra de título personalizada: ventana frameless con controles
+        # propios. El arrastre/snap lo gestiona Windows vía WM_NCHITTEST.
+        self._apply_frameless()
+
+        # Estructura raíz: barra de título + contenido (sidebar | vistas)
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QHBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
+        root_layout = QVBoxLayout(central_widget)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        self._title_bar = TitleBar()
+        self._title_bar.minimize_requested.connect(self.showMinimized)
+        self._title_bar.maximize_toggle_requested.connect(self._toggle_maximize)
+        self._title_bar.close_requested.connect(self.close)
+        root_layout.addWidget(self._title_bar)
+
+        content_layout = QHBoxLayout()
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+        root_layout.addLayout(content_layout, stretch=1)
 
         # Sidebar
         self.sidebar = SidebarWidget()
-        main_layout.addWidget(self.sidebar)
+        content_layout.addWidget(self.sidebar)
 
         # Stacked Views
         self.stacked = QStackedWidget()
@@ -64,11 +104,17 @@ class MainWindow(QMainWindow):
         self.stacked.addWidget(self.configuracion_view)
         self.stacked.addWidget(self.acerca_de_view)
 
-        main_layout.addWidget(self.stacked, stretch=1)
+        content_layout.addWidget(self.stacked, stretch=1)
 
         # Conectar Sidebar con StackedWidget
         self.sidebar.nav_changed.connect(self.stacked.setCurrentIndex)
         self.sidebar.nav_changed.connect(self._on_tab_changed)
+
+        # Preferencia de animaciones (Apariencia) -> microinteracciones Inicio
+        if hasattr(self.configuracion_view, "animations_enabled_changed"):
+            self.configuracion_view.animations_enabled_changed.connect(
+                self.inicio_view.set_animations_enabled
+            )
 
         # Conectar Signals del ViewModel
         self._connect_signals()
@@ -77,6 +123,82 @@ class MainWindow(QMainWindow):
         self.update_coordinator = UpdateCoordinator(parent=self)
         self._update_dialog: UpdateDialog | None = None
         self._connect_update_signals()
+
+    def _apply_frameless(self) -> None:
+        """Activa el modo frameless solo si es estable en esta plataforma."""
+        try:
+            self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+        except Exception:  # pragma: no cover - plataformas atípicas
+            logger.warning("No se pudo activar la barra de título personalizada.")
+
+    def _toggle_maximize(self) -> None:
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
+
+    def changeEvent(self, event) -> None:  # noqa: N802 (API Qt)
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.WindowStateChange:
+            title_bar = getattr(self, "_title_bar", None)
+            if title_bar is not None:
+                title_bar.refresh_window_state_icon(self.isMaximized())
+
+    # ------------------------------------------- Redimensionado nativo
+    def nativeEvent(self, event_type, message):  # noqa: N802 (API Qt)
+        """WM_NCHITTEST: bordes redimensionables y arrastre sobre la barra."""
+        handled = self._handle_nc_hit_test(event_type, message)
+        if handled is not None:
+            return handled
+        return super().nativeEvent(event_type, message)
+
+    def _handle_nc_hit_test(self, event_type, message):
+        if sys.platform != "win32" or event_type != "windows_generic_MSG":
+            return None
+        try:
+            import ctypes
+            import ctypes.wintypes as wintypes
+
+            msg = wintypes.MSG.from_address(int(message))
+            if msg.message != 0x0084:  # WM_NCHITTEST
+                return None
+            x = ctypes.c_short(msg.lParam & 0xFFFF).value
+            y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
+            pos = self.mapFromGlobal(QPoint(x, y))
+            width, height = self.width(), self.height()
+
+            if not self.isMaximized():
+                near_left = pos.x() < _RESIZE_MARGIN
+                near_right = pos.x() > width - _RESIZE_MARGIN
+                near_top = pos.y() < _RESIZE_MARGIN
+                near_bottom = pos.y() > height - _RESIZE_MARGIN
+                if near_top and near_left:
+                    return True, _HT_TOPLEFT
+                if near_top and near_right:
+                    return True, _HT_TOPRIGHT
+                if near_bottom and near_left:
+                    return True, _HT_BOTTOMLEFT
+                if near_bottom and near_right:
+                    return True, _HT_BOTTOMRIGHT
+                if near_left:
+                    return True, _HT_LEFT
+                if near_right:
+                    return True, _HT_RIGHT
+                if near_top:
+                    return True, _HT_TOP
+                if near_bottom:
+                    return True, _HT_BOTTOM
+
+            title_bar = getattr(self, "_title_bar", None)
+            if title_bar is not None and title_bar.isVisible():
+                local = title_bar.mapFrom(self, pos)
+                if 0 <= local.x() <= title_bar.width() and 0 <= local.y() <= title_bar.height():
+                    child = title_bar.childAt(local)
+                    if not isinstance(child, QPushButton) and title_bar.is_drag_zone(local):
+                        return True, _HT_CAPTION
+        except Exception:  # pragma: no cover - nunca romper por el hit-test
+            logger.debug("WM_NCHITTEST no gestionado", exc_info=True)
+        return None
 
     def _connect_signals(self) -> None:
         # InicioView -> ViewModel
