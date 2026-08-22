@@ -4,22 +4,22 @@ Aplicación de escritorio nativa para Windows 10/11 diseñada para la descarga, 
 
 ---
 
-## 🚀 osvaldoDownloaderPro v1.0.0 BETA
+## 🚀 osvaldoDownloaderPro v1.0.1 BETA
 
 ## ⬇️ DESCARGAR PARA WINDOWS
 
-### [ DESCARGAR osvaldoDownloaderPro v1.0.0 ](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.0.0)
+### [ DESCARGAR osvaldoDownloaderPro v1.0.1 ](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.0.1)
 
 En la página que se abre, busca la sección **Assets** (al final de la descripción) y haz clic en:
 
-> **`osvaldoDownloaderPro-1.0.0-Setup.exe`**
+> **`osvaldoDownloaderPro-1.0.1-Setup.exe`**
 
 Ese es el único archivo que necesitas.
 
 **Instalación en 4 pasos:**
 
 1. Haz clic en **DESCARGAR**.
-2. Descarga `osvaldoDownloaderPro-1.0.0-Setup.exe`.
+2. Descarga `osvaldoDownloaderPro-1.0.1-Setup.exe`.
 3. Ejecuta el archivo.
 4. Sigue el instalador.
 
@@ -56,7 +56,7 @@ No compatible con: Windows 10 LTSB/LTSC 2016 o anteriores, ni Windows de 32 bits
 - Procesamiento con **FFmpeg** embebido: fusión de flujos DASH (video + audio) sin re-codificación y extracción de audio.
 - Persistencia local con **SQLite** (modo WAL): historial, favoritos y configuración.
 - Arquitectura Hexagonal + Event-Driven: capas Domain, Application, Infrastructure y Presentation estrictamente desacopladas.
-- Interfaz moderna en modo oscuro construida con PySide6.
+- Interfaz moderna rediseñada en modo oscuro construida con PySide6: barra de título propia, sidebar por secciones, sistema de diseño con tokens (preparado para futuro modo claro) y microinteracciones.
 
 ## Seguridad
 
@@ -75,7 +75,7 @@ Nota: el software se ofrece como BETA. Analiza siempre los resultados de tus des
 ## Instalación (usuarios)
 
 1. Ve a la sección [Releases](../../releases) del repositorio.
-2. Descarga `osvaldoDownloaderPro-1.0.0-Setup.exe`.
+2. Descarga `osvaldoDownloaderPro-1.0.1-Setup.exe`.
 3. Ejecuta el instalador y sigue el asistente (no requiere permisos de administrador).
 4. Guía completa paso a paso: [`docs/BETA_TESTING.md`](docs/BETA_TESTING.md).
 
@@ -101,7 +101,7 @@ python src/main.py
 
 ### Suite de pruebas
 
-166 tests unitarios, de integración y E2E (incluye 83 tests de seguridad):
+349 tests unitarios, de integración y E2E (incluye 83 tests de seguridad):
 
 ```powershell
 python -m pytest
