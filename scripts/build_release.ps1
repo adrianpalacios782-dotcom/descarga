@@ -25,8 +25,19 @@ $BuildDir    = Join-Path $ProjectRoot "build"
 $AppDir      = Join-Path $DistDir "osvaldoDownloaderPro"
 $IsccPath    = Join-Path $Env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"
 $IssPath     = Join-Path $ProjectRoot "installer.iss"
-$SetupExe    = Join-Path $ProjectRoot "installer\osvaldoDownloaderPro-1.0.0-Setup.exe"
 $ReleaseDir  = Join-Path $BuildDir "release"
+
+# --- Version desde la UNICA fuente de verdad: src/__init__.py ---
+$SrcInitPath = Join-Path $ProjectRoot "src\__init__.py"
+if (-not (Test-Path -LiteralPath $SrcInitPath)) { Write-Fail "No existe src/__init__.py"; exit 1 }
+$SrcInitRaw = Get-Content -LiteralPath $SrcInitPath -Raw
+if ($SrcInitRaw -match '(?m)^\s*__version__\s*=\s*"(\d+\.\d+\.\d+)"\s*$') {
+    $AppVersion = $Matches[1]
+} else {
+    Write-Fail "No se pudo leer __version__ de src/__init__.py"; exit 1
+}
+$AppVersionQuad = "$AppVersion.0"
+$SetupExe    = Join-Path $ProjectRoot "installer\osvaldoDownloaderPro-$AppVersion-Setup.exe"
 
 function Write-Step($msg) { Write-Host "[BUILD] $msg" -ForegroundColor Cyan }
 function Write-Fail($msg) { Write-Host "[BUILD][ERROR] $msg" -ForegroundColor Red }
@@ -99,7 +110,7 @@ if ($signExit -eq 2) {
     Write-Host "Pipeline detenido ANTES de compilar el instalador (el instalador no se genera sin firma verificada)."
     New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
     @"
-# RELEASE REPORT - osvaldoDownloaderPro 1.0.0 (NO FIRMADO)
+# RELEASE REPORT - osvaldoDownloaderPro $AppVersion (NO FIRMADO)
 Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 Tests: PASS (completos + seguridad)
 PyInstaller: OK
@@ -123,7 +134,7 @@ if (Test-Path -LiteralPath $configFile) {
     } catch { }
 }
 $signToolDef = '/SReleaseSigner=signtool.exe sign /fd SHA256 /tr ' + $TimestampUrl + ' /td SHA256 $f'
-& $IsccPath "/DUSE_SIGNTOOL" $signToolDef $IssPath
+& $IsccPath "/DUSE_SIGNTOOL" $signToolDef "/DAPP_VERSION=$AppVersion" "/DAPP_VERSION_QUAD=$AppVersionQuad" $IssPath
 if ($LASTEXITCODE -ne 0) { Write-Fail "Inno Setup fallo."; exit 1 }
 
 # --- 8. Verificaciones finales + reporte ---
@@ -143,7 +154,7 @@ $hashLines = $hashes | ForEach-Object { "$($_.Hash)  $(Split-Path $_.Path -Leaf)
 $hashLines | Set-Content -LiteralPath (Join-Path $ReleaseDir "SHA256SUMS.txt") -Encoding ASCII
 
 @"
-# RELEASE REPORT - osvaldoDownloaderPro 1.0.0 (FIRMADO)
+# RELEASE REPORT - osvaldoDownloaderPro $AppVersion (FIRMADO)
 Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 Tests: PASS (completos + seguridad)
 PyInstaller: OK

@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFrame, QHBoxLayout, QPushButton
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFrame
 
 
 class FavoritosView(QWidget):
@@ -12,16 +13,32 @@ class FavoritosView(QWidget):
         layout.setSpacing(16)
 
         title = QLabel("Favoritos")
-        title.setStyleSheet("font-size: 24px; font-weight: 800; color: #ffffff;")
+        title.setObjectName("ViewTitle")
+        subtitle = QLabel("Guarda tus contenidos preferidos para acceder a ellos rápidamente.")
+        subtitle.setObjectName("ViewSubtitle")
         layout.addWidget(title)
+        layout.addWidget(subtitle)
 
         card = QFrame()
-        card.setObjectName("Card")
+        card.setObjectName("EmptyStateCard")
         card_layout = QVBoxLayout(card)
+        card_layout.setSpacing(8)
+        card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        empty_label = QLabel("No tienes contenidos agregados a favoritos.")
-        empty_label.setStyleSheet("font-size: 14px; color: #b3b3b3;")
-        card_layout.addWidget(empty_label)
+        lbl_title = QLabel("Aún no tienes favoritos")
+        lbl_title.setObjectName("EmptyStateTitle")
+        lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        lbl_hint = QLabel(
+            "Cuando agregues contenidos a favoritos aparecerán aquí como tarjetas "
+            "con su miniatura, título y plataforma."
+        )
+        lbl_hint.setObjectName("EmptyStateHint")
+        lbl_hint.setWordWrap(True)
+        lbl_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        card_layout.addWidget(lbl_title)
+        card_layout.addWidget(lbl_hint)
 
         layout.addWidget(card)
         layout.addStretch()

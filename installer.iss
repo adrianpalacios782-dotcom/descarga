@@ -1,9 +1,17 @@
 [Setup]
+; La versión se inyecta desde build_release.ps1 leyendo src/__init__.py
+; (única fuente de verdad). El default permite compilar standalone.
+#ifndef APP_VERSION
+#define APP_VERSION "1.0.0"
+#endif
+#ifndef APP_VERSION_QUAD
+#define APP_VERSION_QUAD "1.0.0.0"
+#endif
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName=osvaldoDownloaderPro
-AppVersion=1.0.0
-VersionInfoVersion=1.0.0.0
-VersionInfoProductVersion=1.0.0
+AppVersion={#APP_VERSION}
+VersionInfoVersion={#APP_VERSION_QUAD}
+VersionInfoProductVersion={#APP_VERSION}
 VersionInfoProductName=osvaldoDownloaderPro
 VersionInfoDescription=osvaldoDownloaderPro Setup
 VersionInfoCompany=osvaldoDownloaderPro
@@ -12,7 +20,7 @@ AppPublisher=osvaldoDownloaderPro Team
 DefaultDirName={autopf}\osvaldoDownloaderPro
 DefaultGroupName=osvaldoDownloaderPro
 OutputDir=installer
-OutputBaseFilename=osvaldoDownloaderPro-1.0.0-Setup
+OutputBaseFilename=osvaldoDownloaderPro-{#APP_VERSION}-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

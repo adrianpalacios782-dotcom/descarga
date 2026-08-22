@@ -1,8 +1,13 @@
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFrame, QPushButton
+
+import src as app_pkg
 
 
 class AcercaDeView(QWidget):
     """Vista con información corporativa, diagnóstico del entorno e integración de FFmpeg."""
+
+    update_check_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -20,9 +25,17 @@ class AcercaDeView(QWidget):
         card_layout = QVBoxLayout(card)
         card_layout.setSpacing(12)
 
-        version_lbl = QLabel("osvaldoDownloaderPro v1.0.0 (Release Principal)")
+        version_lbl = QLabel(
+            f"osvaldoDownloaderPro v{app_pkg.__version__} (Release Principal)"
+        )
         version_lbl.setStyleSheet("font-size: 16px; font-weight: 700; color: #1db954;")
-        
+
+        # Línea explícita de versión requerida en "Acerca de".
+        self.lbl_version_line = QLabel(f"Versión: {app_pkg.__version__}")
+        self.lbl_version_line.setStyleSheet(
+            "font-size: 13px; font-weight: 600; color: #b3b3b3;"
+        )
+
         desc_lbl = QLabel(
             "Aplicación de escritorio nativa e independiente para gestionar y descargar contenido "
             "multimedia desde YouTube, TikTok, Instagram y Facebook mediante Arquitectura Hexagonal y Monolito Modular."
@@ -37,10 +50,16 @@ class AcercaDeView(QWidget):
         btn_diagnostics = QPushButton("Exportar Paquete de Diagnóstico (.zip)")
         btn_diagnostics.setObjectName("SecondaryButton")
 
+        btn_check_updates = QPushButton("Buscar actualizaciones")
+        btn_check_updates.setObjectName("SecondaryButton")
+        btn_check_updates.clicked.connect(self.update_check_requested.emit)
+
         card_layout.addWidget(version_lbl)
+        card_layout.addWidget(self.lbl_version_line)
         card_layout.addWidget(desc_lbl)
         card_layout.addWidget(self.lbl_ffmpeg_status)
         card_layout.addWidget(btn_diagnostics)
+        card_layout.addWidget(btn_check_updates)
 
         layout.addWidget(card)
         layout.addStretch()

@@ -1,253 +1,460 @@
 import os
 from typing import Optional
-from PySide6.QtCore import Signal, Qt, QSize
+
+from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
-    QLabel, QFrame, QComboBox, QFileDialog, QMessageBox, QListWidget, QListWidgetItem
+    QLabel, QFrame, QComboBox, QFileDialog, QRadioButton,
+    QButtonGroup
 )
 
-from src.domain.entities.format_option import DownloadType, FormatOption, VideoFormat, AudioFormat, VideoQualityOption
+from src.domain.entities.format_option import DownloadType, VideoQualityOption
 from src.domain.entities.media_metadata import MediaMetadata
+from src.domain.services.content_preview import (
+    extract_publication_year,
+    format_size_bytes,
+    truncate_text,
+)
+from src.presentation.components.thumbnail_loader import ThumbnailLabel
+
+
+SYNOPSIS_MAX_CHARS = 220
+
+
+class QualityOptionRow(QFrame):
+    """Fila seleccionable tipo tarjeta para una calidad de video real."""
+
+    def __init__(self, vqo: VideoQualityOption, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("QualityCard")
+        self.vqo = vqo
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(14, 8, 14, 8)
+        row.setSpacing(10)
+
+        self.radio = QRadioButton(vqo.label)
+        self.radio.setObjectName("QualityRadio")
+        self.radio.setCursor(Qt.CursorShape.PointingHandCursor)
+        row.addWidget(self.radio)
+
+        if vqo.badge:
+            badge_lbl = QLabel(vqo.badge)
+            badge_lbl.setObjectName("QualityBadge")
+            row.addWidget(badge_lbl)
+
+        row.addStretch()
+
+        info = QLabel(vqo.get_technical_info())
+        info.setObjectName("QualityTechInfo")
+        row.addWidget(info)
+
+        self.radio.toggled.connect(self._on_toggled)
+
+    def _on_toggled(self, checked: bool) -> None:
+        self.setProperty("selected", checked)
+        style = self.style()
+        if style is not None:
+            style.unpolish(self)
+            style.polish(self)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802 (convención Qt)
+        self.radio.setChecked(True)
+        super().mousePressEvent(event)
 
 
 class InicioView(QWidget):
-    """Vista principal para ingresar URLs, analizar contenido y seleccionar resolución/formato de descarga."""
+    """Vista principal: PEGAR -> ANALIZAR -> PREVISUALIZAR -> CALIDAD -> FORMATO -> DESCARGAR."""
+
     analyze_requested = Signal(str)
     download_requested = Signal(object, str, str)  # (media_metadata, format_id, destination_path)
+
+    STATE_EMPTY = "empty"
+    STATE_ANALYZING = "analyzing"
+    STATE_SUCCESS = "success"
+    STATE_ERROR = "error"
+
+    TEXT_EMPTY = "Listo para descargar"
+    TEXT_ANALYZING = "Analizando contenido..."
+    TEXT_SUCCESS = "Contenido encontrado"
+    TEXT_ERROR_TITLE = "No pudimos analizar este enlace"
+    TEXT_ERROR_DETAIL = "El enlace no es compatible o la plataforma no respondió."
+    TEXT_NO_DESCRIPTION = "Sin descripción disponible."
+    TEXT_NOT_AVAILABLE = "No disponible"
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.current_metadata: Optional[MediaMetadata] = None
         self.selected_type: DownloadType = DownloadType.VIDEO
+        self._synopsis_full: str = ""
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 32, 32, 32)
-        layout.setSpacing(20)
+        root = QVBoxLayout(self)
+        root.setContentsMargins(32, 28, 32, 28)
+        root.setSpacing(16)
 
         # Encabezado
-        title = QLabel("Nueva Descarga Multimedia")
-        title.setStyleSheet("font-size: 24px; font-weight: 800; color: #ffffff;")
-        subtitle = QLabel("Pega el enlace de YouTube, TikTok, Instagram o Facebook para obtener el contenido")
-        subtitle.setStyleSheet("font-size: 13px; color: #b3b3b3;")
-        
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
+        title = QLabel("Descarga contenido multimedia")
+        title.setObjectName("ViewTitle")
+        subtitle = QLabel("Pega un enlace y descubre el contenido antes de descargarlo.")
+        subtitle.setObjectName("ViewSubtitle")
+        root.addWidget(title)
+        root.addWidget(subtitle)
 
-        # Fila de URL
+        # Fila de URL con botón Analizar y limpieza rápida
         url_box = QHBoxLayout()
         url_box.setSpacing(12)
         self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText("https://www.youtube.com/watch?v=...")
-        
+        self.url_input.setPlaceholderText(
+            "Pega aquí un enlace de YouTube, TikTok, Instagram o Facebook..."
+        )
+        self.url_input.setClearButtonEnabled(True)
+        self.url_input.returnPressed.connect(self._on_analyze_clicked)
+
         self.btn_analyze = QPushButton("Analizar")
         self.btn_analyze.setObjectName("PrimaryButton")
+        self.btn_analyze.setMinimumWidth(130)
         self.btn_analyze.clicked.connect(self._on_analyze_clicked)
 
-        url_box.addWidget(self.url_input)
+        url_box.addWidget(self.url_input, stretch=1)
         url_box.addWidget(self.btn_analyze)
-        layout.addLayout(url_box)
+        root.addLayout(url_box)
 
-        # Card de Vista Previa y Selección
+        # Banner de estado (vacío / analizando / éxito / error)
+        self.lbl_status = QLabel(self.TEXT_EMPTY)
+        self.lbl_status.setObjectName("StatusLabel")
+        self.lbl_status.setProperty("state", self.STATE_EMPTY)
+        self.lbl_status.setWordWrap(True)
+        root.addWidget(self.lbl_status)
+
+        # Card de previsualización
         self.preview_card = QFrame()
         self.preview_card.setObjectName("Card")
         self.preview_card.hide()
 
-        card_layout = QVBoxLayout(self.preview_card)
-        card_layout.setSpacing(16)
+        card = QVBoxLayout(self.preview_card)
+        card.setSpacing(14)
 
-        self.lbl_title = QLabel("Título del Contenido")
-        self.lbl_title.setStyleSheet("font-size: 18px; font-weight: 700; color: #ffffff;")
-        self.lbl_meta = QLabel("Plataforma — Duración: --:--")
-        self.lbl_meta.setStyleSheet("font-size: 13px; color: #b3b3b3;")
+        top_row = QHBoxLayout()
+        top_row.setSpacing(18)
 
-        card_layout.addWidget(self.lbl_title)
-        card_layout.addWidget(self.lbl_meta)
+        self.thumbnail = ThumbnailLabel(320, 180)
+        top_row.addWidget(self.thumbnail, alignment=Qt.AlignmentFlag.AlignTop)
 
-        # 1. Selector de Tipo de Descarga: [ VIDEO ] vs [ AUDIO ]
-        type_layout = QHBoxLayout()
-        type_layout.setSpacing(10)
-        lbl_type = QLabel("Tipo de Descarga:")
-        lbl_type.setStyleSheet("font-size: 13px; font-weight: 700; color: #b3b3b3;")
-        
-        self.btn_video_mode = QPushButton("VIDEO")
-        self.btn_video_mode.setObjectName("ModeButton")
-        self.btn_video_mode.setCheckable(True)
-        self.btn_video_mode.setChecked(True)
-        self.btn_video_mode.clicked.connect(lambda: self._set_download_mode(DownloadType.VIDEO))
+        info_col = QVBoxLayout()
+        info_col.setSpacing(8)
 
-        self.btn_audio_mode = QPushButton("AUDIO")
-        self.btn_audio_mode.setObjectName("ModeButton")
-        self.btn_audio_mode.setCheckable(True)
-        self.btn_audio_mode.clicked.connect(lambda: self._set_download_mode(DownloadType.AUDIO))
+        chips_row = QHBoxLayout()
+        chips_row.setSpacing(8)
+        self.chip_platform = self._make_chip(accent=True)
+        self.chip_duration = self._make_chip()
+        self.chip_year = self._make_chip()
+        self.chip_quality = self._make_chip()
+        for chip in (self.chip_platform, self.chip_duration, self.chip_year, self.chip_quality):
+            chips_row.addWidget(chip)
+            chip.hide()
+        chips_row.addStretch()
+        info_col.addLayout(chips_row)
 
-        type_layout.addWidget(lbl_type)
-        type_layout.addWidget(self.btn_video_mode)
-        type_layout.addWidget(self.btn_audio_mode)
-        type_layout.addStretch()
-        card_layout.addLayout(type_layout)
+        self.lbl_title = QLabel("")
+        self.lbl_title.setObjectName("PreviewTitle")
+        self.lbl_title.setWordWrap(True)
+        info_col.addWidget(self.lbl_title)
 
-        # 2. Panel de VIDEO (Selector Vertical Limpio de Resoluciones Reales)
-        self.panel_video = QWidget()
-        v_layout = QVBoxLayout(self.panel_video)
-        v_layout.setContentsMargins(0, 0, 0, 0)
-        v_layout.setSpacing(8)
-        
-        lbl_v_fmt = QLabel("Calidad de Video:")
-        lbl_v_fmt.setStyleSheet("font-size: 13px; font-weight: 600; color: #ffffff;")
-        
-        self.list_video_quality = QListWidget()
-        self.list_video_quality.setObjectName("VideoQualityList")
+        self.lbl_channel = QLabel("")
+        self.lbl_channel.setObjectName("PreviewChannel")
+        info_col.addWidget(self.lbl_channel)
+        info_col.addStretch()
 
-        v_layout.addWidget(lbl_v_fmt)
-        v_layout.addWidget(self.list_video_quality)
-        card_layout.addWidget(self.panel_video)
+        top_row.addLayout(info_col, stretch=1)
+        card.addLayout(top_row)
 
-        # 3. Panel de AUDIO (Formato / Bitrate)
+        # Sección Sinopsis
+        synopsis_box = QVBoxLayout()
+        synopsis_box.setSpacing(4)
+        lbl_syn_header = QLabel("SINOPSIS")
+        lbl_syn_header.setObjectName("SectionHeader")
+        self.lbl_synopsis = QLabel("")
+        self.lbl_synopsis.setObjectName("SynopsisText")
+        self.lbl_synopsis.setWordWrap(True)
+        self.btn_toggle_synopsis = QPushButton("Ver más")
+        self.btn_toggle_synopsis.setObjectName("LinkButton")
+        self.btn_toggle_synopsis.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_toggle_synopsis.hide()
+        self.btn_toggle_synopsis.clicked.connect(self._toggle_synopsis)
+        synopsis_box.addWidget(lbl_syn_header)
+        synopsis_box.addWidget(self.lbl_synopsis)
+        synopsis_box.addWidget(self.btn_toggle_synopsis, alignment=Qt.AlignmentFlag.AlignLeft)
+        card.addLayout(synopsis_box)
+
+        # Sección Calidad (radios sobre formatos reales normalizados)
+        lbl_quality = QLabel("CALIDAD DE VIDEO")
+        lbl_quality.setObjectName("SectionHeader")
+        card.addWidget(lbl_quality)
+
+        self.quality_container = QWidget()
+        self.quality_layout = QVBoxLayout(self.quality_container)
+        self.quality_layout.setContentsMargins(0, 0, 0, 0)
+        self.quality_layout.setSpacing(6)
+        card.addWidget(self.quality_container)
+
+        self.quality_button_group = QButtonGroup(self)
+        self.quality_button_group.setExclusive(True)
+
+        # Sección Formato [MP4] [MP3]
+        lbl_format = QLabel("FORMATO")
+        lbl_format.setObjectName("SectionHeader")
+        card.addWidget(lbl_format)
+
+        format_row = QHBoxLayout()
+        format_row.setSpacing(10)
+        self.btn_format_video = QPushButton("MP4")
+        self.btn_format_video.setObjectName("FormatChip")
+        self.btn_format_video.setCheckable(True)
+        self.btn_format_video.setChecked(True)
+        self.btn_format_audio = QPushButton("MP3")
+        self.btn_format_audio.setObjectName("FormatChip")
+        self.btn_format_audio.setCheckable(True)
+        self.format_button_group = QButtonGroup(self)
+        self.format_button_group.setExclusive(True)
+        self.format_button_group.addButton(self.btn_format_video)
+        self.format_button_group.addButton(self.btn_format_audio)
+        format_row.addWidget(self.btn_format_video)
+        format_row.addWidget(self.btn_format_audio)
+        format_row.addStretch()
+        card.addLayout(format_row)
+
+        self.btn_format_video.toggled.connect(lambda checked: self._set_download_mode(DownloadType.VIDEO) if checked else None)
+        self.btn_format_audio.toggled.connect(lambda checked: self._set_download_mode(DownloadType.AUDIO) if checked else None)
+
+        # Panel AUDIO (formato contenedor + bitrate honestos)
         self.panel_audio = QWidget()
         self.panel_audio.hide()
         a_layout = QHBoxLayout(self.panel_audio)
         a_layout.setContentsMargins(0, 0, 0, 0)
         a_layout.setSpacing(12)
-
-        lbl_a_fmt = QLabel("Formato:")
-        lbl_a_fmt.setStyleSheet("font-size: 13px; font-weight: 600;")
+        lbl_a_fmt = QLabel("Contenedor:")
+        lbl_a_fmt.setObjectName("FieldLabel")
         self.combo_audio_fmt = QComboBox()
         self.combo_audio_fmt.addItem("MP3", userData="mp3")
         self.combo_audio_fmt.addItem("M4A", userData="m4a")
         self.combo_audio_fmt.addItem("WAV", userData="wav")
-
         lbl_a_br = QLabel("Bitrate:")
-        lbl_a_br.setStyleSheet("font-size: 13px; font-weight: 600;")
+        lbl_a_br.setObjectName("FieldLabel")
         self.combo_audio_br = QComboBox()
-
         self.lbl_audio_note = QLabel("La conversión mantiene la calidad original del audio; no la aumenta.")
-        self.lbl_audio_note.setStyleSheet("font-size: 11px; color: #b3b3b3;")
+        self.lbl_audio_note.setObjectName("HintLabel")
         self.lbl_audio_note.setWordWrap(True)
-
         a_layout.addWidget(lbl_a_fmt)
         a_layout.addWidget(self.combo_audio_fmt, stretch=1)
         a_layout.addWidget(lbl_a_br)
         a_layout.addWidget(self.combo_audio_br, stretch=1)
-        card_layout.addWidget(self.panel_audio)
-        card_layout.addWidget(self.lbl_audio_note)
+        card.addWidget(self.panel_audio)
+        card.addWidget(self.lbl_audio_note)
+        self.lbl_audio_note.hide()
+
+        # Tamaño estimado de la selección actual
+        self.lbl_size_estimate = QLabel("")
+        self.lbl_size_estimate.setObjectName("SizeEstimate")
+        card.addWidget(self.lbl_size_estimate)
 
         self.combo_audio_fmt.currentIndexChanged.connect(self._refresh_audio_bitrate_options)
+        self.combo_audio_fmt.currentIndexChanged.connect(lambda _: self._update_size_estimate())
+        self.combo_audio_br.currentIndexChanged.connect(lambda _: self._update_size_estimate())
         self._refresh_audio_bitrate_options()
 
-        # Carpeta de Destino
+        # Carpeta de destino
         dest_layout = QHBoxLayout()
         dest_layout.setSpacing(12)
         lbl_dest = QLabel("Guardar en:")
-        lbl_dest.setStyleSheet("font-size: 13px; font-weight: 600;")
+        lbl_dest.setObjectName("FieldLabel")
         self.txt_dest = QLineEdit(os.path.join(os.path.expanduser("~"), "Downloads"))
         btn_browse = QPushButton("Examinar...")
         btn_browse.setObjectName("SecondaryButton")
         btn_browse.clicked.connect(self._on_browse_dest)
-
         dest_layout.addWidget(lbl_dest)
         dest_layout.addWidget(self.txt_dest, stretch=1)
         dest_layout.addWidget(btn_browse)
-        card_layout.addLayout(dest_layout)
+        card.addLayout(dest_layout)
 
-        # Botón de Descarga
-        self.btn_download = QPushButton("Iniciar Descarga")
+        # Acción principal explícita
+        self.btn_download = QPushButton("Descargar")
         self.btn_download.setObjectName("PrimaryButton")
+        self.btn_download.setMinimumHeight(44)
         self.btn_download.clicked.connect(self._on_download_clicked)
-        card_layout.addWidget(self.btn_download)
+        card.addWidget(self.btn_download)
 
-        layout.addWidget(self.preview_card)
-        layout.addStretch()
+        root.addWidget(self.preview_card)
+        root.addStretch()
 
-    def _set_download_mode(self, mode: DownloadType) -> None:
-        self.selected_type = mode
-        if mode == DownloadType.VIDEO:
-            self.btn_video_mode.setChecked(True)
-            self.btn_audio_mode.setChecked(False)
-            self.panel_video.show()
-            self.panel_audio.hide()
-        else:
-            self.btn_video_mode.setChecked(False)
-            self.btn_audio_mode.setChecked(True)
-            self.panel_video.hide()
-            self.panel_audio.show()
+    # ------------------------------------------------------------- Estado UI
+    @staticmethod
+    def _make_chip(accent: bool = False) -> QLabel:
+        chip = QLabel("")
+        chip.setObjectName("ChipAccent" if accent else "Chip")
+        chip.setVisible(False)
+        return chip
+
+    def _set_state_banner(self, state: str, text: str) -> None:
+        self.lbl_status.setText(text)
+        self.lbl_status.setProperty("state", state)
+        style = self.lbl_status.style()
+        if style is not None:
+            style.unpolish(self.lbl_status)
+            style.polish(self.lbl_status)
 
     def set_analyzing_state(self, is_analyzing: bool) -> None:
         if is_analyzing:
             self.btn_analyze.setEnabled(False)
             self.btn_analyze.setText("Analizando...")
             self.url_input.setEnabled(False)
+            self._set_state_banner(self.STATE_ANALYZING, self.TEXT_ANALYZING)
+            self.preview_card.hide()
         else:
             self.btn_analyze.setEnabled(True)
             self.btn_analyze.setText("Analizar")
             self.url_input.setEnabled(True)
+            if self.current_metadata is not None:
+                self._set_state_banner(self.STATE_SUCCESS, self.TEXT_SUCCESS)
+            else:
+                self._set_state_banner(self.STATE_EMPTY, self.TEXT_EMPTY)
+
+    def show_error(self, message: str) -> None:
+        self.current_metadata = None
+        self.preview_card.hide()
+        detail = self._sanitize_error_message(message)
+        text = f"{self.TEXT_ERROR_TITLE}. {self.TEXT_ERROR_DETAIL}"
+        if detail:
+            text = f"{text}\n{detail}"
+        self._set_state_banner(self.STATE_ERROR, text)
+
+    @staticmethod
+    def _sanitize_error_message(message: str) -> str:
+        """Reduce el mensaje técnico a una línea corta sin trazas internas."""
+        if not message:
+            return ""
+        import re
+        cleaned = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", str(message))
+        for raw_line in cleaned.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith(("Traceback", 'File "')) or '"line ' in line or line.startswith("^"):
+                continue
+            for marker in ("Traceback", 'File "'):
+                idx = line.find(marker)
+                if idx > 0:
+                    line = line[:idx].strip()
+            if line:
+                return line[:200]
+        return ""
 
     def _on_analyze_clicked(self) -> None:
         url_str = self.url_input.text().strip()
         if url_str:
             self.analyze_requested.emit(url_str)
 
+    # ------------------------------------------------------- Previsualización
     def set_metadata(self, metadata: MediaMetadata) -> None:
-        self.set_analyzing_state(False)
         self.current_metadata = metadata
-        self.lbl_title.setText(metadata.title)
-        self.lbl_meta.setText(f"Plataforma: {metadata.platform} — Duración: {metadata.get_duration_formatted()} — Autor: {metadata.author}")
+        self._synopsis_full = metadata.description or ""
+        self.set_analyzing_state(False)
 
-        # Poblar opciones de VIDEO verticales limpias (resoluciones reales + "Mejor calidad")
-        self.list_video_quality.clear()
+        self.lbl_title.setText(metadata.title or self.TEXT_NOT_AVAILABLE)
+        channel = (metadata.author or "").strip()
+        self.lbl_channel.setText(f"Canal: {channel}" if channel else f"Canal: {self.TEXT_NOT_AVAILABLE}")
+
+        self._populate_chips(metadata)
+        self.thumbnail.load_from_url(metadata.thumbnail_url or "")
+        self._render_synopsis(show_truncated=True)
+        self._rebuild_quality_options(metadata)
+
+        if not self.quality_button_group.buttons() and metadata.audio_formats:
+            self.btn_format_audio.setChecked(True)
+        elif metadata.video_quality_options or metadata.video_formats:
+            self.btn_format_video.setChecked(True)
+
+        self._update_size_estimate()
+        self.preview_card.show()
+
+    def _populate_chips(self, metadata: MediaMetadata) -> None:
+        self.chip_platform.setText(metadata.platform or self.TEXT_NOT_AVAILABLE)
+        self.chip_platform.show() if metadata.platform else self.chip_platform.hide()
+
+        duration = metadata.get_duration_formatted() if metadata.duration_seconds > 0 else ""
+        if duration:
+            self.chip_duration.setText(f"Duración {duration}")
+            self.chip_duration.show()
+        else:
+            self.chip_duration.hide()
+
+        year = extract_publication_year(metadata.upload_date)
+        if year:
+            self.chip_year.setText(f"Publicado en {year}")
+            self.chip_year.show()
+        else:
+            self.chip_year.hide()
+
+        heights = [v.height for v in metadata.video_quality_options if v.height and not v.is_best_quality]
+        if heights:
+            max_h = max(heights)
+            badge_4k = any(v.badge == "4K" for v in metadata.video_quality_options)
+            label = "Hasta 4K" if badge_4k and max_h >= 2160 else f"Hasta {max_h}p"
+            self.chip_quality.setText(label)
+            self.chip_quality.show()
+        else:
+            self.chip_quality.hide()
+
+    def _render_synopsis(self, show_truncated: bool) -> None:
+        if not self._synopsis_full.strip():
+            self.lbl_synopsis.setText(self.TEXT_NO_DESCRIPTION)
+            self.btn_toggle_synopsis.hide()
+            return
+        truncated = truncate_text(self._synopsis_full, SYNOPSIS_MAX_CHARS)
+        needs_truncation = len(truncated) < len(self._synopsis_full.strip())
+        if show_truncated and needs_truncation:
+            self.lbl_synopsis.setText(truncated)
+            self.btn_toggle_synopsis.setText("Ver más")
+            self.btn_toggle_synopsis.show()
+        else:
+            self.lbl_synopsis.setText(self._synopsis_full)
+            if needs_truncation:
+                self.btn_toggle_synopsis.setText("Ver menos")
+                self.btn_toggle_synopsis.show()
+            else:
+                self.btn_toggle_synopsis.hide()
+
+    def _toggle_synopsis(self) -> None:
+        showing_more = self.btn_toggle_synopsis.text() == "Ver menos"
+        self._render_synopsis(show_truncated=showing_more)
+
+    # --------------------------------------------------------- Opciones UI
+    def _rebuild_quality_options(self, metadata: MediaMetadata) -> None:
+        while self.quality_layout.count():
+            item = self.quality_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        for radio in self.quality_button_group.buttons():
+            self.quality_button_group.removeButton(radio)
 
         options = metadata.video_quality_options
         if not options and metadata.video_formats:
             options = self._fallback_quality_options(metadata)
 
         for vqo in options:
-            item = QListWidgetItem()
-            if vqo.is_best_quality:
-                item.setData(Qt.UserRole, "vq_best")
-            else:
-                item.setData(Qt.UserRole, f"vq_{vqo.height}")
+            row = QualityOptionRow(vqo)
+            self.quality_button_group.addButton(row.radio)
+            self.quality_layout.addWidget(row)
+            row.radio.toggled.connect(lambda checked, r=row: self._on_quality_selected(r) if checked else None)
 
-            row_widget = QWidget()
-            row_layout = QVBoxLayout(row_widget)
-            row_layout.setContentsMargins(12, 4, 12, 4)
-            row_layout.setSpacing(2)
-
-            top_row = QHBoxLayout()
-            top_row.setContentsMargins(0, 0, 0, 0)
-            top_row.setSpacing(8)
-
-            lbl_label = QLabel(vqo.label)
-            lbl_label.setStyleSheet("font-size: 15px; font-weight: 700; color: #ffffff;")
-            top_row.addWidget(lbl_label)
-
-            if vqo.badge:
-                lbl_badge = QLabel(vqo.badge)
-                lbl_badge.setStyleSheet("font-size: 11px; font-weight: 800; color: #000000; background-color: #1db954; padding: 2px 8px; border-radius: 4px;")
-                top_row.addWidget(lbl_badge)
-
-            top_row.addStretch()
-
-            lbl_info = QLabel(vqo.get_technical_info())
-            lbl_info.setStyleSheet("font-size: 11px; color: #727272;")
-
-            row_layout.addLayout(top_row)
-            row_layout.addWidget(lbl_info)
-
-            item.setSizeHint(QSize(0, 56))
-            self.list_video_quality.addItem(item)
-            self.list_video_quality.setItemWidget(item, row_widget)
-
-        # Ajustar la altura dinámica del QListWidget según el número de ítems
-        count = self.list_video_quality.count()
-        if count > 0:
-            self.list_video_quality.setCurrentRow(0)
-            target_height = min(320, max(56, count * 58 + 8))
-            self.list_video_quality.setFixedHeight(target_height)
-
-        # Si no hay opciones de video pero sí de audio, cambiar automáticamente a modo AUDIO
-        if count == 0 and metadata.audio_formats:
-            self._set_download_mode(DownloadType.AUDIO)
-
-        self.preview_card.show()
+        if options:
+            self.quality_container.show()
+            first_radio = self.quality_layout.itemAt(0).widget().radio  # type: ignore[union-attr]
+            first_radio.setChecked(True)
+        else:
+            self.quality_container.hide()
 
     @staticmethod
     def _fallback_quality_options(metadata: MediaMetadata):
@@ -273,17 +480,35 @@ class InicioView(QWidget):
             ))
         return options
 
-    def show_error(self, message: str) -> None:
-        self.set_analyzing_state(False)
-        QMessageBox.warning(self, "Error de Análisis", message)
+    def _selected_quality_option(self) -> Optional[VideoQualityOption]:
+        for row in self._iter_quality_rows():
+            if row.radio.isChecked():
+                return row.vqo
+        return None
 
-    def _on_browse_dest(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Seleccionar Carpeta de Destino")
-        if directory:
-            self.txt_dest.setText(directory)
+    def _iter_quality_rows(self):
+        for i in range(self.quality_layout.count()):
+            widget = self.quality_layout.itemAt(i).widget()
+            if isinstance(widget, QualityOptionRow):
+                yield widget
+
+    def _on_quality_selected(self, row: QualityOptionRow) -> None:
+        self._update_size_estimate()
+
+    def _set_download_mode(self, mode: DownloadType) -> None:
+        self.selected_type = mode
+        if mode == DownloadType.VIDEO:
+            self.btn_format_video.setChecked(True)
+            self.panel_audio.hide()
+            self.lbl_audio_note.hide()
+        else:
+            self.btn_format_audio.setChecked(True)
+            self.panel_audio.show()
+            self.lbl_audio_note.show()
+        self._update_size_estimate()
 
     def _refresh_audio_bitrate_options(self) -> None:
-        """Actualiza los bitrates ofrecidos según el formato de audio seleccionado (honestos y producibles)."""
+        """Actualiza los bitrates ofrecidos según el formato de audio (honestos y producibles)."""
         current = self.combo_audio_fmt.currentData()
         self.combo_audio_br.clear()
 
@@ -299,32 +524,61 @@ class InicioView(QWidget):
             self.combo_audio_br.addItem("Sin compresión", userData=320)
             self.combo_audio_br.setEnabled(False)
 
+    def _update_size_estimate(self) -> None:
+        if self.current_metadata is None:
+            self.lbl_size_estimate.setText("")
+            return
+
+        size_bytes = None
+        context = ""
+        if self.selected_type == DownloadType.VIDEO:
+            vqo = self._selected_quality_option()
+            if vqo is not None:
+                size_bytes = vqo.estimated_size_bytes
+                context = f"{vqo.extension.upper()} · {vqo.label}"
+        else:
+            audio_formats = self.current_metadata.audio_formats
+            if audio_formats:
+                af = audio_formats[0]
+                size_bytes = af.filesize_bytes
+                target_fmt = str(self.combo_audio_fmt.currentData() or "").upper()
+                bitrate = self.combo_audio_br.currentData()
+                context = f"{target_fmt}" + (f" · {bitrate} kbps" if bitrate else "")
+
+        human = format_size_bytes(size_bytes)
+        if human:
+            self.lbl_size_estimate.setText(f"Tamaño estimado: ~{human}" + (f" · {context}" if context else ""))
+        else:
+            self.lbl_size_estimate.setText("Tamaño estimado no disponible" + (f" · {context}" if context else ""))
+
+    # ------------------------------------------------------------ Descarga
+    def _on_browse_dest(self) -> None:
+        directory = QFileDialog.getExistingDirectory(self, "Seleccionar Carpeta de Destino")
+        if directory:
+            self.txt_dest.setText(directory)
+
     def _on_download_clicked(self) -> None:
         if not self.current_metadata:
             return
 
         dest_dir = self.txt_dest.text().strip()
-
         if not os.path.isdir(dest_dir):
-            QMessageBox.warning(self, "Ruta Inválida", "La carpeta de destino no existe o no es válida.")
+            self._show_warning("Ruta Inválida", "La carpeta de destino no existe o no es válida.")
             return
 
         title = self._sanitize_filename(self.current_metadata.title)
 
         if self.selected_type == DownloadType.VIDEO:
-            current_item = self.list_video_quality.currentItem()
-            if not current_item:
-                QMessageBox.warning(self, "Selección Requerida", "Por favor selecciona una resolución de video.")
+            vqo = self._selected_quality_option()
+            if vqo is None:
+                self._show_warning("Selección Requerida", "Por favor selecciona una resolución de video.")
                 return
-            fmt_id = current_item.data(Qt.UserRole)
-            if fmt_id == "vq_best":
+            if vqo.is_best_quality:
+                fmt_id = "vq_best"
                 filename = f"{title} - Mejor calidad.mp4"
             else:
-                try:
-                    height = int(fmt_id.replace("vq_", ""))
-                    filename = f"{title} - {height}p.mp4"
-                except ValueError:
-                    filename = f"{title}.mp4"
+                fmt_id = f"vq_{vqo.height}"
+                filename = f"{title} - {vqo.height}p.mp4"
         else:
             target_fmt = str(self.combo_audio_fmt.currentData())
             target_br = int(self.combo_audio_br.currentData())
@@ -336,12 +590,13 @@ class InicioView(QWidget):
         dest_path = os.path.join(dest_dir, filename)
         self.download_requested.emit(self.current_metadata, fmt_id, dest_path)
 
+    def _show_warning(self, title: str, message: str) -> None:
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.warning(self, title, message)
+
     @staticmethod
     def _sanitize_filename(name: str) -> str:
-        """Sanitiza un nombre de archivo eliminando caracteres peligrosos.
-
-        Usa la misma lógica que el download engine para consistencia.
-        """
+        """Sanitiza un nombre de archivo eliminando caracteres peligrosos."""
         import re
         if not name:
             return "descarga"

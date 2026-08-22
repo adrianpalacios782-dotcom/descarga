@@ -41,3 +41,22 @@ class TaskNotFoundError(DomainError):
 class QualityDegradationError(DomainError):
     """Lanzada cuando la calidad descargada es significativamente inferior a la solicitada."""
     pass
+
+
+class UpdateError(DomainError):
+    """Excepción general del sistema de actualización automática."""
+    pass
+
+
+class InvalidUpdateInfoError(UpdateError):
+    """Lanzada cuando la información remota de actualización es inválida o no confiable.
+
+    Incluye: versión remota con formato no SemVer, URL de asset fuera de la
+    fuente oficial, checksum ausente/malformado o nombre de instalador inesperado.
+    """
+    pass
+
+
+class UpdateDownloadError(UpdateError):
+    """Lanzada cuando la descarga del instalador falla, está incompleta o corrompida."""
+    pass

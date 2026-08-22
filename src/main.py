@@ -51,6 +51,9 @@ def main() -> None:
     window = MainWindow(view_model=view_model)
     window.show()
 
+    # Chequeo único de actualizaciones al iniciar (no bloqueante; falla en silencio).
+    window.schedule_startup_update_check()
+
     sys.exit(app.exec())
 
 
