@@ -1,0 +1,58 @@
+# -*- coding: utf-8 -*-
+#
+# Metadatos de version Windows PE (VS_VERSIONINFO) para osvaldoDownloaderPro.
+# PyInstaller los incrusta como recurso VERSIONINFO del ejecutable; son los que
+# muestra el Explorador/Propiedades y una senal positiva para Smart App Control
+# y los antivirus (binary con identidad declarada vs. binario anonimo).
+#
+# Sintaxis: Python evaluado por PyInstaller (versioninfo.py). Mantener en
+# sincronia con src/__init__.py (__version__ = X.Y.Z -> quad X.Y.Z.0).
+# build_release.ps1 valida esta coincidencia antes de empaquetar.
+#
+# Estructura estandar de la Win32 API:
+#   https://learn.microsoft.com/en-us/windows/win32/menurc/vs-versioninfo
+
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    # Version en 4 enteros de 16 bits: major, minor, patch, build.
+    # Debe reflejar __version__ de src/__init__.py + .0 (1.0.1 -> 1.0.1.0).
+    filevers=(1, 0, 1, 0),
+    prodvers=(1, 0, 1, 0),
+
+    # Mascara que declara que bits de dwFileFlags son validos.
+    mask=0x3F,
+    flags=0x0,
+
+    # SO objetivo: NT / Windows32.
+    OS=0x40004,
+
+    # Tipo de archivo: VFT_APP (aplicacion); sin subtipo especifico.
+    fileType=0x1,
+    subtype=0x0,
+
+    # Fecha de compilacion; 0 = no provista (build reproducible).
+    date=(0, 0),
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          '040904B0',  # US English + Unicode
+          [
+            StringStruct('CompanyName', 'osvaldoDownloaderPro'),
+            StringStruct('FileDescription', 'osvaldoDownloaderPro Desktop Video & Audio Downloader'),
+            StringStruct('FileVersion', '1.0.1.0'),
+            StringStruct('InternalName', 'osvaldoDownloaderPro'),
+            StringStruct('LegalCopyright', 'Copyright (C) 2026 osvaldoDownloaderPro'),
+            StringStruct('OriginalFilename', 'osvaldoDownloaderPro.exe'),
+            StringStruct('ProductName', 'osvaldoDownloaderPro'),
+            StringStruct('ProductVersion', '1.0.1.0'),
+            # Sin comentarios ni nombres privados: menos superficie para
+            # heuristicas de deteccion basadas en metadatos incompletos.
+          ]
+        )
+      ]
+    ),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])]),  # en-US, Unicode
+  ]
+)
