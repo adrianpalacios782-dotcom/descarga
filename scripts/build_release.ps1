@@ -71,6 +71,26 @@ foreach ($dir in @($BuildDir, $DistDir)) {
 
 # --- 4. PyInstaller ---
 Write-Step "Paso 4/8: PyInstaller (osvaldoDownloaderPro.spec)"
+
+# Sincronia de metadatos: scripts/version_info.txt debe reflejar la version
+# de src/__init__.py (unica fuente de verdad). Si difieren, el exe quedaria
+# con identidad distinta al instalador -> rechazo en revision de Windows.
+$ExpectedQuad = "$AppVersion.0"
+$VersionInfoPath = Join-Path $ProjectRoot "scripts\version_info.txt"
+if (-not (Test-Path -LiteralPath $VersionInfoPath)) { Write-Fail "Falta scripts/version_info.txt"; exit 1 }
+$ViRaw = Get-Content -LiteralPath $VersionInfoPath -Raw
+if ($ViRaw -notmatch [regex]::Escape("StringStruct('FileVersion', '$ExpectedQuad')")) {
+    Write-Fail "version_info.txt: FileVersion != '$ExpectedQuad' (desincronizado con src/__init__.py)"; exit 1
+}
+if ($ViRaw -notmatch [regex]::Escape("StringStruct('ProductVersion', '$ExpectedQuad')")) {
+    Write-Fail "version_info.txt: ProductVersion != '$ExpectedQuad'"; exit 1
+}
+$VerParts = $AppVersion.Split('.')
+$ExpectedTuple = "filevers=\($($VerParts[0]),\s*$($VerParts[1]),\s*$($VerParts[2]),\s*0\)"
+if ($ViRaw -notmatch $ExpectedTuple) {
+    Write-Fail "version_info.txt: filevers no coincide con $ExpectedQuad"; exit 1
+}
+
 python -m PyInstaller osvaldoDownloaderPro.spec --noconfirm
 if ($LASTEXITCODE -ne 0) { Write-Fail "PyInstaller fallo."; exit 1 }
 
@@ -95,6 +115,24 @@ foreach ($bin in @("ffmpeg.exe", "ffprobe.exe")) {
 foreach ($r in @("ffmpeg.exe", "ffprobe.exe")) {
     if (-not (Test-Path -LiteralPath (Join-Path $AppDir $r))) { Write-Fail "Falta artefacto requerido: $r"; exit 1 }
 }
+
+# Metadatos de version embebidos en el exe (recurso VERSIONINFO de PyInstaller).
+$AppExe = Join-Path $AppDir "osvaldoDownloaderPro.exe"
+$Vi = (Get-Item -LiteralPath $AppExe).VersionInfo
+if ($Vi.FileVersion -ne $ExpectedQuad) {
+    Write-Fail "exe FileVersion='$($Vi.FileVersion)' != '$ExpectedQuad'"; exit 1
+}
+if ($Vi.ProductVersion -ne $ExpectedQuad) {
+    Write-Fail "exe ProductVersion='$($Vi.ProductVersion)' != '$ExpectedQuad'"; exit 1
+}
+if ($Vi.ProductName -ne "osvaldoDownloaderPro") {
+    Write-Fail "exe ProductName='$($Vi.ProductName)' inesperado"; exit 1
+}
+if ($Vi.CompanyName -ne "osvaldoDownloaderPro") {
+    Write-Fail "exe CompanyName='$($Vi.CompanyName)' inesperado"; exit 1
+}
+Write-Step "Metadatos de version OK (FileVersion/ProductVersion=$ExpectedQuad, ProductName/CompanyName OK)"
+
 Write-Step "Artefactos OK (exe + ffmpeg + ffprobe + _internal)"
 
 # --- 6. Firma del exe de la app (solo si hay certificado) ---
@@ -115,6 +153,8 @@ Fecha: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 Tests: PASS (completos + seguridad)
 PyInstaller: OK
 Artefactos verificados: osvaldoDownloaderPro.exe / ffmpeg.exe / ffprobe.exe / _internal
+Metadatos de version del exe: OK ($ExpectedQuad)
+UPX: DESACTIVADO
 Firma: NO REALIZADA - certificado no configurado
 Instalador: NO COMPILADO (requiere firma)
 "@ | Set-Content -LiteralPath (Join-Path $ReleaseDir "RELEASE_REPORT.md") -Encoding UTF8
