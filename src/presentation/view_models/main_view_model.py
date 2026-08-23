@@ -21,10 +21,14 @@ from src.domain.events.domain_events import (
     DownloadFailedEvent,
     DownloadCancelledEvent,
 )
+from src.domain.exceptions.domain_exceptions import TaskNotFoundError
 from src.domain.ports.download_engine import IDownloadEngine
 from src.domain.ports.download_repository import IDownloadRepository
 from src.domain.ports.platform_adapter import IPlatformAdapter
 from src.domain.value_objects.download_id import DownloadId
+from src.infrastructure.adapters.download.download_queue_manager import (
+    DownloadQueueManager,
+)
 from src.infrastructure.event_bus.in_process_event_bus import InProcessEventBus
 
 
@@ -36,10 +40,13 @@ class MainViewModel(QObject):
     media_analyzed = Signal(object)
     analysis_failed = Signal(str)
     download_created = Signal(object)
+    download_queued = Signal(str)          # id -> tarjeta "En cola"
+    download_started = Signal(str)         # id -> transición a "Descargando"
     download_progress = Signal(str, float, int, int, float, float)  # id, %, downloaded, total, speed, eta
     download_state_changed = Signal(str, str, object)  # id, estado, mensaje de error
     download_completed = Signal(str, str)
     download_failed = Signal(str, str)
+    download_quality_warning = Signal(str, str)  # id, advertencia de calidad
 
     def __init__(
         self,
@@ -47,6 +54,7 @@ class MainViewModel(QObject):
         download_engine: IDownloadEngine,
         repository: IDownloadRepository,
         event_bus: InProcessEventBus,
+        download_queue: Optional[DownloadQueueManager] = None,
         parent: Optional[QObject] = None
     ) -> None:
         super().__init__(parent)
@@ -54,6 +62,7 @@ class MainViewModel(QObject):
         self.download_engine = download_engine
         self.repository = repository
         self.event_bus = event_bus
+        self.download_queue = download_queue
 
         # Inicializar Casos de Uso
         self.analyze_uc = AnalyzeUrlUseCase(self.platform_adapter)
@@ -72,6 +81,12 @@ class MainViewModel(QObject):
         self.event_bus.subscribe(DownloadFailedEvent, self._on_download_failed_event)
         self.event_bus.subscribe(DownloadCancelledEvent, self._on_download_cancelled_event)
 
+        # Puente señales de la cola -> señales del ViewModel (si hay cola)
+        if self.download_queue is not None:
+            self.download_queue.enqueued.connect(self.download_queued.emit)
+            self.download_queue.started.connect(self.download_started.emit)
+            self.download_queue.quality_warning.connect(self.download_quality_warning.emit)
+
     @Slot(str)
     def analyze_url(self, url_str: str) -> None:
         """Ejecuta el análisis de la URL en un hilo secundario asíncrono para mantener la UI 100% fluida."""
@@ -88,22 +103,44 @@ class MainViewModel(QObject):
         thread.start()
 
     def create_and_start_download(self, media: MediaMetadata, format_id: str, destination_path: str) -> DownloadTask:
-        """Crea y comienza una nueva descarga."""
+        """Crea y encola una nueva descarga (o la inicia directo si no hay cola)."""
         task = self.create_uc.execute(media=media, format_id=format_id, destination_path=destination_path)
         self.download_created.emit(task)
-        self.start_uc.execute(task.id)
+        if self.download_queue is not None:
+            # La cola respeta el límite de concurrencia: queda "En cola" hasta
+            # que haya slot y transiciona sola a DOWNLOADING.
+            self.download_queue.enqueue(task)
+        else:
+            self.start_uc.execute(task.id)
         return task
 
     def pause_download(self, task_id_str: str) -> None:
+        if self.download_queue is not None:
+            self.download_queue.pause(task_id_str)
+            return
         self.pause_uc.execute(DownloadId(task_id_str))
 
     def resume_download(self, task_id_str: str) -> None:
+        if self.download_queue is not None:
+            self.download_queue.resume(task_id_str)
+            return
         self.resume_uc.execute(DownloadId(task_id_str))
 
     def cancel_download(self, task_id_str: str) -> None:
+        if self.download_queue is not None:
+            self.download_queue.cancel(task_id_str)
+            return
         self.cancel_uc.execute(DownloadId(task_id_str))
 
     def retry_download(self, task_id_str: str) -> None:
+        if self.download_queue is not None:
+            task = self.repository.get_by_id(DownloadId(task_id_str))
+            if not task:
+                raise TaskNotFoundError(f"No se encontró la tarea de descarga con ID '{task_id_str}'.")
+            task.reset_to_queued()
+            self.repository.save(task)
+            self.download_queue.enqueue(task)
+            return
         self.retry_uc.execute(DownloadId(task_id_str))
 
     def get_all_tasks(self) -> List[DownloadTask]:
@@ -120,7 +157,9 @@ class MainViewModel(QObject):
         )
 
     def _on_download_completed_event(self, event: DownloadCompletedEvent) -> None:
-        self.download_state_changed.emit(event.task_id, "COMPLETED", None)
+        # Una descarga completada con calidad degradada sigue siendo COMPLETED;
+        # la advertencia viaja como mensaje para mostrarse inline en la tarjeta.
+        self.download_state_changed.emit(event.task_id, "COMPLETED", event.warning_message or None)
         self.download_completed.emit(event.task_id, event.destination_path)
 
     def _on_download_failed_event(self, event: DownloadFailedEvent) -> None:

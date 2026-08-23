@@ -83,3 +83,20 @@ class TestSQLiteDownloadRepository:
         db_repo.delete(sample_task.id)
         assert db_repo.get_by_id(sample_task.id) is None
         assert len(db_repo.get_all()) == 0
+
+    def test_quality_warning_roundtrip(self, db_repo: SQLiteDownloadRepository, sample_task: DownloadTask) -> None:
+        """Una tarea completada con advertencia de calidad degradada persiste y recupera el aviso."""
+        sample_task.transition_to(DownloadState.DOWNLOADING)
+        sample_task.quality_warning = (
+            "Calidad degradada: se solicitó 1080p pero el archivo resultante "
+            "tiene 806p@24fps. La resolución solicitada no pudo ser entregada."
+        )
+        sample_task.complete()
+        db_repo.save(sample_task)
+
+        retrieved = db_repo.get_by_id(sample_task.id)
+        assert retrieved is not None
+        assert retrieved.status == DownloadState.COMPLETED
+        assert retrieved.error_message is None
+        assert "806p@24fps" in (retrieved.quality_warning or "")
+        assert "1080p" in (retrieved.quality_warning or "")

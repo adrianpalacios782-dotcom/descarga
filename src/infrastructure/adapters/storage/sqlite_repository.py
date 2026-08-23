@@ -110,9 +110,9 @@ class SQLiteDownloadRepository(IDownloadRepository):
                     INSERT INTO download_tasks (
                         id, media_id, chosen_format_id, destination_path, current_state,
                         progress_percent, downloaded_bytes, total_bytes, speed_bps, eta_seconds,
-                        error_message, created_at, started_at, completed_at
+                        error_message, quality_warning, created_at, started_at, completed_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         current_state=excluded.current_state,
                         progress_percent=excluded.progress_percent,
@@ -121,6 +121,7 @@ class SQLiteDownloadRepository(IDownloadRepository):
                         speed_bps=excluded.speed_bps,
                         eta_seconds=excluded.eta_seconds,
                         error_message=excluded.error_message,
+                        quality_warning=excluded.quality_warning,
                         started_at=excluded.started_at,
                         completed_at=excluded.completed_at
                     """,
@@ -136,6 +137,7 @@ class SQLiteDownloadRepository(IDownloadRepository):
                         task.speed_bps,
                         task.eta_seconds,
                         task.error_message,
+                        task.quality_warning,
                         task.created_at.isoformat(),
                         task.started_at.isoformat() if task.started_at else None,
                         task.completed_at.isoformat() if task.completed_at else None
@@ -251,7 +253,8 @@ class SQLiteDownloadRepository(IDownloadRepository):
             created_at=datetime.fromisoformat(row["created_at"]),
             started_at=datetime.fromisoformat(row["started_at"]) if row["started_at"] else None,
             completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None,
-            error_message=row["error_message"]
+            error_message=row["error_message"],
+            quality_warning=row["quality_warning"] if "quality_warning" in row.keys() else None
         )
 
         return task

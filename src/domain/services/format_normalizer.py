@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional, Tuple
+import re
 
 from src.domain.entities.format_option import (
     FormatOption, StreamType, VideoFormat, AudioFormat, VideoQualityOption
@@ -104,12 +105,19 @@ class FormatNormalizer:
     def infer_standard_height(cls, f: Dict[str, Any]) -> int:
         """Deduce la altura estándar de un formato incluso sin `height` numérico.
 
-        Orden de evidencia: height real > etiquetas en format_id/format_note/resolution.
-        Retorna 0 si no hay evidencia suficiente.
+        Orden de evidencia: height real > resolución "WxH" > etiquetas en
+        format_id/format_note/resolution. Retorna 0 si no hay evidencia suficiente.
         """
         raw_height = f.get("height") or 0
         if raw_height > 0:
             return cls.get_standard_height(raw_height)
+
+        resolution_raw = str(f.get("resolution") or "").strip().lower()
+        match = re.match(r"^(\d{2,5})x(\d{2,5})$", resolution_raw)
+        if match:
+            parsed_height = int(match.group(2))
+            if parsed_height > 0:
+                return cls.get_standard_height(parsed_height)
 
         haystacks = (
             str(f.get("format_id") or ""),
