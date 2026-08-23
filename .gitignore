@@ -107,6 +107,11 @@ logs/
 opencode-temp/
 *.opencode.tmp
 
+# ---------- Scratch / diagnostico local ----------
+# Scripts de depuracion, servidores HTTP locales de prueba y capturas.
+# Nunca forman parte del repositorio publico.
+scratch/
+
 # ---------- Sistema ----------
 Thumbs.db
 Desktop.ini
