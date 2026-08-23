@@ -61,7 +61,7 @@ tests/
 El motor se valida además con descargas reales (YouTube público) ejecutadas desde la CLI:
 
 ```bash
-python C:\Users\qyt95\AppData\Local\Temp\opencode\odp_battery.py
+python "%TEMP%\odp_battery.py"
 ```
 
 Verifica para cada caso (Mejor calidad, 1080p, 720p, 480p, MP3 320, M4A 192, WAV):
