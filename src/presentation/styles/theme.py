@@ -846,6 +846,12 @@ QLabel#CardErrorLabel {{
     color: {p.danger};
 }}
 
+QLabel#CardWarningLabel {{
+    font-size: 11px;
+    font-weight: 600;
+    color: {p.warning};
+}}
+
 /* -------------------------------------------------- Estados vacíos */
 QLabel#EmptyStateTitle {{
     font-size: 17px;

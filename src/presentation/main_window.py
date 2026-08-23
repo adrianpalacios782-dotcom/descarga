@@ -212,8 +212,17 @@ class MainWindow(QMainWindow):
 
         # ViewModel -> DescargasView
         self.view_model.download_created.connect(self.descargas_view.add_task)
+        self.view_model.download_queued.connect(
+            lambda task_id: self.descargas_view.set_state(task_id, "QUEUED")
+        )
+        self.view_model.download_started.connect(
+            lambda task_id: self.descargas_view.set_state(task_id, "DOWNLOADING")
+        )
         self.view_model.download_progress.connect(self.descargas_view.update_progress)
         self.view_model.download_state_changed.connect(self.descargas_view.set_state)
+        self.view_model.download_quality_warning.connect(
+            self.descargas_view.show_quality_warning
+        )
 
         # DescargasView -> ViewModel
         self.descargas_view.pause_requested.connect(self.view_model.pause_download)

@@ -14,13 +14,22 @@ from src.domain.value_objects.url import Url
 class BasePlatformAdapter(IPlatformAdapter):
     """Adaptador base de infraestructura que aísla yt-dlp detrás del contrato IPlatformAdapter sin cookies de navegador.
 
-    Usa restricciones mínimas de player_client para obtener la lista completa de formatos
+    Usa estrategias de player_client ordenadas por confiabilidad para obtener la lista completa de formatos
     (DASH video-only, audio-only, progresivos) sin provocar 403 ni limitar resoluciones.
+
+    IMPORTANTE: cuando YouTube aplica su verificación anti-bot a un cliente, NO siempre
+    falla la extracción: puede responder "exitosamente" con metadata completa (título,
+    miniatura, canal...) pero SOLO formatos storyboard (mhtml sb0-sb3). Ese resultado es
+    degenerado y NO debe aceptarse como análisis válido si otra estrategia entrega
+    formatos reales.
     """
 
     CLIENT_STRATEGIES: List[Optional[List[str]]] = [
-        None,
-        ["web"],
+        None,        # defaults de yt-dlp (agrega varios clientes internamente)
+        ["tv"],      # cliente TV: suele sortear el bot-check con DASH completo
+        ["android"], # cliente Android: contenido real aunque limitado (sin PO token)
+        ["web"],     # cliente web clásico
+        ["mweb"],    # cliente web móvil
     ]
 
     def _build_ydl_opts(self, player_clients: Optional[List[str]] = None) -> Dict[str, Any]:
@@ -39,8 +48,17 @@ class BasePlatformAdapter(IPlatformAdapter):
         return ydl_opts
 
     def _extract_with_ytdlp(self, url: Url) -> Dict[str, Any]:
-        """Extrae la información con la mejor estrategia de clientes disponible."""
-        results: List[Dict[str, Any]] = []
+        """Extrae la información con la mejor estrategia de clientes disponible.
+
+        Una estrategia solo se considera exitosa si entregó al menos un formato REAL
+        de medios (no storyboard/mhtml/thumbnail). Se acepta la primera estrategia
+        que entregue video real; si ninguna entrega video, se usa la mejor que haya
+        entregado solo audio; si todas fallan o devuelven únicamente recursos
+        auxiliares, se lanza MediaAnalysisError.
+        """
+        video_info: Optional[Dict[str, Any]] = None
+        audio_only_info: Optional[Dict[str, Any]] = None
+        direct_url_info: Optional[Dict[str, Any]] = None
         errors: List[str] = []
 
         for clients in self.CLIENT_STRATEGIES:
@@ -48,23 +66,43 @@ class BasePlatformAdapter(IPlatformAdapter):
                 opts = self._build_ydl_opts(clients)
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url.value, download=False)
-                    if not info:
-                        continue
-                    if "entries" in info or info.get("_type") == "playlist":
-                        entries = [e for e in info.get("entries", []) if e]
-                        if entries:
-                            info = entries[0]
-                    formats = info.get("formats") or []
-                    video_opts = FormatNormalizer.normalize_video_quality_options(formats)
-                    max_height = max([v.height for v in video_opts], default=0)
-                    results.append((max_height, len(formats), info))
+                if not info:
+                    continue
+                if "entries" in info or info.get("_type") == "playlist":
+                    entries = [e for e in info.get("entries", []) if e]
+                    if entries:
+                        info = entries[0]
+                formats = info.get("formats") or []
+
+                if not formats:
+                    # Extracción de archivo directo (sin lista de formatos): válida.
+                    if info.get("url"):
+                        direct_url_info = info
+                        break
+                    errors.append("respuesta sin formatos")
+                    continue
+
+                real_formats = [f for f in formats if not FormatNormalizer.is_auxiliary_format(f)]
+                if not real_formats:
+                    errors.append("respuesta sin formatos de medios reales (solo recursos auxiliares)")
+                    continue
+
+                video_opts = FormatNormalizer.normalize_video_quality_options(formats)
+                max_height = max([v.height for v in video_opts], default=0)
+                if max_height > 0 and video_info is None:
+                    video_info = info
+                    break
+                if audio_only_info is None:
+                    audio_only_info = info
             except Exception as ex:
                 errors.append(str(ex))
                 continue
 
-        if results:
-            results.sort(key=lambda r: (r[0], r[1]), reverse=True)
-            return results[0][2]
+        chosen = video_info if video_info is not None else (
+            direct_url_info if direct_url_info is not None else audio_only_info
+        )
+        if chosen is not None:
+            return chosen
 
         raw_msg = errors[0] if errors else "Respuesta vacía"
         clean_msg = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", raw_msg)
@@ -74,6 +112,11 @@ class BasePlatformAdapter(IPlatformAdapter):
             clean_msg = (
                 "La plataforma (YouTube) ha restringido temporalmente las solicitudes "
                 "o requiere verificación para este contenido."
+            )
+        elif all("auxiliares" in e for e in errors):
+            clean_msg = (
+                "La plataforma no entregó formatos descargables para este contenido "
+                "(solo recursos auxiliares). Intenta de nuevo en unos minutos."
             )
 
         raise MediaAnalysisError(f"Fallo al analizar el contenido multimedia: {clean_msg}")

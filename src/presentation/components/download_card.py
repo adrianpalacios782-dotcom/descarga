@@ -127,6 +127,12 @@ class DownloadCardWidget(QFrame):
         self.error_label.hide()
         body.addWidget(self.error_label)
 
+        self.warning_label = QLabel("")
+        self.warning_label.setObjectName("CardWarningLabel")
+        self.warning_label.setWordWrap(True)
+        self.warning_label.hide()
+        body.addWidget(self.warning_label)
+
         body.addStretch()
         layout.addLayout(body, stretch=1)
 
@@ -218,3 +224,11 @@ class DownloadCardWidget(QFrame):
             self.error_label.show()
         else:
             self.error_label.hide()
+
+    def set_quality_warning(self, message: str) -> None:
+        """Muestra una advertencia de calidad inline (descarga completada con calidad inferior)."""
+        if message:
+            self.warning_label.setText(message)
+            self.warning_label.show()
+        else:
+            self.warning_label.hide()

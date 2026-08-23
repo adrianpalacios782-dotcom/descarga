@@ -53,6 +53,10 @@ class DownloadTask:
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    # Advertencia de calidad (ej. "se solicitó 1080p pero se obtuvo 806p").
+    # La tarea puede estar COMPLETED y aun así llevar esta advertencia visible:
+    # una descarga técnicamente exitosa con calidad inferior NO es un Error.
+    quality_warning: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not self.destination_path or not self.destination_path.strip():
@@ -129,5 +133,6 @@ class DownloadTask:
         self.speed_bps = 0.0
         self.eta_seconds = 0.0
         self.error_message = None
+        self.quality_warning = None
         self.started_at = None
         self.completed_at = None

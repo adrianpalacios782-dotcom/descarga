@@ -77,8 +77,19 @@ class DescargasView(QWidget):
             return
         from src.domain.entities.download_task import DownloadState
         self.cards[task_id].set_state(DownloadState(state))
-        self.cards[task_id].set_error(error_message or "")
+        if state == "COMPLETED":
+            # En COMPLETED el mensaje es una advertencia de calidad (no un error).
+            self.cards[task_id].set_quality_warning(error_message or "")
+            self.cards[task_id].set_error("")
+        else:
+            self.cards[task_id].set_quality_warning("")
+            self.cards[task_id].set_error(error_message or "")
 
     def update_progress(self, task_id: str, progress: float, downloaded: int, total: int, speed: float, eta: float) -> None:
         if task_id in self.cards:
             self.cards[task_id].update_telemetry(progress, downloaded, total, speed, eta)
+
+    def show_quality_warning(self, task_id: str, message: str) -> None:
+        """Muestra una advertencia de calidad sin alterar el estado de la tarjeta."""
+        if task_id in self.cards:
+            self.cards[task_id].set_quality_warning(message or "")

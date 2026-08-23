@@ -72,6 +72,7 @@ class QualityOptionRow(QFrame):
         info = QLabel(vqo.get_technical_info())
         info.setObjectName("QualityTechInfo")
         info.setWordWrap(True)
+        self.info = info
         card.addWidget(info)
 
         size_human = format_size_bytes(vqo.estimated_size_bytes)
@@ -112,6 +113,8 @@ class InicioView(QWidget):
     TEXT_ERROR_DETAIL = "El enlace no es compatible o la plataforma no respondió."
     TEXT_NO_DESCRIPTION = "Sin descripción disponible."
     TEXT_NOT_AVAILABLE = "No disponible"
+    TEXT_NO_VIDEO_QUALITIES = "Este contenido no ofrece calidades de video compatibles."
+    TEXT_NO_AUDIO = "Este contenido no ofrece pistas de audio compatibles."
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -592,6 +595,7 @@ class InicioView(QWidget):
             self.btn_format_video.setChecked(True)
 
         self._update_size_estimate()
+        self._update_download_availability()
         self.hero_wrap.hide()
         self._show_header(show=True)
         self.preview_card.show()
@@ -679,6 +683,38 @@ class InicioView(QWidget):
         else:
             self.quality_container.hide()
 
+        self._update_download_availability()
+
+    def _update_download_availability(self) -> None:
+        """Habilita/deshabilita el botón Descargar según la selección posible.
+
+        Reemplaza el antiguo QMessageBox 'Selección Requerida': los errores de
+        validación normales se comunican inline, nunca con diálogos modales.
+        Es el ÚNICO escritor del resumen cuando la descarga no es posible.
+        """
+        if self.current_metadata is None:
+            self.btn_download.setEnabled(False)
+            return
+
+        can_download = False
+        message = ""
+        if self.selected_type == DownloadType.VIDEO:
+            has_qualities = bool(self._iter_quality_rows())
+            can_download = has_qualities
+            if not has_qualities:
+                message = self.TEXT_NO_VIDEO_QUALITIES
+        else:
+            has_audio = bool(self.current_metadata.audio_formats)
+            can_download = has_audio
+            if not has_audio:
+                message = self.TEXT_NO_AUDIO
+
+        self.btn_download.setEnabled(can_download)
+        if can_download:
+            self._update_size_estimate()
+        else:
+            self.lbl_selection_summary.setText(message)
+
     @staticmethod
     def _fallback_quality_options(metadata: MediaMetadata):
         from src.domain.entities.format_option import VideoQualityOption
@@ -725,7 +761,7 @@ class InicioView(QWidget):
             self.btn_format_audio.setChecked(True)
             self.panel_audio.show()
             self.lbl_audio_note.show()
-        self._update_size_estimate()
+        self._update_download_availability()
 
     def _refresh_audio_bitrate_options(self) -> None:
         """Actualiza los bitrates ofrecidos según el formato de audio (honestos y producibles)."""
@@ -794,6 +830,11 @@ class InicioView(QWidget):
         if not self.current_metadata:
             return
 
+        # Validación inline (sin QMessageBox): si no hay selección posible el botón
+        # permanece deshabilitado y el resumen explica el motivo.
+        if not self.btn_download.isEnabled():
+            return
+
         dest_dir = self.txt_dest.text().strip()
         if not os.path.isdir(dest_dir):
             self._show_warning("Ruta Inválida", "La carpeta de destino no existe o no es válida.")
@@ -804,7 +845,8 @@ class InicioView(QWidget):
         if self.selected_type == DownloadType.VIDEO:
             vqo = self._selected_quality_option()
             if vqo is None:
-                self._show_warning("Selección Requerida", "Por favor selecciona una resolución de video.")
+                # Defensa adicional: sin calidad seleccionada no se emite la descarga.
+                self.lbl_selection_summary.setText(self.TEXT_NO_VIDEO_QUALITIES)
                 return
             if vqo.is_best_quality:
                 fmt_id = "vq_best"

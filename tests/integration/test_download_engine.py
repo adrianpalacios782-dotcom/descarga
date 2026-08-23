@@ -2,6 +2,8 @@ import os
 import threading
 import time
 
+import pytest
+
 from src.domain.entities.download_task import DownloadTask, DownloadState
 from src.domain.entities.format_option import FormatOption, StreamType
 from src.domain.entities.media_metadata import MediaMetadata
@@ -275,6 +277,9 @@ class TestYtDlpDownloadEngine:
         assert seen_opts["format"] == (
             "137+bestaudio[acodec^=mp4a]"
             "/137+bestaudio"
+            "/bestvideo[height=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
+            "/bestvideo[height=1080]+bestaudio[acodec^=mp4a]"
+            "/bestvideo[height=1080]+bestaudio"
             "/bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
             "/bestvideo[height<=1080]+bestaudio[acodec^=mp4a]"
             "/bestvideo[height<=1080]+bestaudio"
@@ -502,10 +507,37 @@ class TestYtDlpDownloadEngine:
         assert "1080p" in (task.error_message or "")
         assert "360p" in (task.error_message or "")
 
-    def test_quality_degradation_detected(self, tmp_path) -> None:
+    def test_quality_degradation_reported_as_warning_not_error(self, tmp_path) -> None:
+        """La validación de calidad se mantiene: la degradación NO oculta el problema,
+        pero una descarga técnicamente terminada NO debe clasificarse como Error."""
         event_bus = InProcessEventBus()
         failed = []
+        completed = []
         event_bus.subscribe(DownloadFailedEvent, lambda e: failed.append(e))
+        event_bus.subscribe(DownloadCompletedEvent, lambda e: completed.append(e))
+
+        ffmpeg = FakeFFmpeg(video_height=360)
+        engine, _ = _make_engine(event_bus=event_bus, ffmpeg=ffmpeg)
+
+        fmt = FormatOption(format_id="137", extension="mp4", height=1080, stream_type=StreamType.VIDEO_ONLY,
+                           needs_ffmpeg_merge=True)
+        task, dest_file = _make_task(tmp_path, fmt)
+        task.transition_to(DownloadState.DOWNLOADING)
+        engine.download(task)
+
+        assert _wait_for(lambda: len(completed) == 1, timeout=15.0)
+        assert len(failed) == 0, "Una descarga terminada con calidad inferior no es un Error"
+        assert task.status == DownloadState.COMPLETED
+        warning = task.quality_warning or ""
+        assert "degradada" in warning.lower()
+        assert "1080p" in warning
+        assert "360p" in warning
+        assert os.path.exists(dest_file), "El archivo descargado debe conservarse"
+
+    def test_completed_event_carries_quality_warning(self, tmp_path) -> None:
+        event_bus = InProcessEventBus()
+        completed = []
+        event_bus.subscribe(DownloadCompletedEvent, lambda e: completed.append(e))
 
         ffmpeg = FakeFFmpeg(video_height=360)
         engine, _ = _make_engine(event_bus=event_bus, ffmpeg=ffmpeg)
@@ -516,11 +548,9 @@ class TestYtDlpDownloadEngine:
         task.transition_to(DownloadState.DOWNLOADING)
         engine.download(task)
 
-        assert _wait_for(lambda: len(failed) == 1, timeout=15.0)
-        assert task.status == DownloadState.FAILED
-        assert "degradada" in (task.error_message or "").lower()
-        assert "1080p" in (task.error_message or "")
-        assert "360p" in (task.error_message or "")
+        assert _wait_for(lambda: len(completed) == 1, timeout=15.0)
+        assert completed[0].warning_message == task.quality_warning
+        assert "360p" in completed[0].warning_message
 
     def test_quality_within_tolerance_accepted(self, tmp_path) -> None:
         event_bus = InProcessEventBus()
@@ -539,15 +569,33 @@ class TestYtDlpDownloadEngine:
         assert _wait_for(lambda: len(completed) == 1)
         assert task.status == DownloadState.COMPLETED
 
-    def test_no_silent_degradation_to_360p(self, tmp_path) -> None:
-        event_bus = InProcessEventBus()
-        completed = []
-        failed = []
-        event_bus.subscribe(DownloadCompletedEvent, lambda e: completed.append(e))
-        event_bus.subscribe(DownloadFailedEvent, lambda e: failed.append(e))
+    def test_exact_height_requested_is_downloaded_when_available(self, tmp_path) -> None:
+        """Si la resolución solicitada existe, el spec debe pedirla EXACTA antes que
+        cualquier rango <=h (regresión del caso 1080p entregado como 806p)."""
+        fmt = FormatOption(format_id="137", extension="mp4", height=1080, stream_type=StreamType.VIDEO_ONLY,
+                           needs_ffmpeg_merge=True)
+        spec = YtDlpDownloadEngine._build_video_format_spec(fmt)
+        exact_pos = spec.find("bestvideo[height=1080]")
+        capped_pos = spec.find("bestvideo[height<=1080]")
+        assert exact_pos != -1, "Debe existir selector de altura exacta"
+        assert capped_pos != -1, "Debe existir selector de rango <=h como red de seguridad"
+        assert exact_pos < capped_pos, "La altura exacta debe probarse ANTES que el rango <=h"
+        assert spec.startswith("137+bestaudio")
 
+    def test_exact_height_without_numeric_id_still_prefers_exact(self, tmp_path) -> None:
+        fmt = FormatOption(format_id="best_quality", extension="mp4", height=1440,
+                           stream_type=StreamType.VIDEO_ONLY, is_best_quality=True, needs_ffmpeg_merge=True)
+        spec = YtDlpDownloadEngine._build_video_format_spec(fmt)
+        # best_quality no limita altura: comportamiento intacto (regresión CASO A).
+        assert spec == (
+            "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]"
+            "/bestvideo+bestaudio[acodec^=mp4a]"
+            "/bestvideo+bestaudio/best"
+        )
+
+    def test_degraded_task_reset_clears_warning(self, tmp_path) -> None:
         ffmpeg = FakeFFmpeg(video_height=360)
-        engine, _ = _make_engine(event_bus=event_bus, ffmpeg=ffmpeg)
+        engine, _ = _make_engine(event_bus=None, ffmpeg=ffmpeg)
 
         fmt = FormatOption(format_id="137", extension="mp4", height=1080, stream_type=StreamType.VIDEO_ONLY,
                            needs_ffmpeg_merge=True)
@@ -555,9 +603,12 @@ class TestYtDlpDownloadEngine:
         task.transition_to(DownloadState.DOWNLOADING)
         engine.download(task)
 
-        assert _wait_for(lambda: len(completed) == 1 or len(failed) == 1, timeout=15.0)
-        assert len(completed) == 0, "La descarga NO debe completarse si la calidad se degradó a 360p"
-        assert len(failed) == 1, "Debe reportarse como fallida"
+        assert _wait_for(lambda: task.status == DownloadState.COMPLETED)
+        assert task.quality_warning
+
+        task.reset_to_queued()
+        assert task.quality_warning is None
+        assert task.error_message is None
 
     def test_format_not_found_error_message_includes_available(self, tmp_path) -> None:
         event_bus = InProcessEventBus()
@@ -689,3 +740,95 @@ class TestYtDlpDownloadEngine:
         assert _wait_for(lambda: task.status == DownloadState.COMPLETED)
         spec = seen_opts["format"]
         assert "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]" in spec
+
+
+# ---------------------------------------------------------------------------
+# Fallback anti-bot de player_client (causa raíz #4)
+# ---------------------------------------------------------------------------
+
+def _client_of(opts) -> object:
+    ea = (opts.get("extractor_args") or {}).get("youtube") or {}
+    clients = ea.get("player_client") or [None]
+    return clients[0]
+
+
+class TestAntiBotClientFallback:
+
+    def test_probe_uses_next_strategy_when_default_returns_storyboards_only(self) -> None:
+        """Causa raíz #4 (sondeo): el cliente default responde solo storyboards
+        (bot-check silencioso); la pre-validación debe usar la siguiente estrategia."""
+        calls = []
+
+        def factory(opts):
+            client = _client_of(opts)
+            calls.append(client)
+            if client is None:
+                storyboards = [{"format_id": f"sb{i}", "ext": "mhtml", "vcodec": "none",
+                                "acodec": "none", "protocol": "mhtml"} for i in range(4)]
+                return FakeYoutubeDL(opts, probe_formats=storyboards)
+            return FakeYoutubeDL(opts, probe_formats=PROBE_FORMATS_360P_ONLY)
+
+        engine = YtDlpDownloadEngine(ydl_factory=factory)
+        info = engine._probe_available_formats("https://youtube.com/watch?v=x", threading.Event())
+        assert calls[0] is None and calls[1] == "tv"
+        heights = engine._extract_available_video_heights(info)
+        assert heights == [360]
+
+    def test_probe_raises_when_all_strategies_degenerate(self) -> None:
+        storyboards = [{"format_id": f"sb{i}", "ext": "mhtml", "vcodec": "none",
+                        "acodec": "none", "protocol": "mhtml"} for i in range(4)]
+
+        def factory(opts):
+            return FakeYoutubeDL(opts, probe_formats=storyboards)
+
+        engine = YtDlpDownloadEngine(ydl_factory=factory)
+        with pytest.raises(RuntimeError):
+            engine._probe_available_formats("https://youtube.com/watch?v=x", threading.Event())
+
+    def test_download_video_cycles_clients_until_success(self, tmp_path) -> None:
+        """default y tv fallan con bot-check; android tiene éxito → COMPLETED."""
+        calls = []
+        time.sleep = lambda *_: None  # acelerar reintentos
+
+        def factory(opts):
+            client = _client_of(opts)
+            if "outtmpl" in opts:
+                calls.append(client)
+            if client in (None, "tv"):
+                return FakeYoutubeDL(opts, fail_with=RuntimeError("Sign in to confirm you're not a bot"))
+            return FakeYoutubeDL(opts)
+
+        engine = YtDlpDownloadEngine(
+            event_bus=None, ffmpeg_adapter=FakeFFmpeg(video_height=360), ydl_factory=factory
+        )
+        fmt = FormatOption(format_id="18", extension="mp4", height=360,
+                           stream_type=StreamType.VIDEO_AUDIO, needs_ffmpeg_merge=False)
+        task, dest_file = _make_task(tmp_path, fmt)
+        task.transition_to(DownloadState.DOWNLOADING)
+        engine.download(task)
+
+        assert _wait_for(lambda: task.status == DownloadState.COMPLETED)
+        assert calls == [None, "tv", "android"]
+        assert os.path.exists(dest_file)
+
+    def test_download_fails_after_all_client_strategies_exhausted(self, tmp_path) -> None:
+        events = []
+        bus = InProcessEventBus()
+        bus.subscribe(DownloadFailedEvent, lambda e: events.append(e))
+
+        time.sleep = lambda *_: None
+
+        def factory(opts):
+            return FakeYoutubeDL(opts, fail_with=RuntimeError("Sign in to confirm you're not a bot"))
+
+        engine = YtDlpDownloadEngine(event_bus=bus, ffmpeg_adapter=FakeFFmpeg(), ydl_factory=factory)
+
+        fmt = FormatOption(format_id="18", extension="mp4", height=360,
+                           stream_type=StreamType.VIDEO_AUDIO, needs_ffmpeg_merge=False)
+        task, _ = _make_task(tmp_path, fmt)
+        task.transition_to(DownloadState.DOWNLOADING)
+        engine.download(task)
+
+        assert _wait_for(lambda: bool(events), timeout=10.0)
+        assert task.status == DownloadState.FAILED
+        assert "Sign in" in str(events[-1].error_message) or "bot" in str(events[-1].error_message).lower()

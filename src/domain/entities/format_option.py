@@ -51,8 +51,12 @@ class VideoQualityOption:
         else:
             parts.append("Video + Audio")
 
+        # Un formato sin filesize/filesize_approx NUNCA se descarta: se muestra
+        # explícitamente que el tamaño no está disponible.
         if self.estimated_size_bytes and self.estimated_size_bytes > 0:
             parts.append(self.get_human_filesize())
+        else:
+            parts.append("Tamaño no disponible")
         return " · ".join(parts)
 
     def get_human_filesize(self) -> str:

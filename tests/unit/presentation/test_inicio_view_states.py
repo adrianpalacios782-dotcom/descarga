@@ -246,6 +246,88 @@ class TestInicioErrorStates:
         assert view.lbl_status.property("state") == "empty"
 
 
+class TestInicioNoQualitiesFlow:
+    """Problemas 4 y 5: sin calidades no se inicia descarga; validación inline, sin QMessageBox."""
+
+    def _assert_no_qmessagebox(self, monkeypatch) -> list:
+        calls = []
+
+        def _forbidden(*a, **k):
+            calls.append((a, k))
+            raise AssertionError("QMessageBox prohibido para validación de selección")
+
+        from PySide6.QtWidgets import QMessageBox
+        monkeypatch.setattr(QMessageBox, "warning", staticmethod(_forbidden))
+        monkeypatch.setattr(QMessageBox, "information", staticmethod(_forbidden))
+        monkeypatch.setattr(QMessageBox, "critical", staticmethod(_forbidden))
+        return calls
+
+    def test_no_video_qualities_disables_download_and_shows_inline_reason(self, qapp, monkeypatch) -> None:
+        self._assert_no_qmessagebox(monkeypatch)
+        metadata = make_metadata(video_quality_options=[], video_formats=[])
+        view = InicioView()
+        view.set_metadata(metadata)
+
+        # Con audio disponible el modo AUDIO se auto-selecciona: simulamos modo VIDEO manual.
+        view.btn_format_video.setChecked(True)
+        assert not view.btn_download.isEnabled()
+        assert "no ofrece calidades de video" in view.lbl_selection_summary.text()
+
+    def test_clicking_disabled_download_never_emits_signal(self, qapp, monkeypatch, tmp_path) -> None:
+        self._assert_no_qmessagebox(monkeypatch)
+        metadata = make_metadata(video_quality_options=[], video_formats=[])
+        view = InicioView()
+        view.set_metadata(metadata)
+        view.btn_format_video.setChecked(True)
+        view.txt_dest.setText(str(tmp_path))
+
+        captured = []
+        view.download_requested.connect(lambda m, f, d: captured.append(f))
+        view._on_download_clicked()
+        assert captured == [], "Sin selección de calidad NO debe iniciarse descarga"
+
+    def test_no_qmessagebox_for_missing_quality_selection(self, qapp, monkeypatch, tmp_path) -> None:
+        """Caso obligatorio 13: el caso 'Selección Requerida' ya nunca usa QMessageBox."""
+        self._assert_no_qmessagebox(monkeypatch)
+        metadata = make_metadata(video_quality_options=[], video_formats=[])
+        view = InicioView()
+        view.set_metadata(metadata)
+        view.btn_format_video.setChecked(True)
+        view.txt_dest.setText(str(tmp_path))
+        captured = []
+        view.download_requested.connect(lambda m, f, d: captured.append(f))
+        view._on_download_clicked()
+        assert captured == []
+
+    def test_with_qualities_button_enabled_and_best_preselected(self, qapp, monkeypatch) -> None:
+        """Caso obligatorio 9 (UI): con calidades, 'Mejor calidad' queda preseleccionada."""
+        self._assert_no_qmessagebox(monkeypatch)
+        view = InicioView()
+        view.set_metadata(make_metadata())
+        assert view.btn_download.isEnabled()
+        rows = list(view._iter_quality_rows())
+        assert rows[0].radio.isChecked()
+        assert rows[0].vqo.is_best_quality
+
+    def test_audio_mode_without_audio_formats_disables_button(self, qapp, monkeypatch) -> None:
+        self._assert_no_qmessagebox(monpatch := monkeypatch)
+        metadata = make_metadata(audio_formats=[])
+        view = InicioView()
+        view.set_metadata(metadata)
+        view.btn_format_audio.setChecked(True)
+        assert not view.btn_download.isEnabled()
+        assert "pistas de audio" in view.lbl_selection_summary.text()
+
+    def test_card_without_size_shows_tamano_no_disponible(self, qapp) -> None:
+        """Caso obligatorio 2 (UI): formato sin filesize aparece con 'Tamaño no disponible'."""
+        view = InicioView()
+        view.set_metadata(make_metadata())
+        row_480 = list(view._iter_quality_rows())[2]
+        tech = row_480.info.text()
+        assert "Tamaño no disponible" in tech
+        assert row_480.vqo.estimated_size_bytes is None
+
+
 class TestThumbnailFallback:
 
     def _wait_for(self, condition, timeout_s=3.0) -> bool:

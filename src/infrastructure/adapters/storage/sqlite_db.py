@@ -89,6 +89,7 @@ class DatabaseManager:
             """)
 
             self._migrate_format_options(conn)
+            self._migrate_download_tasks(conn)
 
     @staticmethod
     def _migrate_format_options(conn: sqlite3.Connection) -> None:
@@ -113,6 +114,16 @@ class DatabaseManager:
         for column, ddl in columns:
             if column not in existing:
                 conn.execute(f"ALTER TABLE format_options ADD COLUMN {column} {ddl}")
+
+    @staticmethod
+    def _migrate_download_tasks(conn: sqlite3.Connection) -> None:
+        """Añade columnas nuevas a download_tasks si la tabla ya existía sin ellas."""
+        existing: List[str] = [
+            row[1]
+            for row in conn.execute("PRAGMA table_info(download_tasks)").fetchall()
+        ]
+        if "quality_warning" not in existing:
+            conn.execute("ALTER TABLE download_tasks ADD COLUMN quality_warning TEXT")
 
     def close(self) -> None:
         """Cierra la conexión activa."""

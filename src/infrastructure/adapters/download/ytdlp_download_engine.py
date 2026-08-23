@@ -53,6 +53,30 @@ class YtDlpDownloadEngine(IDownloadEngine):
         self._threads: Dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
 
+    # Estrategias de player_client para yt-dlp (extractores que las soportan, p. ej.
+    # YouTube). Cuando la plataforma restringe el cliente por defecto ("Sign in to
+    # confirm you're not a bot"), se alterna el cliente entre reintentos igual que
+    # hace el análisis (base_platform_adapter.CLIENT_STRATEGIES).
+    DOWNLOAD_CLIENT_STRATEGIES: List[Optional[List[str]]] = [
+        None,        # defaults de yt-dlp
+        ["tv"],
+        ["android"],
+    ]
+
+    PROBE_CLIENT_STRATEGIES: List[Optional[List[str]]] = [
+        None,
+        ["tv"],
+        ["android"],
+        ["web"],
+        ["mweb"],
+    ]
+
+    @staticmethod
+    def _apply_clients(opts: Dict[str, Any], clients: Optional[List[str]]) -> Dict[str, Any]:
+        if clients:
+            opts["extractor_args"] = {"youtube": {"player_client": list(clients)}}
+        return opts
+
     def download(self, task: DownloadTask) -> None:
         task_id = task.id.value
         cancel_token = threading.Event()
@@ -146,14 +170,24 @@ class YtDlpDownloadEngine(IDownloadEngine):
         opts = self._build_base_opts(source_tmpl, task.id.value, cancel_token, pause_token)
         opts["format"] = "bestaudio/best"
 
-        ydl = self._ydl_factory(opts)
-        try:
-            info = ydl.extract_info(task.media.url.value, download=True)
-        finally:
+        info = None
+        last_error = None
+        for clients in self.DOWNLOAD_CLIENT_STRATEGIES:
+            attempt_opts = self._apply_clients(dict(opts), clients)
+            ydl = self._ydl_factory(attempt_opts)
             try:
-                ydl.close()
-            except Exception:
-                pass
+                info = ydl.extract_info(task.media.url.value, download=True)
+                break
+            except Exception as ex:
+                last_error = ex
+                logger.warning(f"Descarga de audio falló con clientes {clients or 'default'}: {ex}")
+            finally:
+                try:
+                    ydl.close()
+                except Exception:
+                    pass
+        if info is None:
+            raise last_error or RuntimeError("La descarga de audio falló tras agotar las estrategias de cliente.")
 
         source_path = self._resolve_final_path(info, dest_dir, base + ".audio_src")
         if not source_path or not os.path.exists(source_path):
@@ -247,7 +281,14 @@ class YtDlpDownloadEngine(IDownloadEngine):
                 delay = [3.0, 8.0][attempt - 1]
                 logger.info(f"Reintento de descarga {attempt + 1}/3 tras {delay}s")
                 time.sleep(delay)
-            ydl = self._ydl_factory(opts)
+            attempt_opts = self._apply_clients(
+                dict(opts),
+                self.DOWNLOAD_CLIENT_STRATEGIES[attempt % len(self.DOWNLOAD_CLIENT_STRATEGIES)],
+            )
+            clients_used = (attempt_opts.get("extractor_args") or {}).get("youtube", {}).get("player_client")
+            if clients_used:
+                logger.info(f"Intento {attempt + 1}/3 con player_client={clients_used}")
+            ydl = self._ydl_factory(attempt_opts)
             try:
                 info = ydl.extract_info(url, download=True)
                 break
@@ -294,7 +335,15 @@ class YtDlpDownloadEngine(IDownloadEngine):
                     f"archivo resultante tiene {actual_label}."
                 )
             else:
-                self._validate_downloaded_quality(actual_height, requested_height, requested_label, actual_label)
+                # La validación de calidad se mantiene: si hay degradación real se
+                # registra como advertencia visible en la tarea completada. La
+                # descarga NO se marca como Error: el archivo terminó correctamente,
+                # solo que con calidad inferior a la solicitada.
+                try:
+                    self._validate_downloaded_quality(actual_height, requested_height, requested_label, actual_label)
+                except QualityDegradationError as ex:
+                    task.quality_warning = str(ex)
+                    logger.warning(f"Descarga {task.id.value} completada con {task.quality_warning}")
 
         if fmt.is_best_quality and actual_height and actual_height < (fmt.height or 0):
             logger.warning(
@@ -320,6 +369,7 @@ class YtDlpDownloadEngine(IDownloadEngine):
                     task_id=task.id.value,
                     destination_path=task.destination_path,
                     total_bytes=size,
+                    warning_message=task.quality_warning or "",
                 )
             )
 
@@ -363,15 +413,16 @@ class YtDlpDownloadEngine(IDownloadEngine):
 
         Cadena de fallback:
         1. format_id específico + mejor audio compatible (si format_id es numérico real)
-        2. bestvideo por altura con H.264 + AAC (máxima compatibilidad MP4)
-        3. bestvideo por altura con cualquier codec + AAC
-        4. bestvideo por altura + mejor audio disponible
-        5. bestvideo + bestaudio (sin límite de altura)
-        6. best (último recurso)
+        2. bestvideo con altura EXACTA solicitada (H.264+AAC, luego cualquier codec)
+        3. bestvideo con altura <= solicitada (H.264+AAC, luego cualquier codec)
+        4. bestvideo + bestaudio (sin límite de altura)
+        5. best (último recurso)
 
-        IMPORTANTE: No se usa '?' (opcional) en el filtro de altura para que yt-dlp
-        seleccione el mejor formato dentro del rango en lugar de ignorar el filtro y
-        entregar cualquier resolución disponible.
+        IMPORTANTE: los selectores de altura EXACTA van ANTES que los de rango
+        `height<=h` para garantizar que, si la resolución solicitada existe en el
+        servidor, se descargue exactamente esa. El rango `<=h` solo actúa cuando la
+        resolución exacta no está disponible; la validación final reportará entonces
+        la degradación real sin ocultarla.
         """
         if fmt.is_best_quality or fmt.format_id == "best_quality":
             return (
@@ -385,13 +436,22 @@ class YtDlpDownloadEngine(IDownloadEngine):
 
         if fmt.height and fmt.height > 0:
             h = fmt.height
+            exact = (
+                f"bestvideo[height={h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
+                f"/bestvideo[height={h}]+bestaudio[acodec^=mp4a]"
+                f"/bestvideo[height={h}]+bestaudio"
+            )
+            capped = (
+                f"bestvideo[height<={h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
+                f"/bestvideo[height<={h}]+bestaudio[acodec^=mp4a]"
+                f"/bestvideo[height<={h}]+bestaudio"
+            )
             if is_raw_id and safe_id:
                 return (
                     f"{safe_id}+bestaudio[acodec^=mp4a]"
                     f"/{safe_id}+bestaudio"
-                    f"/bestvideo[height<={h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
-                    f"/bestvideo[height<={h}]+bestaudio[acodec^=mp4a]"
-                    f"/bestvideo[height<={h}]+bestaudio"
+                    f"/{exact}"
+                    f"/{capped}"
                     f"/bestvideo+bestaudio"
                     f"/best"
                 )
@@ -400,18 +460,11 @@ class YtDlpDownloadEngine(IDownloadEngine):
                 # ya incluye audio, se selecciona directamente sin combinaciones de merge.
                 return (
                     f"{safe_id}"
-                    f"/bestvideo[height<={h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
-                    f"/bestvideo[height<={h}]+bestaudio[acodec^=mp4a]"
-                    f"/bestvideo[height<={h}]+bestaudio"
+                    f"/{exact}"
+                    f"/{capped}"
                     f"/best"
                 )
-            return (
-                f"bestvideo[height<={h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
-                f"/bestvideo[height<={h}]+bestaudio[acodec^=mp4a]"
-                f"/bestvideo[height<={h}]+bestaudio"
-                f"/bestvideo+bestaudio"
-                f"/best"
-            )
+            return f"{exact}/{capped}/bestvideo+bestaudio/best"
 
         if is_raw_id and safe_id:
             return f"{safe_id}/bestvideo+bestaudio/best"
@@ -422,17 +475,17 @@ class YtDlpDownloadEngine(IDownloadEngine):
         return "bestvideo+bestaudio/best"
 
     def _probe_available_formats(self, url: str, cancel_token: threading.Event) -> Dict[str, Any]:
-        """Sondea todos los formatos disponibles en el servidor sin descargar.
+        """Sondea los formatos disponibles en el servidor sin descargar.
 
-        Usa sin restricciones de player_client para obtener la lista completa de
-        formatos DASH (video-only, audio-only, progresivos). Esta información se
-        usa para validar que la resolución solicitada existe antes de intentar
-        descargar.
+        Recorre las mismas estrategias de player_client que el análisis y acepta
+        la primera respuesta con formatos de medios reales (no solo storyboards),
+        de modo que la pre-validación también funciona cuando la plataforma
+        restringe el cliente por defecto.
         """
         if cancel_token.is_set():
             raise DownloadCancelled("Descarga cancelada por el usuario.")
 
-        opts: Dict[str, Any] = {
+        base_opts: Dict[str, Any] = {
             "quiet": True,
             "no_warnings": True,
             "no_color": True,
@@ -441,15 +494,27 @@ class YtDlpDownloadEngine(IDownloadEngine):
             "format": "all",
             "socket_timeout": 30,
         }
-        ydl = self._ydl_factory(opts)
-        try:
-            info = ydl.extract_info(url, download=False)
-            return info or {}
-        finally:
+        first_error: Optional[Exception] = None
+        for clients in self.PROBE_CLIENT_STRATEGIES:
+            ydl = self._ydl_factory(self._apply_clients(dict(base_opts), clients))
             try:
-                ydl.close()
-            except Exception:
-                pass
+                info = ydl.extract_info(url, download=False)
+                formats = (info or {}).get("formats") or []
+                if any(not FormatNormalizer.is_auxiliary_format(f) for f in formats):
+                    return info or {}
+                if first_error is None:
+                    first_error = RuntimeError(
+                        f"el servidor no entregó formatos de medios reales con clientes {clients or 'default'}"
+                    )
+            except Exception as ex:
+                if first_error is None:
+                    first_error = ex
+            finally:
+                try:
+                    ydl.close()
+                except Exception:
+                    pass
+        raise first_error or RuntimeError("No se pudieron sondear los formatos del servidor.")
 
     @staticmethod
     def _extract_available_video_heights(info: Dict[str, Any]) -> List[int]:

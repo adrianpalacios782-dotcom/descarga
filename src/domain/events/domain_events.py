@@ -55,10 +55,15 @@ class DownloadResumedEvent(DomainEvent):
 
 @dataclass(frozen=True, kw_only=True)
 class DownloadCompletedEvent(DomainEvent):
-    """Emitido cuando una descarga finaliza exitosamente."""
+    """Emitido cuando una descarga finaliza exitosamente.
+
+    warning_message transporta una advertencia no bloqueante (ej. calidad
+    degradada: se solicitó 1080p y el archivo final tiene menos resolución).
+    """
     task_id: str
     destination_path: str
     total_bytes: int
+    warning_message: str = ""
 
 
 @dataclass(frozen=True, kw_only=True)
