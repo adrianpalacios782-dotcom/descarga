@@ -2,7 +2,7 @@ import logging
 import sys
 import threading
 
-from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QMainWindow,
@@ -49,6 +49,8 @@ _RESIZE_MARGIN = 6
 
 class MainWindow(QMainWindow):
     """Ventana principal de la aplicación osvaldoDownloaderPro."""
+
+    ffmpeg_status_checked = Signal(bool, str)
 
     def __init__(self, view_model: MainViewModel) -> None:
         super().__init__()
@@ -234,6 +236,9 @@ class MainWindow(QMainWindow):
         self.descargas_view.open_file_requested.connect(self._open_in_explorer)
         self.descargas_view.open_folder_requested.connect(self._open_folder)
 
+        # Diagnóstico FFmpeg -> AcercaDeView (emisión thread-safe)
+        self.ffmpeg_status_checked.connect(self.acerca_de_view.set_ffmpeg_status)
+
     def _connect_update_signals(self) -> None:
         # Vistas manuales -> coordinador (con feedback visible)
         self.configuracion_view.update_check_requested.connect(
@@ -371,6 +376,6 @@ class MainWindow(QMainWindow):
             from src.infrastructure.adapters.media.ffmpeg_adapter import FFmpegProcessAdapter
             adapter = FFmpegProcessAdapter()
             ok, version = adapter.check_availability_sync()
-            self.acerca_de_view.set_ffmpeg_status(ok, version)
+            self.ffmpeg_status_checked.emit(ok, version)
 
         threading.Thread(target=_worker, daemon=True).start()

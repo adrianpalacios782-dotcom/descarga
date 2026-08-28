@@ -6,6 +6,6 @@ build_release.ps1 e installer.iss a través del script de build) derivan de
 este atributo. Para publicar una nueva versión, cambiar SOLO este valor.
 """
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 APP_NAME = "osvaldoDownloaderPro"

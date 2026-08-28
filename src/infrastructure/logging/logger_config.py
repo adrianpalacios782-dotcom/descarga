@@ -60,4 +60,11 @@ def setup_logger(log_dir: str = "logs", level: int = logging.INFO) -> logging.Lo
     file_handler.addFilter(sanitizer_filter)
     logger.addHandler(file_handler)
 
+    # Configurar también el namespace 'src' para capturar logs de todos los módulos del proyecto
+    src_logger = logging.getLogger("src")
+    src_logger.setLevel(level)
+    if not src_logger.handlers:
+        src_logger.addHandler(console_handler)
+        src_logger.addHandler(file_handler)
+
     return logger

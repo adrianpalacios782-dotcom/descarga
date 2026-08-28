@@ -108,6 +108,34 @@ class TestVideoQualityContracts:
         assert fmt.height == 720
         assert fmt.format_id == "136"
 
+    def test_vq_best_maps_dynamically_to_real_max(self, use_case) -> None:
+        """Mejor calidad NUNCA fuerza 2160p: mapea a la resolución máxima REAL.
+
+        Si el servidor solo ofrece hasta 1080p, el formato sintético debe
+        llevar height=1080 (y el spec del motor no impondrá límite de altura).
+        """
+        raw_solo_1080 = [f for f in RAW_FORMATS if f.get("height", 0) <= 1080]
+        media = MediaMetadata(
+            media_id=MediaId.from_string("https://www.youtube.com/watch?v=F3tKutGo1Fo"),
+            url=Url("https://www.youtube.com/watch?v=F3tKutGo1Fo"),
+            platform="YouTube",
+            title="Video max 1080p",
+            duration_seconds=247.0,
+            video_quality_options=FormatNormalizer.normalize_video_quality_options(raw_solo_1080),
+            audio_formats=FormatNormalizer.normalize_audio_formats(RAW_FORMATS),
+        )
+        task = use_case.execute(media, "vq_best", "D:\\x\\a.mp4")
+        fmt = task.selected_format
+        assert fmt.is_best_quality is True
+        assert fmt.height == 1080, "Debe mapear al máximo real (1080p), no forzar 2160p"
+
+        spec = __import__(
+            "src.infrastructure.adapters.download.ytdlp_download_engine", fromlist=["YtDlpDownloadEngine"]
+        ).YtDlpDownloadEngine._build_video_format_spec(fmt)
+        # El spec de best no restringe altura: el servidor entrega su máximo.
+        assert "height=" not in spec.replace("[ext=", "[ext=")
+        assert "2160" not in spec
+
     def test_video_only_plus_audio_only_merge_contract(self, use_case) -> None:
         """Caso obligatorio 5: video-only + audio-only se construyen para merge."""
         media = make_media()

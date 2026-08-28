@@ -1,8 +1,9 @@
 """Sistema de diseño centralizado: paletas como tokens y constructor de QSS.
 
-Arquitectura preparada para modo claro: cualquier paleta que exponga los mismos
-atributos puede alimentar build_qss(). El acento verde se reserva para acciones
-importantes (Analizar/Descargar/progreso/selección/estados positivos).
+Tema "Studio Desktop": lienzo #0B0F19 con superficies #111827/#1E293B,
+bordes sutiles rgba(255,255,255,0.08) y acento índigo #6366F1 reservado
+para acciones importantes (Analizar/Descargar/progreso/selección).
+Cualquier paleta que exponga los mismos atributos puede alimentar build_qss().
 """
 
 from dataclasses import dataclass
@@ -80,27 +81,27 @@ class Palette:
 
 
 DARK_PALETTE = Palette(
-    bg_window="#0e0e11",
-    bg_sidebar="#101013",
-    bg_titlebar="#101013",
-    surface="#16161a",
-    surface_hover="#1c1c21",
-    surface_active="#232329",
-    surface_sunken="#121216",
-    border="#242429",
-    border_strong="#303038",
-    border_focus="#1db954",
-    text_primary="#f2f2f4",
-    text_secondary="#a4a4ad",
-    text_tertiary="#6d6d76",
-    text_on_accent="#06130a",
-    accent="#1db954",
-    accent_hover="#1ed760",
-    accent_pressed="#169c46",
-    accent_dim="rgba(29, 185, 84, 0.10)",
-    accent_text="#1ed760",
-    danger="#ff6b6b",
-    warning="#f59e0b",
+    bg_window="#0B0F19",
+    bg_sidebar="#0B0F19",
+    bg_titlebar="#0B0F19",
+    surface="#111827",
+    surface_hover="#151E31",
+    surface_active="#1E293B",
+    surface_sunken="#0F172A",
+    border="rgba(255, 255, 255, 0.08)",
+    border_strong="rgba(255, 255, 255, 0.16)",
+    border_focus="#6366F1",
+    text_primary="#F8FAFC",
+    text_secondary="#94A3B8",
+    text_tertiary="#64748B",
+    text_on_accent="#FFFFFF",
+    accent="#6366F1",
+    accent_hover="#818CF8",
+    accent_pressed="#4F46E5",
+    accent_dim="rgba(99, 102, 241, 0.14)",
+    accent_text="#A5B4FC",
+    danger="#EF4444",
+    warning="#F59E0B",
     close_hover_bg="#e81123",
 )
 
@@ -115,16 +116,16 @@ LIGHT_PALETTE = Palette(
     surface_sunken="#fafafa",
     border="#e2e2e6",
     border_strong="#cfced6",
-    border_focus="#1db954",
+    border_focus="#6366F1",
     text_primary="#1a1a1e",
     text_secondary="#5c5c66",
     text_tertiary="#9a9aa2",
     text_on_accent="#ffffff",
-    accent="#1db954",
-    accent_hover="#22c55e",
-    accent_pressed="#169c46",
-    accent_dim="rgba(29, 185, 84, 0.10)",
-    accent_text="#15803d",
+    accent="#6366F1",
+    accent_hover="#818CF8",
+    accent_pressed="#4F46E5",
+    accent_dim="rgba(99, 102, 241, 0.12)",
+    accent_text="#4F46E5",
     danger="#dc2626",
     warning="#b45309",
     close_hover_bg="#e81123",
@@ -208,8 +209,14 @@ QLabel#SidebarTitle {{
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.8px;
-    color: {p.text_tertiary};
-    padding: 0px 8px 10px 8px;
+    color: {p.text_secondary};
+    padding: 0px 0px 10px 0px;
+}}
+
+QLabel#LogoMark {{
+    color: {p.accent};
+    font-size: 14px;
+    padding-bottom: 10px;
 }}
 
 QPushButton#NavButton {{
@@ -218,7 +225,7 @@ QPushButton#NavButton {{
     border: none;
     border-left: 3px solid transparent;
     border-radius: 8px;
-    padding: 9px 12px;
+    padding: 9px 10px 9px 12px;
     font-size: 13px;
     font-weight: 600;
     text-align: left;
@@ -235,6 +242,22 @@ QPushButton#NavButton:checked {{
     color: {p.accent_text};
     font-weight: 700;
     border-left: 3px solid {p.accent};
+}}
+
+QWidget#NavRow {{
+    background-color: transparent;
+}}
+
+QLabel#NavBadge {{
+    background-color: {p.accent_dim};
+    color: {p.accent_text};
+    border: 1px solid {p.border};
+    border-radius: 9px;
+    min-width: 14px;
+    padding: 1px 7px;
+    font-size: 10px;
+    font-weight: 800;
+    qproperty-alignment: AlignCenter;
 }}
 
 QFrame#SidebarDivider {{
@@ -465,8 +488,8 @@ QPushButton#SegmentButton:hover {{
 }}
 
 QPushButton#SegmentButton:checked {{
-    background-color: {p.surface_active};
-    color: {p.text_primary};
+    background-color: {p.accent_dim};
+    color: {p.accent_text};
 }}
 
 /* ------------------------------------- Chips de formato heredados */
@@ -756,46 +779,142 @@ QLabel#ClipboardText {{
     font-weight: 600;
 }}
 
-/* ------------------------------------------- Tarjetas de calidad */
-QFrame#QualityCard {{
+/* ------------------------------------------- Filas de formato (Studio) */
+/* Filas limpias [icono][título·badge][codec/fps][tamaño][Descargar]:
+   cero cuadrículas rígidas y cero skeletons con texto roto. */
+QFrame#FormatRow, QFrame#QualityCard {{
     background-color: {p.surface};
     border: 1px solid {p.border};
     border-radius: 12px;
 }}
 
-QFrame#QualityCard:hover {{
-    border-color: {p.border_strong};
+QFrame#FormatRow:hover, QFrame#QualityCard:hover {{
     background-color: {p.surface_hover};
+    border-color: {p.border_strong};
 }}
 
-QFrame#QualityCard[selected="true"] {{
+QFrame#FormatRow[selected="true"], QFrame#QualityCard[selected="true"] {{
+    background-color: #172033;
     border: 1px solid {p.accent};
+}}
+
+QLabel#FormatRowIcon {{
+    font-size: 15px;
+    color: {p.accent_text};
     background-color: {p.accent_dim};
+    border-radius: 8px;
+    min-width: 26px;
+    max-width: 26px;
+    min-height: 26px;
+    max-height: 26px;
+    qproperty-alignment: AlignCenter;
+}}
+
+QLabel#QualityTitle {{
+    background-color: transparent;
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 700;
 }}
 
 QRadioButton#QualityRadio {{
     background-color: transparent;
-    color: {p.text_primary};
-    font-size: 15px;
-    font-weight: 700;
-    spacing: 10px;
+    color: transparent;
+    font-size: 1px;
+    spacing: 0px;
 }}
 
 QRadioButton#QualityRadio::indicator {{
-    width: 15px;
-    height: 15px;
+    width: 0px;
+    height: 0px;
+    border: none;
+    background-color: transparent;
+}}
+
+QPushButton#FormatRowDownload {{
+    background-color: {p.accent};
+    color: {p.text_on_accent};
+    border: none;
     border-radius: 8px;
-    border: 2px solid {p.border_strong};
+    padding: 6px 14px;
+    font-size: 11px;
+    font-weight: 800;
+}}
+
+QPushButton#FormatRowDownload:hover {{
+    background-color: {p.accent_hover};
+}}
+
+QPushButton#FormatRowDownload:pressed {{
+    background-color: {p.accent_pressed};
+}}
+
+/* ------------------------------------- Barra de URL integrada (Studio) */
+QFrame#UrlBar {{
     background-color: {p.surface_sunken};
+    border: 1px solid {p.border};
+    border-radius: 12px;
 }}
 
-QRadioButton#QualityRadio::indicator:hover {{
-    border-color: {p.accent};
+QFrame#UrlBar[property~="invalid"] {{
+    border: 1px solid {p.danger};
 }}
 
-QRadioButton#QualityRadio::indicator:checked {{
-    border: 5px solid {p.accent};
-    background-color: #ffffff;
+QFrame#UrlBar[property~="valid"] {{
+    border: 1px solid {p.border_focus};
+}}
+
+QLineEdit#UrlInput {{
+    background-color: transparent;
+    border: none;
+    font-size: 14px;
+    padding: 11px 4px;
+}}
+
+QPushButton#InlineButton {{
+    background-color: transparent;
+    border: none;
+    border-radius: 8px;
+    color: {p.text_secondary};
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 700;
+}}
+
+QPushButton#InlineButton:hover {{
+    background-color: {p.surface_active};
+    color: {p.text_primary};
+}}
+
+/* ------------------------------------ Badge de duración sobre miniatura */
+QFrame#ThumbWrap {{
+    background-color: transparent;
+    border: none;
+}}
+
+QLabel#DurationBadge {{
+    background-color: rgba(0, 0, 0, 0.78);
+    color: #FFFFFF;
+    border-radius: 8px;
+    padding: 2px 8px;
+    margin: 0px 8px 8px 0px;
+    font-size: 11px;
+    font-weight: 700;
+}}
+
+/* --------------------------------- Indicador limpio de "Analizando..." */
+QProgressBar#AnalyzingBar {{
+    background-color: {p.surface_active};
+    border: none;
+    border-radius: 3px;
+    min-height: 5px;
+    max-height: 5px;
+    color: transparent;
+}}
+
+QProgressBar#AnalyzingBar::chunk {{
+    background-color: {p.accent};
+    border-radius: 3px;
 }}
 
 QLabel#QualityBadge {{
@@ -809,13 +928,13 @@ QLabel#QualityBadge {{
 
 QLabel#QualityTechInfo {{
     font-size: 11px;
-    color: {p.text_tertiary};
+    color: #94A3B8;
 }}
 
 QLabel#QualitySize {{
     font-size: 11px;
     font-weight: 600;
-    color: {p.text_secondary};
+    color: #CBD5E1;
 }}
 
 /* ------------------------------------------- Tarjeta de descarga */
@@ -865,10 +984,162 @@ QLabel#EmptyStateHint {{
 }}
 
 /* ------------------------------------------------------------ Varios */
-QLabel#SidebarFooter {{
+QFrame#SidebarProfileCard {{
+    background-color: {p.surface};
+    border: 1px solid {p.border};
+    border-radius: 12px;
+}}
+
+QLabel#ProfileDot {{
+    background-color: {p.accent};
+    border-radius: 4px;
+    max-width: 8px;
+    max-height: 8px;
+    min-width: 8px;
+    min-height: 8px;
+}}
+
+QLabel#ProfileName {{
+    font-size: 12px;
+    font-weight: 700;
+    color: {p.text_primary};
+}}
+
+QLabel#ProfileMeta {{
     font-size: 10px;
     color: {p.text_tertiary};
-    padding-left: 8px;
+}}
+
+/* ============================================================
+   Studio Desktop — Monitor de actividad (sidebar derecho)
+   ============================================================ */
+
+QFrame#ActivityPanel {{
+    background-color: {p.bg_sidebar};
+    border-left: 1px solid {p.border};
+}}
+
+QLabel#ActivityHeader {{
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1.4px;
+    color: {p.text_tertiary};
+}}
+
+QToolButton#CollapseButton {{
+    background-color: transparent;
+    border: 1px solid {p.border};
+    border-radius: 8px;
+    color: {p.text_secondary};
+    font-size: 14px;
+    font-weight: 700;
+    padding: 2px 8px;
+}}
+
+QToolButton#CollapseButton:hover {{
+    background-color: {p.surface_hover};
+    color: {p.text_primary};
+}}
+
+QLabel#RailTitle {{
+    color: {p.text_tertiary};
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+}}
+
+QFrame#ActivityCard {{
+    background-color: {p.surface};
+    border: 1px solid {p.border};
+    border-radius: 12px;
+}}
+
+QFrame#ActivityCard:hover {{
+    border-color: {p.border_strong};
+}}
+
+QLabel#ActivityTitle {{
+    font-size: 12px;
+    font-weight: 700;
+    color: {p.text_primary};
+}}
+
+QLabel#ActivityStatus {{
+    font-size: 10px;
+    font-weight: 600;
+    color: {p.text_secondary};
+}}
+
+QLabel#ActivitySpeed {{
+    font-size: 11px;
+    font-weight: 800;
+    color: {p.accent_text};
+}}
+
+QLabel#ActivityPct {{
+    font-size: 11px;
+    font-weight: 800;
+    color: {p.text_primary};
+}}
+
+QToolButton#ActivityBtn {{
+    background-color: {p.surface_hover};
+    border: 1px solid {p.border};
+    border-radius: 7px;
+    color: {p.text_secondary};
+    font-size: 10px;
+    padding: 2px 6px;
+    font-weight: 700;
+}}
+
+QToolButton#ActivityBtn:hover {{
+    background-color: {p.surface_active};
+    color: {p.text_primary};
+}}
+
+QProgressBar#ActivityProgress {{
+    background-color: {p.surface_active};
+    border: none;
+    border-radius: 3px;
+    min-height: 6px;
+    max-height: 6px;
+    text-align: center;
+    color: transparent;
+}}
+
+QProgressBar#ActivityProgress::chunk {{
+    background-color: {p.accent};
+    border-radius: 3px;
+}}
+
+QLabel#HistoryRow {{
+    font-size: 11px;
+    color: {p.text_secondary};
+    padding: 2px 0px;
+}}
+
+QFrame#MetricsCard {{
+    background-color: {p.surface};
+    border: 1px solid {p.border};
+    border-radius: 14px;
+}}
+
+QLabel#MetricValue {{
+    font-size: 17px;
+    font-weight: 800;
+    color: {p.text_primary};
+}}
+
+QLabel#MetricLabel {{
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1.0px;
+    color: {p.text_tertiary};
+}}
+
+QLabel#EmptyMonitorLabel {{
+    font-size: 11px;
+    color: {p.text_tertiary};
 }}
 """
 

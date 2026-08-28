@@ -299,6 +299,19 @@ def folder_icon(color: str = "#b3b3b3") -> QIcon:
     return _finish(pixmap, p)
 
 
+def search_icon(color: str = "#94a3b8") -> QIcon:
+    """Lupa minimalista para la barra de URL del Studio."""
+    pixmap, p = _base_pixmap()
+    p.setPen(_pen(color))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawEllipse(QPointF(17.5, 17.5), 7.5, 7.5)
+    handle_pen = _pen(color)
+    handle_pen.setWidthF(3.4)
+    p.setPen(handle_pen)
+    p.drawLine(QPointF(23.5, 23.5), QPointF(29.5, 29.5))
+    return _finish(pixmap, p)
+
+
 WINDOW_ICON_SIZE = 16
 
 

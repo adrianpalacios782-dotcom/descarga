@@ -110,14 +110,17 @@ class Url:
         )
 
     def detect_platform(self) -> str:
-        val = self.value.lower()
-        if re.search(r"(youtube\.com|youtu\.be)", val):
+        parsed = urlparse(self.value)
+        host = (parsed.hostname or "").lower().rstrip(".")
+        if host.startswith("www."):
+            host = host[4:]
+        if host in ("youtube.com", "youtu.be", "m.youtube.com") or host.endswith(".youtube.com"):
             return "YouTube"
-        elif re.search(r"(tiktok\.com)", val):
+        elif host in ("tiktok.com", "vm.tiktok.com") or host.endswith(".tiktok.com"):
             return "TikTok"
-        elif re.search(r"(instagram\.com)", val):
+        elif host in ("instagram.com",) or host.endswith(".instagram.com"):
             return "Instagram"
-        elif re.search(r"(facebook\.com|fb\.watch)", val):
+        elif host in ("facebook.com", "fb.watch", "m.facebook.com") or host.endswith(".facebook.com"):
             return "Facebook"
         return "Generic"
 

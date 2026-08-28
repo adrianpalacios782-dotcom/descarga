@@ -209,9 +209,11 @@ class YtDlpDownloadEngine(IDownloadEngine):
 
         probe = self.ffmpeg_adapter.probe_streams(task.destination_path)
         size = os.path.getsize(task.destination_path)
+        probe_audio = probe.get("audio")
+        probe_audio_codec = probe_audio.get("codec") if isinstance(probe_audio, dict) else None
         logger.info(
             f"AUDIO {target_fmt}@{bitrate}k completado: {size} bytes, "
-            f"codec={probe.get('audio', {}).get('codec')}, duración={probe.get('duration_seconds')}"
+            f"codec={probe_audio_codec}, duración={probe.get('duration_seconds')}"
         )
 
         task.downloaded_bytes = size
@@ -317,10 +319,14 @@ class YtDlpDownloadEngine(IDownloadEngine):
         # ── Fase 5: Validar calidad descargada ──
         size = os.path.getsize(final_path)
         probe = self.ffmpeg_adapter.probe_streams(final_path)
-        actual_height = (probe.get("video") or {}).get("height")
-        video_codec = (probe.get("video") or {}).get("codec")
-        audio_codec = (probe.get("audio") or {}).get("codec")
-        actual_fps = (probe.get("video") or {}).get("fps")
+        probe_video = probe.get("video")
+        probe_audio = probe.get("audio")
+        video_info = probe_video if isinstance(probe_video, dict) else {}
+        audio_info = probe_audio if isinstance(probe_audio, dict) else {}
+        actual_height = video_info.get("height")
+        video_codec = video_info.get("codec")
+        audio_codec = audio_info.get("codec")
+        actual_fps = video_info.get("fps")
 
         actual_label = f"{actual_height}p" if actual_height else "desconocida"
         if actual_fps:
@@ -407,29 +413,36 @@ class YtDlpDownloadEngine(IDownloadEngine):
     def _build_video_format_spec(fmt) -> str:
         """Construye la especificación de formato para yt-dlp.
 
-        Utiliza el format_id real identificado por el normalizer como selector primario,
-        con fallback a selección por altura cuando el format_id no está disponible o es
-        sintético (ej. "best_quality").
+        PRINCIPIO: la RESOLUCIÓN MANDA; el contenedor/codec es preferencia
+        secundaria. Las versiones anteriores anteponían selectores
+        [vcodec^=avc1], lo que hacía que yt-dlp sacrificara resolución para
+        satisfacer el codec (ej. 1080p pedido → 480p avc1 entregado, archivos
+        "degradados" de pocos MB). Ahora los filtros de codec están prohibidos
+        dentro de los selectores de altura y `merge_output_format=mp4` se
+        encarga del contenedor final vía FFmpeg a bitrate completo.
 
-        Cadena de fallback:
-        1. format_id específico + mejor audio compatible (si format_id es numérico real)
-        2. bestvideo con altura EXACTA solicitada (H.264+AAC, luego cualquier codec)
-        3. bestvideo con altura <= solicitada (H.264+AAC, luego cualquier codec)
-        4. bestvideo + bestaudio (sin límite de altura)
-        5. best (último recurso)
+        Cadena para "Mejor calidad" (sin límite de altura — resuelve
+        dinámicamente al máximo REAL del servidor, nunca fuerza 2160p):
+          1. bestvideo+bestaudio            → máximo real disponible
+          2. bestvideo[ext=mp4]+bestaudio[ext=m4a] → par mp4 si aplica
+          3. best[ext=mp4]                  → progresivo mp4
+          4. best                           → último recurso
 
-        IMPORTANTE: los selectores de altura EXACTA van ANTES que los de rango
-        `height<=h` para garantizar que, si la resolución solicitada existe en el
-        servidor, se descargue exactamente esa. El rango `<=h` solo actúa cuando la
-        resolución exacta no está disponible; la validación final reportará entonces
-        la degradación real sin ocultarla.
+        Cadena con altura solicitada h:
+          1. format_id crudo + bestaudio (si el ID es numérico real)
+          2. bestvideo altura EXACTA h (+ bestaudio m4a / cualquier audio)
+          3. bestvideo altura <= h (red de seguridad, SIN filtro de codec)
+          4. cadena "Mejor calidad"
         """
+        best_chain = (
+            "bestvideo+bestaudio"
+            "/bestvideo[ext=mp4]+bestaudio[ext=m4a]"
+            "/best[ext=mp4]"
+            "/best"
+        )
+
         if fmt.is_best_quality or fmt.format_id == "best_quality":
-            return (
-                "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]"
-                "/bestvideo+bestaudio[acodec^=mp4a]"
-                "/bestvideo+bestaudio/best"
-            )
+            return best_chain
 
         is_raw_id = fmt.format_id and fmt.format_id.isdigit()
         safe_id = YtDlpDownloadEngine._sanitize_format_id(fmt.format_id) if fmt.format_id else ""
@@ -437,23 +450,20 @@ class YtDlpDownloadEngine(IDownloadEngine):
         if fmt.height and fmt.height > 0:
             h = fmt.height
             exact = (
-                f"bestvideo[height={h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
-                f"/bestvideo[height={h}]+bestaudio[acodec^=mp4a]"
+                f"bestvideo[height={h}]+bestaudio[ext=m4a]"
                 f"/bestvideo[height={h}]+bestaudio"
             )
             capped = (
-                f"bestvideo[height<={h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
-                f"/bestvideo[height<={h}]+bestaudio[acodec^=mp4a]"
+                f"bestvideo[height<={h}]+bestaudio[ext=m4a]"
                 f"/bestvideo[height<={h}]+bestaudio"
             )
             if is_raw_id and safe_id:
                 return (
-                    f"{safe_id}+bestaudio[acodec^=mp4a]"
-                    f"/{safe_id}+bestaudio"
+                    f"{safe_id}+bestaudio"
+                    f"/{safe_id}+bestaudio[ext=m4a]"
                     f"/{exact}"
                     f"/{capped}"
-                    f"/bestvideo+bestaudio"
-                    f"/best"
+                    f"/{best_chain}"
                 )
             if safe_id and not fmt.is_video_only:
                 # Formato progresivo con ID alfanumerico (ej. Facebook 'hd'/'sd'):
@@ -464,15 +474,15 @@ class YtDlpDownloadEngine(IDownloadEngine):
                     f"/{capped}"
                     f"/best"
                 )
-            return f"{exact}/{capped}/bestvideo+bestaudio/best"
+            return f"{exact}/{capped}/{best_chain}"
 
         if is_raw_id and safe_id:
-            return f"{safe_id}/bestvideo+bestaudio/best"
+            return f"{safe_id}/{best_chain}"
 
         if safe_id and not fmt.is_video_only:
-            return f"{safe_id}/bestvideo+bestaudio/best"
+            return f"{safe_id}/best"
 
-        return "bestvideo+bestaudio/best"
+        return best_chain
 
     def _probe_available_formats(self, url: str, cancel_token: threading.Event) -> Dict[str, Any]:
         """Sondea los formatos disponibles en el servidor sin descargar.
@@ -665,13 +675,14 @@ class YtDlpDownloadEngine(IDownloadEngine):
 
     def _canonicalize_final_path(self, final_path: str, task: DownloadTask) -> str:
         dest = task.destination_path
-        if os.path.abspath(final_path) == os.path.abspath(dest):
-            return dest
-
         _, _, desired_ext = self._split_destination(dest)
-        _, _, actual_ext = os.path.splitext(final_path)
+        _, actual_ext = os.path.splitext(final_path)
         if actual_ext.lower() != desired_ext.lower():
             dest = os.path.splitext(dest)[0] + actual_ext
+
+        if os.path.abspath(final_path) == os.path.abspath(dest):
+            task.destination_path = dest
+            return dest
 
         os.makedirs(os.path.dirname(os.path.abspath(dest)), exist_ok=True)
         if os.path.exists(dest):
