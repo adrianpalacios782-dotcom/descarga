@@ -1,7 +1,7 @@
 import logging
 import re
 import time
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 import yt_dlp
 
@@ -84,7 +84,7 @@ class TikTokAdapter(BasePlatformAdapter):
             f"TikTok no pudo extraer los datos del video: {clean_msg}"
         )
 
-    def _build_ydl_opts(self) -> Dict[str, Any]:
+    def _build_ydl_opts(self, player_clients: Optional[List[str]] = None) -> Dict[str, Any]:
         """Opciones mínimas para TikTok — sin extractor_args, sin player_client."""
         return {
             "quiet": True,

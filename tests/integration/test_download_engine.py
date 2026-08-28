@@ -257,7 +257,7 @@ class TestYtDlpDownloadEngine:
         assert ffmpeg.extract_calls[0]["audio_format"] == "m4a"
         assert ffmpeg.extract_calls[0]["bitrate_kbps"] == 192
 
-    def test_video_height_spec_prefers_avc1_mp4a(self, tmp_path) -> None:
+    def test_video_height_spec_resolution_first_no_codec_degradation(self, tmp_path) -> None:
         seen_opts = {}
 
         def factory(opts):
@@ -275,17 +275,21 @@ class TestYtDlpDownloadEngine:
 
         assert _wait_for(lambda: task.status == DownloadState.COMPLETED)
         assert seen_opts["format"] == (
-            "137+bestaudio[acodec^=mp4a]"
-            "/137+bestaudio"
-            "/bestvideo[height=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
-            "/bestvideo[height=1080]+bestaudio[acodec^=mp4a]"
+            "137+bestaudio"
+            "/137+bestaudio[ext=m4a]"
+            "/bestvideo[height=1080]+bestaudio[ext=m4a]"
             "/bestvideo[height=1080]+bestaudio"
-            "/bestvideo[height<=1080][vcodec^=avc1]+bestaudio[acodec^=mp4a]"
-            "/bestvideo[height<=1080]+bestaudio[acodec^=mp4a]"
+            "/bestvideo[height<=1080]+bestaudio[ext=m4a]"
             "/bestvideo[height<=1080]+bestaudio"
             "/bestvideo+bestaudio"
+            "/bestvideo[ext=mp4]+bestaudio[ext=m4a]"
+            "/best[ext=mp4]"
             "/best"
         )
+        # Regresión: ningún selector de altura puede llevar filtro de codec
+        # (era la causa de descargas degradadas tipo "1080p pedido → 480p avc1").
+        assert "vcodec" not in seen_opts["format"]
+        assert "acodec" not in seen_opts["format"]
         assert seen_opts["merge_output_format"] == "mp4"
         assert seen_opts["allow_multi_streams"] is True
 
@@ -307,9 +311,10 @@ class TestYtDlpDownloadEngine:
 
         assert _wait_for(lambda: task.status == DownloadState.COMPLETED)
         assert seen_opts["format"] == (
-            "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]"
-            "/bestvideo+bestaudio[acodec^=mp4a]"
-            "/bestvideo+bestaudio/best"
+            "bestvideo+bestaudio"
+            "/bestvideo[ext=mp4]+bestaudio[ext=m4a]"
+            "/best[ext=mp4]"
+            "/best"
         )
         assert seen_opts["allow_multi_streams"] is True
 
@@ -586,11 +591,13 @@ class TestYtDlpDownloadEngine:
         fmt = FormatOption(format_id="best_quality", extension="mp4", height=1440,
                            stream_type=StreamType.VIDEO_ONLY, is_best_quality=True, needs_ffmpeg_merge=True)
         spec = YtDlpDownloadEngine._build_video_format_spec(fmt)
-        # best_quality no limita altura: comportamiento intacto (regresión CASO A).
+        # best_quality no limita altura: resuelve dinámicamente al máximo real
+        # del servidor (regresión CASO A; nunca fuerza 2160p).
         assert spec == (
-            "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]"
-            "/bestvideo+bestaudio[acodec^=mp4a]"
-            "/bestvideo+bestaudio/best"
+            "bestvideo+bestaudio"
+            "/bestvideo[ext=mp4]+bestaudio[ext=m4a]"
+            "/best[ext=mp4]"
+            "/best"
         )
 
     def test_degraded_task_reset_clears_warning(self, tmp_path) -> None:
@@ -719,7 +726,7 @@ class TestYtDlpDownloadEngine:
 
         assert _wait_for(lambda: task.status == DownloadState.COMPLETED)
         spec = seen_opts["format"]
-        assert spec.startswith("bestvideo[vcodec^=avc1]"), f"best_quality no debe usar format_id crudo, got: {spec}"
+        assert spec.startswith("bestvideo+bestaudio"), f"best_quality no debe usar format_id crudo, got: {spec}"
 
     def test_best_quality_never_uses_raw_format_id(self, tmp_path) -> None:
         seen_opts = {}
@@ -739,7 +746,10 @@ class TestYtDlpDownloadEngine:
 
         assert _wait_for(lambda: task.status == DownloadState.COMPLETED)
         spec = seen_opts["format"]
-        assert "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]" in spec
+        # La regla de fusión a bitrate completo exigida por el producto debe
+        # estar presente como tier de preferencia de contenedor.
+        assert "bestvideo[ext=mp4]+bestaudio[ext=m4a]" in spec
+        assert "best[ext=mp4]" in spec
 
 
 # ---------------------------------------------------------------------------

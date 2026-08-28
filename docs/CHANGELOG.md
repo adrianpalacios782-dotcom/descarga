@@ -4,6 +4,19 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 
 ---
 
+## [1.0.2] - 2026-08-28
+
+### Corregido
+- **Presentación:** Solucionado `SyntaxError` en hoja de estilos QSS (`theme.py`) que impedía la carga de estilos.
+- **Motor de Descarga:** Corregido error de desempaquetado de tupla y prevención de borrado accidental de archivo en `_canonicalize_final_path`.
+- **Presentación:** Restaurada la preservación del título real del video en los archivos descargados (`_build_video_request`).
+- **Concurrencia:** Comunicación asíncrona segura con `Signal` de Qt en la comprobación de FFmpeg (`MainWindow`).
+- **Seguridad:** Validación anti-spoofing en detección de plataforma basada exclusivamente en `hostname` de la URL (`Url.detect_platform`).
+- **Adaptadores:** Optimización del ciclo de clientes para ejecutar rotación anti-bot únicamente en YouTube, previniendo rate-limiting innecesario en Facebook e Instagram.
+- **Infraestructura:** Conexión del namespace de logs de proyecto al archivo rotativo y filtro de datos sensibles (`logger_config.py`).
+
+---
+
 ## [1.0.1] - 2026-08-22
 
 ### Añadido

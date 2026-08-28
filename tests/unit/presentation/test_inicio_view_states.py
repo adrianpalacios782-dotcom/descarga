@@ -328,6 +328,64 @@ class TestInicioNoQualitiesFlow:
         assert row_480.vqo.estimated_size_bytes is None
 
 
+class TestQualityCardsRendering:
+    """Regresión visual: tarjetas legibles (título blanco, radio sin texto)."""
+
+    def test_title_label_composes_label_and_badge(self, qapp) -> None:
+        view = InicioView()
+        view.set_metadata(make_metadata())
+        rows = list(view._iter_quality_rows())
+        assert rows[0].title.text() == "Mejor calidad · HD"
+        assert rows[1].title.text() == "720p"
+
+    def test_radio_has_no_text_no_glyph_artifacts(self, qapp) -> None:
+        view = InicioView()
+        view.set_metadata(make_metadata())
+        for row in view._iter_quality_rows():
+            assert row.radio.text() == ""
+
+    def test_grid_fully_cleared_between_analyses(self, qapp) -> None:
+        view = InicioView()
+        view.set_metadata(make_metadata())
+        first_ids = [id(r) for r in view._iter_quality_rows()]
+        view.set_metadata(make_metadata(title="Otro video"))
+        second_rows = list(view._iter_quality_rows())
+        assert len(second_rows) == 3
+        assert all(id(r) not in first_ids for r in second_rows)
+
+
+class TestPlaylistUrlSanitization:
+    """Al pegar o analizar, los parámetros de playlist se eliminan."""
+
+    def test_analyze_emits_sanitized_url(self, qapp) -> None:
+        view = InicioView()
+        emitted: list[str] = []
+        view.analyze_requested.connect(emitted.append)
+        view.url_input.setText(
+            "https://www.youtube.com/watch?v=F3tKutGo1Fo&list=PLxyz&index=2"
+        )
+        view._on_analyze_clicked()
+        assert emitted == ["https://www.youtube.com/watch?v=F3tKutGo1Fo"]
+
+    def test_paste_inserts_sanitized_url(self, qapp, monkeypatch) -> None:
+        from PySide6.QtWidgets import QApplication
+
+        monkeypatch.setattr(
+            QApplication,
+            "clipboard",
+            staticmethod(lambda: type(
+                "FakeClipboard",
+                (),
+                {"text": staticmethod(
+                    lambda: "https://youtu.be/F3tKutGo1Fo?si=t&list=PLz"
+                )},
+            )()),
+        )
+        view = InicioView()
+        view._on_paste_clicked()
+        assert view.url_input.text() == "https://youtu.be/F3tKutGo1Fo?si=t"
+
+
 class TestThumbnailFallback:
 
     def _wait_for(self, condition, timeout_s=3.0) -> bool:

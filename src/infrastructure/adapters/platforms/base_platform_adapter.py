@@ -61,7 +61,10 @@ class BasePlatformAdapter(IPlatformAdapter):
         direct_url_info: Optional[Dict[str, Any]] = None
         errors: List[str] = []
 
-        for clients in self.CLIENT_STRATEGIES:
+        is_youtube = url.detect_platform() == "YouTube"
+        strategies = self.CLIENT_STRATEGIES if is_youtube else [None]
+
+        for clients in strategies:
             try:
                 opts = self._build_ydl_opts(clients)
                 with yt_dlp.YoutubeDL(opts) as ydl:
@@ -109,8 +112,9 @@ class BasePlatformAdapter(IPlatformAdapter):
         clean_msg = re.sub(r"ERROR:\s*", "", clean_msg).strip()
 
         if any(term in clean_msg.lower() for term in ("sign in", "bot", "too many requests", "429")):
+            plat_name = url.detect_platform()
             clean_msg = (
-                "La plataforma (YouTube) ha restringido temporalmente las solicitudes "
+                f"La plataforma ({plat_name}) ha restringido temporalmente las solicitudes "
                 "o requiere verificación para este contenido."
             )
         elif all("auxiliares" in e for e in errors):

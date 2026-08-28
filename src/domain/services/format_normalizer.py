@@ -190,6 +190,8 @@ class FormatNormalizer:
                 badge = "2K"
             elif std_h >= 720:
                 badge = "HD"
+            elif std_h >= 480:
+                badge = "SD"
 
             label = f"{std_h}p"
             needs_merge = not best_vf.has_audio
