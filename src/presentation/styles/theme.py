@@ -177,6 +177,11 @@ QWidget#TitleBarDrag {{
     background-color: transparent;
 }}
 
+QLabel#TitleBrandIcon {{
+    background-color: transparent;
+    border-radius: 4px;
+}}
+
 QLabel#TitleBrand {{
     color: {p.text_secondary};
     font-size: 12px;

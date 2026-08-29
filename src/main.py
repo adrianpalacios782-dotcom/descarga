@@ -69,7 +69,26 @@ def main() -> None:
     )
 
     # 4. ViewModel & GUI
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("osvaldoDownloaderPro.desktop.v1")
+        except Exception:
+            pass
+
     app = QApplication(sys.argv)
+
+    from PySide6.QtGui import QIcon
+    icon_candidates = [
+        os.path.join(os.path.dirname(__file__), "..", "assets", "icon.png"),
+        os.path.join(os.path.dirname(__file__), "..", "assets", "icon.ico"),
+        os.path.join(getattr(sys, "_MEIPASS", ""), "assets", "icon.png"),
+        os.path.join(os.path.dirname(sys.executable), "assets", "icon.png"),
+    ]
+    for candidate in icon_candidates:
+        if candidate and os.path.exists(candidate):
+            app.setWindowIcon(QIcon(candidate))
+            break
 
     view_model = MainViewModel(
         platform_adapter=platform_registry,
@@ -80,6 +99,8 @@ def main() -> None:
     )
 
     window = MainWindow(view_model=view_model)
+    if not app.windowIcon().isNull():
+        window.setWindowIcon(app.windowIcon())
     window.show()
 
     # Chequeo único de actualizaciones al iniciar (no bloqueante; falla en silencio).

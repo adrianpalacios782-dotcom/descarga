@@ -24,6 +24,8 @@ OutputBaseFilename=osvaldoDownloaderPro-{#APP_VERSION}-Setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=assets\icon.ico
+UninstallIconFile=assets\icon.ico
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -65,17 +67,20 @@ Source: "dist\osvaldoDownloaderPro\ffmpeg.exe"; DestDir: "{app}"; Flags: ignorev
 Source: "dist\osvaldoDownloaderPro\ffprobe.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Internal directory (PySide6, yt-dlp, curl_cffi, Python runtime, etc.)
 Source: "dist\osvaldoDownloaderPro\_internal\*"; DestDir: "{app}\_internal"; Flags: recursesubdirs createallsubdirs ignoreversion
+; Assets (iconos y recursos de marca)
+Source: "dist\osvaldoDownloaderPro\assets\*"; DestDir: "{app}\assets"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\osvaldoDownloaderPro"; Filename: "{app}\osvaldoDownloaderPro.exe"
+Name: "{group}\osvaldoDownloaderPro"; Filename: "{app}\osvaldoDownloaderPro.exe"; IconFilename: "{app}\osvaldoDownloaderPro.exe"
 Name: "{group}\{cm:UninstallProgram,osvaldoDownloaderPro}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\osvaldoDownloaderPro"; Filename: "{app}\osvaldoDownloaderPro.exe"; Tasks: desktopicon
+Name: "{autodesktop}\osvaldoDownloaderPro"; Filename: "{app}\osvaldoDownloaderPro.exe"; IconFilename: "{app}\osvaldoDownloaderPro.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\osvaldoDownloaderPro.exe"; Description: "{cm:LaunchProgram,osvaldoDownloaderPro}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\assets"
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);

@@ -145,6 +145,16 @@ foreach ($r in @("ffmpeg.exe", "ffprobe.exe")) {
     if (-not (Test-Path -LiteralPath (Join-Path $AppDir $r))) { Write-Fail "Falta artefacto requerido: $r"; exit 1 }
 }
 
+# Proveer assets/ (icono de la aplicacion) en la raiz de dist para el instalador
+$assetsSrc = Join-Path $ProjectRoot "assets"
+$assetsDst = Join-Path $AppDir "assets"
+if (Test-Path -LiteralPath $assetsSrc) {
+    Copy-Item -LiteralPath $assetsSrc -Destination $assetsDst -Recurse -Force
+}
+if (-not (Test-Path -LiteralPath (Join-Path $AppDir "assets\icon.ico"))) {
+    Write-Fail "Falta artefacto requerido: assets\icon.ico"; exit 1
+}
+
 # Metadatos de version embebidos en el exe (recurso VERSIONINFO de PyInstaller).
 $AppExe = Join-Path $AppDir "osvaldoDownloaderPro.exe"
 $Vi = (Get-Item -LiteralPath $AppExe).VersionInfo
