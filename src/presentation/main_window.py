@@ -321,6 +321,10 @@ class MainWindow(QMainWindow):
         """El instalador verificado ya fue lanzado: cerrar esta aplicación."""
         logger.info("Actualización: cerrando la aplicación para completar la instalación.")
         self.close()
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
 
     def _on_update_failed(self, message: str) -> None:
         """Fallo de actualización: mensaje claro y la app sigue funcionando."""

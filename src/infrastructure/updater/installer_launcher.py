@@ -178,10 +178,12 @@ class InstallerLauncher:
             raise UpdateError("No se localizó el ejecutable de la aplicación.")
 
         inner = (
-            f'"{installer}" /SILENT /SUPPRESSMSGBOXES '
+            f'timeout /t 2 /nobreak >nul '
+            f'& start /wait "" "{installer}" /SILENT /SUPPRESSMSGBOXES '
+            f'& timeout /t 1 /nobreak >nul '
             f'& start "" "{app_exe}"'
         )
-        command_line = f'cmd /c "{inner}"'
+        command_line = f'cmd.exe /c "{inner}"'
 
         logger.info("Actualización: lanzando instalador verificado (silencioso).")
         self._popen(  # noqa: S603 - línea construida solo con rutas verificadas internamente
