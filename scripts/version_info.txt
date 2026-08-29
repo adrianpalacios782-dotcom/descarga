@@ -16,8 +16,8 @@ VSVersionInfo(
   ffi=FixedFileInfo(
     # Version en 4 enteros de 16 bits: major, minor, patch, build.
     # Debe reflejar __version__ de src/__init__.py + .0 (1.0.2 -> 1.0.2.0).
-    filevers=(1, 0, 3, 0),
-    prodvers=(1, 0, 3, 0),
+    filevers=(1, 0, 4, 0),
+    prodvers=(1, 0, 4, 0),
 
     # Mascara que declara que bits de dwFileFlags son validos.
     mask=0x3F,
@@ -41,12 +41,12 @@ VSVersionInfo(
           [
             StringStruct('CompanyName', 'osvaldoDownloaderPro'),
             StringStruct('FileDescription', 'osvaldoDownloaderPro Desktop Video & Audio Downloader'),
-            StringStruct('FileVersion', '1.0.3.0'),
+            StringStruct('FileVersion', '1.0.4.0'),
             StringStruct('InternalName', 'osvaldoDownloaderPro'),
             StringStruct('LegalCopyright', 'Copyright (C) 2026 osvaldoDownloaderPro'),
             StringStruct('OriginalFilename', 'osvaldoDownloaderPro.exe'),
             StringStruct('ProductName', 'osvaldoDownloaderPro'),
-            StringStruct('ProductVersion', '1.0.3.0'),
+            StringStruct('ProductVersion', '1.0.4.0'),
             # Sin comentarios ni nombres privados: menos superficie para
             # heuristicas de deteccion basadas en metadatos incompletos.
           ]

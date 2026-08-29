@@ -4,20 +4,20 @@ Aplicación de escritorio nativa para Windows 10/11 diseñada para el análisis,
 
 ---
 
-## 🚀 osvaldoDownloaderPro v1.0.3 BETA (Última versión)
+## 🚀 osvaldoDownloaderPro v1.0.4 BETA (Última versión)
 
 ## ⬇️ DESCARGAR PARA WINDOWS
 
-### [ ⬇️ DESCARGAR osvaldoDownloaderPro v1.0.3 (Instalador Oficial) ](https://github.com/adrianpalacios782-dotcom/descarga/releases/latest)
+### [ ⬇️ DESCARGAR osvaldoDownloaderPro v1.0.4 (Instalador Oficial) ](https://github.com/adrianpalacios782-dotcom/descarga/releases/latest)
 
 En la página de lanzamientos, dirígete a la sección **Assets** y descarga:
 
-> **`osvaldoDownloaderPro-1.0.3-Setup.exe`** (114 MB — incluye instalador, motor y dependencias completas)
+> **`osvaldoDownloaderPro-1.0.4-Setup.exe`** (114 MB — incluye instalador, nuevo icono oficial, motor y dependencias completas)
 
 **Instalación rápida en 4 pasos:**
 
 1. Haz clic en el enlace de descarga superior o visita [Releases](../../releases/latest).
-2. Descarga `osvaldoDownloaderPro-1.0.3-Setup.exe`.
+2. Descarga `osvaldoDownloaderPro-1.0.4-Setup.exe`.
 3. Ejecuta el instalador (no requiere permisos de administrador).
 4. Sigue los pasos del asistente y listo.
 
@@ -128,7 +128,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1 -SkipSigning
 
 El script genera automáticamente:
 - `dist\osvaldoDownloaderPro\`: Binario portable desempaquetado.
-- `installer\osvaldoDownloaderPro-1.0.3-Setup.exe`: Instalador ejecutable para Windows.
+- `installer\osvaldoDownloaderPro-1.0.4-Setup.exe`: Instalador ejecutable para Windows.
 - `dist\SHA256SUMS.txt`: Sumas de comprobación SHA-256 de los artefactos.
 
 ---

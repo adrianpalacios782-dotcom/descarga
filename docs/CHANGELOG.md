@@ -4,6 +4,15 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 
 ---
 
+## [1.0.4] - 2026-08-29
+
+### Añadido
+- **Identidad de Marca:** Integración del nuevo icono oficial **ODP PRO** (diseño squircle moderno, hexágono cian y flecha de descarga) en el ejecutable (`icon.ico`), instalador y accesos directos.
+- **Presentación:** Icono de la marca en la barra de título personalizada y soporte de agrupación en la barra de tareas de Windows (`AppUserModelID`).
+- **Instalador:** Accesos directos de escritorio y menú inicio configurados para referenciar directamente `assets\icon.ico`.
+
+---
+
 ## [1.0.3] - 2026-08-28
 
 ### Mejorado
