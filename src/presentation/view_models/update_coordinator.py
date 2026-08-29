@@ -138,8 +138,8 @@ class UpdateCoordinator(QObject):
             self.download_progress.emit(100, 100)
             self.ready_to_install.emit()
 
-            self.install_started.emit()
             self._launcher.install_and_restart(installer_path, asset)
+            self.install_started.emit()
             # La cadena cmd del launcher borra este temp dir tras instalar.
             self._temp_dir = None
             logger.info("Actualización: instalador lanzado correctamente.")
