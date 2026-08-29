@@ -1,37 +1,61 @@
+"""Vista principal de análisis y descarga (Studio / InicioView).
+
+Flujo de interacción:
+PEGAR URL → ANALIZAR → PREVISUALIZAR CONTENIDO → ELEGIR FORMATO → CONFIGURAR → INICIAR DESCARGA.
+
+Estructura modular:
+- ContentPreviewCard: miniatura proporcional, chips de metadatos y sinopsis colapsable.
+- FormatTableHeader y FormatTableRow: tabla estructurada con columnas legibles y selector circular.
+- DownloadConfigWidget: carpeta de destino y nombre de archivo editable.
+- Barra de acción: tamaño estimado ("El tamaño es aproximado") y botón destacado de descarga.
+"""
+
 import os
 import re
 from typing import List, Optional
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
-    QLabel, QFrame, QComboBox, QFileDialog, QRadioButton,
-    QButtonGroup, QProgressBar, QApplication, QGridLayout,
+    QApplication,
+    QButtonGroup,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
 
 from src.domain.entities.format_option import AudioFormat, DownloadType, VideoQualityOption
 from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.exceptions.domain_exceptions import InvalidUrlError
 from src.domain.services.content_preview import (
-    extract_publication_year,
     format_size_bytes,
-    truncate_text,
 )
 from src.domain.services.url_sanitizer import sanitize_single_video_url
 from src.domain.value_objects.url import Url
 from src.presentation.components.animations import fade_in
 from src.presentation.components.app_icons import download_icon, search_icon
+from src.presentation.components.content_preview_card import ContentPreviewCard, ThumbWithBadge
+from src.presentation.components.download_config_widget import DownloadConfigWidget
+from src.presentation.components.format_table_widget import (
+    TAB_AUDIO,
+    TAB_RECOMMENDED,
+    TAB_VIDEO,
+    FormatRow,
+    FormatTableHeader,
+    FormatTableRow,
+)
 from src.presentation.components.thumbnail_loader import ThumbnailLabel
 from src.presentation.styles.styles import DARK_PALETTE
 
-
-SYNOPSIS_MAX_CHARS = 220
 URL_VALIDATION_DELAY_MS = 350
 CLIPBOARD_POLL_INTERVAL_MS = 1200
-
-TAB_RECOMMENDED = "recommended"
-TAB_VIDEO = "video"
-TAB_AUDIO = "audio"
 
 _CLIPBOARD_URL_PATTERN = re.compile(
     r"https?://(?:www\.|m\.)?(youtube\.com|youtu\.be|tiktok\.com|"
@@ -47,106 +71,8 @@ _PLATFORM_SPOTLIGHT = [
 ]
 
 
-class FormatRow(QFrame):
-    """Fila limpia de formato del Studio: `[icono] título·badge | codec/fps |
-    tamaño | Descargar`. Sustituye a la cuadrícula de tarjetas.
-
-    El QRadioButton se conserva como ancla invisible de selección exclusiva
-    (texto vacío e indicador oculto), así el flujo clásico "seleccionar fila +
-    botón Descargar principal" sigue funcionando junto al despacho directo por
-    fila. Cero skeletons y cero texto roto: mientras analiza se muestra una
-    barra indeterminada limpia.
-    """
-
-    def __init__(self, vqo: Optional[VideoQualityOption] = None,
-                 af: Optional[AudioFormat] = None, parent=None) -> None:
-        super().__init__(parent)
-        self.setObjectName("FormatRow")
-        self.kind = "video" if vqo is not None else "audio"
-        self.vqo = vqo
-        self.af = af
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        row = QHBoxLayout(self)
-        row.setContentsMargins(12, 9, 12, 9)
-        row.setSpacing(11)
-
-        # Ancla de selección (invisible por QSS).
-        self.radio = QRadioButton()
-        self.radio.setObjectName("QualityRadio")
-        self.radio.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        row.addWidget(self.radio)
-
-        self.icon = QLabel("▶" if self.kind == "video" else "♫")
-        self.icon.setObjectName("FormatRowIcon")
-        row.addWidget(self.icon)
-
-        text_col = QVBoxLayout()
-        text_col.setSpacing(2)
-
-        if self.kind == "video":
-            assert vqo is not None
-            title_text = vqo.label if not vqo.badge else f"{vqo.label} · {vqo.badge}"
-            sub_text = vqo.get_technical_info()
-            size_human = format_size_bytes(vqo.estimated_size_bytes)
-        else:
-            assert af is not None
-            br = int(round(float(af.bitrate_kbps))) if af.bitrate_kbps else 0
-            title_text = f"{br} kbps · {af.extension.upper()}" if br else f"Pista {af.extension.upper()}"
-            sub_text = f"Audio nativo del servidor · contenedor {af.extension.upper()}"
-            size_human = format_size_bytes(af.filesize_bytes)
-
-        title_lbl = QLabel(title_text)
-        title_lbl.setObjectName("QualityTitle")
-        self.title = title_lbl
-        text_col.addWidget(title_lbl)
-
-        info_lbl = QLabel(sub_text)
-        info_lbl.setObjectName("QualityTechInfo")
-        self.info = info_lbl
-        text_col.addWidget(info_lbl)
-        row.addLayout(text_col, stretch=1)
-
-        size_text = f"~{size_human}" if size_human else "—"
-        size_lbl = QLabel(size_text)
-        size_lbl.setObjectName("QualitySize")
-        self.size_label = size_lbl
-        row.addWidget(size_lbl)
-
-        self.btn_download = QPushButton("Descargar")
-        self.btn_download.setObjectName("FormatRowDownload")
-        self.btn_download.setCursor(Qt.CursorShape.PointingHandCursor)
-        row.addWidget(self.btn_download)
-
-        self.radio.toggled.connect(self._on_toggled)
-
-    def _on_toggled(self, checked: bool) -> None:
-        self.setProperty("selected", checked)
-        style = self.style()
-        if style is not None:
-            style.unpolish(self)
-            style.polish(self)
-
-    def mousePressEvent(self, event) -> None:  # noqa: N802 (convención Qt)
-        self.radio.setChecked(True)
-        super().mousePressEvent(event)
-
-
-class ThumbWithBadge(QFrame):
-    """Miniatura con borde redondeado y badge de duración superpuesto."""
-
-    def __init__(self, thumbnail: ThumbnailLabel, badge: QLabel, parent=None) -> None:
-        super().__init__(parent)
-        self.setObjectName("ThumbWrap")
-        self.setFixedSize(thumbnail.width(), thumbnail.height())
-        grid = QGridLayout(self)
-        grid.setContentsMargins(0, 0, 0, 0)
-        grid.addWidget(thumbnail, 0, 0)
-        grid.addWidget(badge, 0, 0, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight)
-
-
 class InicioView(QWidget):
-    """Vista Studio: PEGAR -> ANALIZAR -> HERO -> PESTAÑAS/FILAS -> DESCARGAR."""
+    """Vista de análisis y descarga con tabla de selección técnica y configuración."""
 
     analyze_requested = Signal(str)
     download_requested = Signal(object, str, str)  # (media_metadata, format_id, destination_path)
@@ -166,35 +92,42 @@ class InicioView(QWidget):
     TEXT_NO_VIDEO_QUALITIES = "Este contenido no ofrece calidades de video compatibles."
     TEXT_NO_AUDIO = "Este contenido no ofrece pistas de audio compatibles."
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.current_metadata: Optional[MediaMetadata] = None
         self.selected_type: DownloadType = DownloadType.VIDEO
         self._synopsis_full: str = ""
-        self._quality_rows: List[FormatRow] = []
-        self._audio_rows: List[FormatRow] = []
+        self._quality_rows: List[FormatTableRow] = []
+        self._audio_rows: List[FormatTableRow] = []
         self._format_tab: str = TAB_VIDEO
         self._animations_enabled: bool = True
         self._clipboard_last_seen: str = ""
-        # Creado antes de conectar señales de combos: _update_size_estimate lo usa.
+
+        # Creados antes de conectar señales de combos para _update_size_estimate
+        self.lbl_size_estimate = QLabel("")
+        self.lbl_size_estimate.setObjectName("SizeEstimate")
+        self.lbl_size_note = QLabel("El tamaño es aproximado.")
+        self.lbl_size_note.setStyleSheet("color: #64748B; font-size: 11px; font-style: italic;")
         self.lbl_selection_summary = QLabel("")
+        self.lbl_selection_summary.setObjectName("DownloadSummary")
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(36, 30, 36, 28)
+        root.setContentsMargins(32, 24, 32, 24)
         root.setSpacing(14)
 
-        # ---------------------------------------------------- Encabezado
-        # Oculto en estado vacío: el héroe lo sustituye como portada.
-        self.header_title = QLabel("Descarga contenido multimedia")
+        # ---------------------------------------------------- 1. Encabezado
+        self.header_title = QLabel("Analizar contenido")
         self.header_title.setObjectName("ViewTitle")
-        self.header_subtitle = QLabel("Analiza el enlace y elige calidad antes de descargar.")
+        self.header_subtitle = QLabel(
+            "Pega un enlace y analizamos el contenido para mostrarte las mejores opciones de descarga."
+        )
         self.header_subtitle.setObjectName("ViewSubtitle")
         self.header_title.hide()
         self.header_subtitle.hide()
         root.addWidget(self.header_title)
         root.addWidget(self.header_subtitle)
 
-        # --------------------------------------------- Estado vacío héroe
+        # --------------------------------------------- 2. Estado vacío (Héroe)
         self.hero_widget = self._build_hero_widget()
         self.hero_wrap = QWidget()
         hero_wrap_layout = QVBoxLayout(self.hero_wrap)
@@ -202,7 +135,7 @@ class InicioView(QWidget):
         hero_wrap_layout.addWidget(self.hero_widget)
         root.addWidget(self.hero_wrap, stretch=1)
 
-        # ------------------------------------- Sugerencia del portapapeles
+        # ------------------------------------- 3. Sugerencia del portapapeles
         self.clipboard_banner = QFrame()
         self.clipboard_banner.setObjectName("ClipboardBanner")
         banner_layout = QHBoxLayout(self.clipboard_banner)
@@ -219,7 +152,7 @@ class InicioView(QWidget):
         self.clipboard_banner.hide()
         root.addWidget(self.clipboard_banner)
 
-        # ------------------------------ Barra de URL integrada (Studio)
+        # ------------------------------ 4. Barra de URL integrada
         self.url_bar = QFrame()
         self.url_bar.setObjectName("UrlBar")
         url_inner = QHBoxLayout(self.url_bar)
@@ -233,7 +166,7 @@ class InicioView(QWidget):
         self.url_input = QLineEdit()
         self.url_input.setObjectName("UrlInput")
         self.url_input.setPlaceholderText(
-            "Pega aquí el enlace de YouTube, TikTok, Instagram o Facebook"
+            "Pega aquí un enlace de YouTube, TikTok, Instagram o Facebook"
         )
         self.url_input.setClearButtonEnabled(True)
         self.url_input.returnPressed.connect(self._on_analyze_clicked)
@@ -254,7 +187,7 @@ class InicioView(QWidget):
         self.btn_analyze = QPushButton("Analizar")
         self.btn_analyze.setObjectName("PrimaryButton")
         self.btn_analyze.setMinimumWidth(130)
-        self.btn_analyze.setMinimumHeight(40)
+        self.btn_analyze.setMinimumHeight(42)
         self.btn_analyze.clicked.connect(self._on_analyze_clicked)
         url_box.addWidget(self.btn_analyze)
         root.addLayout(url_box)
@@ -266,138 +199,110 @@ class InicioView(QWidget):
         self.lbl_status.setWordWrap(True)
         root.addWidget(self.lbl_status)
 
-        # Indicador limpio de análisis: barra indeterminada, cero skeletons.
+        # Indicador de análisis: barra indeterminada
         self.analyzing_bar = QProgressBar()
         self.analyzing_bar.setObjectName("AnalyzingBar")
-        self.analyzing_bar.setRange(0, 0)  # indeterminada
+        self.analyzing_bar.setRange(0, 0)
         self.analyzing_bar.setTextVisible(False)
         self.analyzing_bar.hide()
         root.addWidget(self.analyzing_bar)
 
-        # --------------------------------------- Card de previsualización
-        self.preview_card = QFrame()
-        self.preview_card.setObjectName("Card")
+        # --------------------------- 5. Área de contenido analizado (Scrollable)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll_area.setObjectName("InicioScrollArea")
+        self.scroll_area.hide()
+
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setContentsMargins(0, 0, 0, 0)
+        scroll_layout.setSpacing(14)
+
+        # 5.1 Card de previsualización modular
+        self.preview_card = ContentPreviewCard()
         self.preview_card.hide()
+        # Aliases retrocompatibles para tests unitarios y e2e
+        self.thumbnail = self.preview_card.thumbnail
+        self.lbl_duration_badge = self.preview_card.lbl_duration_badge
+        self.thumb_wrap = self.preview_card.thumb_wrap
+        self.chip_platform = self.preview_card.chip_platform
+        self.chip_duration = self.preview_card.chip_duration
+        self.chip_year = self.preview_card.chip_year
+        self.chip_quality = self.preview_card.chip_quality
+        self.lbl_title = self.preview_card.lbl_title
+        self.lbl_channel = self.preview_card.lbl_channel
+        self.lbl_synopsis = self.preview_card.lbl_synopsis
+        self.btn_toggle_synopsis = self.preview_card.btn_toggle_synopsis
+        scroll_layout.addWidget(self.preview_card)
 
-        card = QVBoxLayout(self.preview_card)
-        card.setContentsMargins(22, 20, 22, 20)
-        card.setSpacing(14)
+        # 5.2 Card de opciones de formato
+        self.format_card = QFrame()
+        self.format_card.setObjectName("Card")
+        format_card_layout = QVBoxLayout(self.format_card)
+        format_card_layout.setContentsMargins(20, 16, 20, 16)
+        format_card_layout.setSpacing(12)
 
-        top_row = QHBoxLayout()
-        top_row.setSpacing(20)
+        lbl_format_header = QLabel("OPCIONES DE DESCARGA")
+        lbl_format_header.setObjectName("SectionHeader")
+        format_card_layout.addWidget(lbl_format_header)
 
-        # Miniatura con badge de duración superpuesto (esquina inferior derecha).
-        self.thumbnail = ThumbnailLabel(320, 180)
-        self.lbl_duration_badge = QLabel("")
-        self.lbl_duration_badge.setObjectName("DurationBadge")
-        self.lbl_duration_badge.hide()
-        self.thumb_wrap = ThumbWithBadge(self.thumbnail, self.lbl_duration_badge)
-        top_row.addWidget(self.thumb_wrap, alignment=Qt.AlignmentFlag.AlignTop)
-
-        info_col = QVBoxLayout()
-        info_col.setSpacing(8)
-
-        chips_row = QHBoxLayout()
-        chips_row.setSpacing(8)
-        self.chip_platform = self._make_chip(accent=True)
-        self.chip_duration = self._make_chip()
-        self.chip_year = self._make_chip()
-        self.chip_quality = self._make_chip()
-        for chip in (self.chip_platform, self.chip_duration, self.chip_year, self.chip_quality):
-            chips_row.addWidget(chip)
-            chip.hide()
-        chips_row.addStretch()
-        info_col.addLayout(chips_row)
-
-        self.lbl_title = QLabel("")
-        self.lbl_title.setObjectName("PreviewTitle")
-        self.lbl_title.setWordWrap(True)
-        info_col.addWidget(self.lbl_title)
-
-        self.lbl_channel = QLabel("")
-        self.lbl_channel.setObjectName("PreviewChannel")
-        info_col.addWidget(self.lbl_channel)
-        info_col.addStretch()
-
-        top_row.addLayout(info_col, stretch=1)
-        card.addLayout(top_row)
-
-        # Sección Sinopsis (colapsable "Ver más")
-        synopsis_box = QVBoxLayout()
-        synopsis_box.setSpacing(4)
-        lbl_syn_header = QLabel("SINOPSIS")
-        lbl_syn_header.setObjectName("SectionHeader")
-        self.lbl_synopsis = QLabel("")
-        self.lbl_synopsis.setObjectName("SynopsisText")
-        self.lbl_synopsis.setWordWrap(True)
-        self.btn_toggle_synopsis = QPushButton("Ver más")
-        self.btn_toggle_synopsis.setObjectName("LinkButton")
-        self.btn_toggle_synopsis.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_toggle_synopsis.hide()
-        self.btn_toggle_synopsis.clicked.connect(self._toggle_synopsis)
-        synopsis_box.addWidget(lbl_syn_header)
-        synopsis_box.addWidget(self.lbl_synopsis)
-        synopsis_box.addWidget(self.btn_toggle_synopsis, alignment=Qt.AlignmentFlag.AlignLeft)
-        card.addLayout(synopsis_box)
-
-        # --------------------------------- Formatos por pestañas y filas
-        lbl_format = QLabel("FORMATOS")
-        lbl_format.setObjectName("SectionHeader")
-        card.addSpacing(4)
-        card.addWidget(lbl_format)
-
+        # Tabs de formato
         segment_container = QWidget()
         segment_container.setObjectName("SegmentContainer")
-        segment_container.setFixedHeight(44)
+        segment_container.setFixedHeight(42)
         seg_layout = QHBoxLayout(segment_container)
         seg_layout.setContentsMargins(4, 4, 4, 4)
-        seg_layout.setSpacing(2)
+        seg_layout.setSpacing(4)
 
-        self.btn_format_recommended = QPushButton("Recomendado")
-        self.btn_format_video = QPushButton("Vídeo")
-        self.btn_format_audio = QPushButton("Audio")
-        for btn in (self.btn_format_recommended, self.btn_format_video, self.btn_format_audio):
+        self.btn_format_video = QPushButton("▶ Vídeo")
+        self.btn_format_audio = QPushButton("♪ Audio")
+        self.btn_format_recommended = QPushButton("★ Recomendado")
+        for btn in (self.btn_format_video, self.btn_format_audio, self.btn_format_recommended):
             btn.setObjectName("SegmentButton")
             btn.setCheckable(True)
             seg_layout.addWidget(btn)
         seg_layout.addStretch()
 
-        format_row = QHBoxLayout()
-        format_row.addWidget(segment_container)
-        format_row.addStretch()
-        card.addLayout(format_row)
+        format_nav_row = QHBoxLayout()
+        format_nav_row.addWidget(segment_container)
+        format_nav_row.addStretch()
+        format_card_layout.addLayout(format_nav_row)
 
         self.format_button_group = QButtonGroup(self)
         self.format_button_group.setExclusive(True)
-        self.format_button_group.addButton(self.btn_format_recommended)
         self.format_button_group.addButton(self.btn_format_video)
         self.format_button_group.addButton(self.btn_format_audio)
-        # Pestaña inicial: Vídeo (muestra todas las calidades disponibles).
+        self.format_button_group.addButton(self.btn_format_recommended)
         self.btn_format_video.setChecked(True)
 
-        # Filas de formato (contenedor vertical limpio, sin cuadrícula).
+        # Cabecera de la tabla de formatos
+        self.table_header = FormatTableHeader()
+        format_card_layout.addWidget(self.table_header)
+
+        # Contenedor de filas de formato
         self.quality_container = QWidget()
         self.quality_layout = QVBoxLayout(self.quality_container)
         self.quality_layout.setContentsMargins(0, 0, 0, 0)
-        self.quality_layout.setSpacing(8)
-        card.addWidget(self.quality_container)
+        self.quality_layout.setSpacing(6)
+        format_card_layout.addWidget(self.quality_container)
 
         self.lbl_format_hint = QLabel("")
         self.lbl_format_hint.setObjectName("HintLabel")
         self.lbl_format_hint.setWordWrap(True)
         self.lbl_format_hint.hide()
-        card.addWidget(self.lbl_format_hint)
+        format_card_layout.addWidget(self.lbl_format_hint)
 
         self.quality_button_group = QButtonGroup(self)
         self.quality_button_group.setExclusive(True)
         self.audio_button_group = QButtonGroup(self)
         self.audio_button_group.setExclusive(True)
 
-        # Panel AUDIO (conversión honesta: contenedor + bitrate producibles)
+        # Panel de conversión AUDIO
         self.panel_audio = QWidget()
         self.panel_audio.hide()
         a_layout = QHBoxLayout(self.panel_audio)
-        a_layout.setContentsMargins(0, 0, 0, 0)
+        a_layout.setContentsMargins(0, 4, 0, 4)
         a_layout.setSpacing(12)
         lbl_a_fmt = QLabel("Contenedor:")
         lbl_a_fmt.setObjectName("FieldLabel")
@@ -415,66 +320,63 @@ class InicioView(QWidget):
         a_layout.addWidget(self.combo_audio_fmt, stretch=1)
         a_layout.addWidget(lbl_a_br)
         a_layout.addWidget(self.combo_audio_br, stretch=1)
-        card.addWidget(self.panel_audio)
-        card.addWidget(self.lbl_audio_note)
+        format_card_layout.addWidget(self.panel_audio)
+        format_card_layout.addWidget(self.lbl_audio_note)
         self.lbl_audio_note.hide()
-
-        # Tamaño estimado de la selección actual
-        self.lbl_size_estimate = QLabel("")
-        self.lbl_size_estimate.setObjectName("SizeEstimate")
-        card.addWidget(self.lbl_size_estimate)
 
         self.combo_audio_fmt.currentIndexChanged.connect(self._refresh_audio_bitrate_options)
         self.combo_audio_fmt.currentIndexChanged.connect(lambda _: self._update_size_estimate())
         self.combo_audio_br.currentIndexChanged.connect(lambda _: self._update_size_estimate())
         self._refresh_audio_bitrate_options()
 
-        # Carpeta de destino
-        dest_layout = QHBoxLayout()
-        dest_layout.setSpacing(12)
-        lbl_dest = QLabel("Guardar en:")
-        lbl_dest.setObjectName("FieldLabel")
-        self.txt_dest = QLineEdit(os.path.join(os.path.expanduser("~"), "Downloads"))
-        btn_browse = QPushButton("Examinar...")
-        btn_browse.setObjectName("SecondaryButton")
-        btn_browse.clicked.connect(self._on_browse_dest)
-        dest_layout.addWidget(lbl_dest)
-        dest_layout.addWidget(self.txt_dest, stretch=1)
-        dest_layout.addWidget(btn_browse)
-        card.addLayout(dest_layout)
+        scroll_layout.addWidget(self.format_card)
 
-        # Acción principal protagonista + resumen de la selección
-        action_col = QVBoxLayout()
-        action_col.setSpacing(6)
-        self.btn_download = QPushButton("Descargar")
+        # 5.3 Configuración de descarga modular (Carpeta + Nombre editable)
+        self.download_config = DownloadConfigWidget()
+        self.txt_dest = self.download_config.txt_dest
+        self.txt_filename = self.download_config.txt_filename
+        scroll_layout.addWidget(self.download_config)
+
+        # 5.4 Barra de acción inferior / Tamaño y Botón Descargar
+        self.action_card = QFrame()
+        self.action_card.setObjectName("Card")
+        action_layout = QHBoxLayout(self.action_card)
+        action_layout.setContentsMargins(20, 16, 20, 16)
+        action_layout.setSpacing(16)
+
+        size_col = QVBoxLayout()
+        size_col.setSpacing(3)
+        size_col.addWidget(self.lbl_size_estimate)
+        size_col.addWidget(self.lbl_size_note)
+        size_col.addWidget(self.lbl_selection_summary)
+        action_layout.addLayout(size_col, stretch=1)
+
+        self.btn_download = QPushButton("Iniciar descarga")
         self.btn_download.setObjectName("DownloadButton")
         self.btn_download.setIcon(download_icon(DARK_PALETTE.text_on_accent))
-        self.btn_download.setIconSize(QSize(18, 18))
+        self.btn_download.setIconSize(QSize(20, 20))
         self.btn_download.setMinimumHeight(50)
+        self.btn_download.setMinimumWidth(210)
         self.btn_download.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_download.clicked.connect(self._on_download_clicked)
-        self.lbl_selection_summary.setObjectName("DownloadSummary")
-        self.lbl_selection_summary.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        action_col.addWidget(self.btn_download)
-        action_col.addWidget(self.lbl_selection_summary)
-        card.addLayout(action_col)
+        action_layout.addWidget(self.btn_download)
 
-        root.addWidget(self.preview_card)
-        root.addStretch(0)
+        scroll_layout.addWidget(self.action_card)
 
-        # Conexiones de pestañas (tras construir todo y fijar pestaña inicial).
+        self.scroll_area.setWidget(scroll_content)
+        root.addWidget(self.scroll_area, stretch=1)
+
+        # Conexiones de pestañas
         self.btn_format_recommended.toggled.connect(lambda _: self._on_format_tab_toggled())
         self.btn_format_video.toggled.connect(lambda _: self._on_format_tab_toggled())
         self.btn_format_audio.toggled.connect(lambda _: self._on_format_tab_toggled())
 
-        # ------------------------------------------- Timers de ayuda UX
-        # Validación en vivo del enlace (con debounce para no validar a medias).
+        # Timers de validación de URL y portapapeles
         self._url_validate_timer = QTimer(self)
         self._url_validate_timer.setSingleShot(True)
         self._url_validate_timer.setInterval(URL_VALIDATION_DELAY_MS)
         self._url_validate_timer.timeout.connect(self._validate_url_now)
 
-        # Vigilancia discreta del portapapeles: solo sugiere, nunca analiza sola.
         self._clipboard_timer = QTimer(self)
         self._clipboard_timer.setInterval(CLIPBOARD_POLL_INTERVAL_MS)
         self._clipboard_timer.timeout.connect(self._poll_clipboard)
@@ -546,6 +448,7 @@ class InicioView(QWidget):
             self._show_header(show=True)
             self.hero_wrap.hide()
             self.preview_card.hide()
+            self.scroll_area.hide()
         else:
             self.btn_analyze.setEnabled(True)
             self.btn_analyze.setText("Analizar")
@@ -560,7 +463,6 @@ class InicioView(QWidget):
                 self.hero_wrap.show()
 
     def _show_header(self, show: bool) -> None:
-        """La cabecera compacta aparece cuando el héroe se retira."""
         self.header_title.setVisible(show)
         self.header_subtitle.setVisible(show)
 
@@ -570,6 +472,7 @@ class InicioView(QWidget):
         self.btn_analyze.setText("Analizar")
         self.url_input.setEnabled(True)
         self.preview_card.hide()
+        self.scroll_area.hide()
         self.hero_wrap.hide()
         self.analyzing_bar.hide()
         self._show_header(show=True)
@@ -581,7 +484,6 @@ class InicioView(QWidget):
 
     @staticmethod
     def _sanitize_error_message(message: str) -> str:
-        """Reduce el mensaje técnico a una línea corta sin trazas internas."""
         if not message:
             return ""
         cleaned = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", str(message))
@@ -608,11 +510,6 @@ class InicioView(QWidget):
     # -------------------------------------------------- URL: pegar y validar
     @staticmethod
     def _sanitize_input_url(raw: str) -> str:
-        """Limpia la URL de entrada: sin espacios ni parámetros de playlist.
-
-        Un enlace `watch?v=...&list=...` se reduce al video individual para
-        analizar/descargar exactamente lo que el usuario está viendo.
-        """
         return sanitize_single_video_url((raw or "").strip())
 
     def _on_paste_clicked(self) -> None:
@@ -627,7 +524,6 @@ class InicioView(QWidget):
         self._url_validate_timer.start()
 
     def _validate_url_now(self) -> None:
-        """Marca el campo como válido/inválido usando el mismo criterio del dominio."""
         text = self.url_input.text().strip()
         state = ""
         tooltip = ""
@@ -655,7 +551,6 @@ class InicioView(QWidget):
 
     # ------------------------------------------------------------ Portapapeles
     def _poll_clipboard(self) -> None:
-        """Muestra una sugerencia discreta si el portapapeles trae un enlace compatible."""
         if not self.isVisible() or not self.btn_analyze.isEnabled():
             return
         text = QApplication.clipboard().text().strip()
@@ -683,13 +578,13 @@ class InicioView(QWidget):
         self._synopsis_full = metadata.description or ""
         self.set_analyzing_state(False)
 
-        self.lbl_title.setText(metadata.title or self.TEXT_NOT_AVAILABLE)
-        channel = (metadata.author or "").strip()
-        self.lbl_channel.setText(f"Canal: {channel}" if channel else f"Canal: {self.TEXT_NOT_AVAILABLE}")
+        # Cargar tarjeta de preview
+        self.preview_card.set_metadata(metadata)
 
-        self._populate_chips(metadata)
-        self.thumbnail.load_from_url(metadata.thumbnail_url or "")
-        self._render_synopsis(show_truncated=True)
+        # Cargar sugerencia de nombre de archivo editable
+        self.download_config.set_suggested_title(metadata.title)
+
+        # Reconstruir opciones de formato
         self._rebuild_quality_options(metadata)
 
         if not self._quality_rows and metadata.audio_formats:
@@ -702,61 +597,8 @@ class InicioView(QWidget):
         self.hero_wrap.hide()
         self._show_header(show=True)
         self.preview_card.show()
-        fade_in(self.preview_card, enabled=self._animations_enabled)
-
-    def _populate_chips(self, metadata: MediaMetadata) -> None:
-        self.chip_platform.setText(metadata.platform or self.TEXT_NOT_AVAILABLE)
-        self.chip_platform.show() if metadata.platform else self.chip_platform.hide()
-
-        duration = metadata.get_duration_formatted() if metadata.duration_seconds > 0 else ""
-        if duration:
-            self.chip_duration.setText(f"Duración {duration}")
-            self.chip_duration.show()
-        else:
-            self.chip_duration.hide()
-        # Badge superpuesto sobre la miniatura.
-        self.lbl_duration_badge.setText(duration)
-        self.lbl_duration_badge.setVisible(bool(duration))
-
-        year = extract_publication_year(metadata.upload_date)
-        if year:
-            self.chip_year.setText(f"Publicado en {year}")
-            self.chip_year.show()
-        else:
-            self.chip_year.hide()
-
-        heights = [v.height for v in metadata.video_quality_options if v.height and not v.is_best_quality]
-        if heights:
-            max_h = max(heights)
-            badge_4k = any(v.badge == "4K" for v in metadata.video_quality_options)
-            label = "Hasta 4K" if badge_4k and max_h >= 2160 else f"Hasta {max_h}p"
-            self.chip_quality.setText(label)
-            self.chip_quality.show()
-        else:
-            self.chip_quality.hide()
-
-    def _render_synopsis(self, show_truncated: bool) -> None:
-        if not self._synopsis_full.strip():
-            self.lbl_synopsis.setText(self.TEXT_NO_DESCRIPTION)
-            self.btn_toggle_synopsis.hide()
-            return
-        truncated = truncate_text(self._synopsis_full, SYNOPSIS_MAX_CHARS)
-        needs_truncation = len(truncated) < len(self._synopsis_full.strip())
-        if show_truncated and needs_truncation:
-            self.lbl_synopsis.setText(truncated)
-            self.btn_toggle_synopsis.setText("Ver más")
-            self.btn_toggle_synopsis.show()
-        else:
-            self.lbl_synopsis.setText(self._synopsis_full)
-            if needs_truncation:
-                self.btn_toggle_synopsis.setText("Ver menos")
-                self.btn_toggle_synopsis.show()
-            else:
-                self.btn_toggle_synopsis.hide()
-
-    def _toggle_synopsis(self) -> None:
-        showing_more = self.btn_toggle_synopsis.text() == "Ver menos"
-        self._render_synopsis(show_truncated=showing_more)
+        self.scroll_area.show()
+        fade_in(self.scroll_area, enabled=self._animations_enabled)
 
     # --------------------------------------------------------- Filas UI
     def _current_tab(self) -> str:
@@ -777,6 +619,7 @@ class InicioView(QWidget):
             self.selected_type = DownloadType.AUDIO
         else:
             self.selected_type = DownloadType.VIDEO
+
         if self.current_metadata is not None:
             self._rebuild_quality_options(self.current_metadata)
         else:
@@ -795,16 +638,11 @@ class InicioView(QWidget):
         self.quality_container.update()
 
     def _rebuild_quality_options(self, metadata: MediaMetadata) -> None:
-        """Reconstruye las filas según la pestaña activa.
-
-        Limpieza completa entre análisis/pestañas: cero filas fantasma o
-        residuos visuales del contenido anterior.
-        """
         self._clear_format_rows()
 
-        rows: List[FormatRow] = []
+        rows: List[FormatTableRow] = []
         if self._format_tab == TAB_AUDIO:
-            rows = [FormatRow(af=af) for af in metadata.audio_formats]
+            rows = [FormatTableRow(af=af) for af in metadata.audio_formats]
         else:
             options = list(metadata.video_quality_options)
             if not options and metadata.video_formats:
@@ -812,16 +650,22 @@ class InicioView(QWidget):
             if self._format_tab == TAB_RECOMMENDED:
                 best = [o for o in options if o.is_best_quality]
                 chosen = best[:1] or options[:1]
-                rows = [FormatRow(vqo=o) for o in chosen]
+                rows = [FormatTableRow(vqo=o, is_recommended=True) for o in chosen]
                 if metadata.audio_formats:
-                    rows.append(FormatRow(af=metadata.audio_formats[0]))
+                    rows.append(FormatTableRow(af=metadata.audio_formats[0]))
             else:
-                rows = [FormatRow(vqo=o) for o in options]
+                for idx, o in enumerate(options):
+                    is_rec = idx == 0 and o.is_best_quality
+                    rows.append(FormatTableRow(vqo=o, is_recommended=is_rec))
 
         for row in rows:
-            self._quality_rows.append(row) if row.kind == "video" else self._audio_rows.append(row)
-            group = self.quality_button_group if row.kind == "video" else self.audio_button_group
-            group.addButton(row.radio)
+            if row.kind == "video":
+                self._quality_rows.append(row)
+                self.quality_button_group.addButton(row.radio)
+            else:
+                self._audio_rows.append(row)
+                self.audio_button_group.addButton(row.radio)
+
             self.quality_layout.addWidget(row)
             row.radio.toggled.connect(
                 lambda checked, r=row: self._on_quality_selected(r) if checked else None
@@ -829,12 +673,14 @@ class InicioView(QWidget):
             row.btn_download.clicked.connect(lambda _, r=row: self._dispatch_row_download(r))
 
         if rows:
+            self.table_header.show()
             self.quality_container.show()
             self.lbl_format_hint.hide()
-            first_video = next((r for r in rows if r.kind == "video"), None)
-            if first_video is not None:
-                first_video.radio.setChecked(True)
+            first_row = next((r for r in rows if r.kind == "video"), rows[0])
+            if first_row is not None:
+                first_row.radio.setChecked(True)
         else:
+            self.table_header.hide()
             self.quality_container.hide()
             self.lbl_format_hint.setText(
                 self.TEXT_NO_AUDIO if self._format_tab == TAB_AUDIO else self.TEXT_NO_VIDEO_QUALITIES
@@ -844,12 +690,6 @@ class InicioView(QWidget):
         self._update_download_availability()
 
     def _update_download_availability(self) -> None:
-        """Habilita/deshabilita el botón Descargar según la selección posible.
-
-        Los errores de validación normales se comunican inline en el resumen,
-        nunca con diálogos modales. Es el ÚNICO escritor del resumen cuando la
-        descarga no es posible.
-        """
         if self.current_metadata is None:
             self.btn_download.setEnabled(False)
             return
@@ -915,7 +755,7 @@ class InicioView(QWidget):
         """Filas de VIDEO visibles en la pestaña actual (compatibilidad tests/e2e)."""
         return list(self._quality_rows)
 
-    def _on_quality_selected(self, row: FormatRow) -> None:
+    def _on_quality_selected(self, row: FormatTableRow) -> None:
         self._update_size_estimate()
 
     def _set_download_mode(self, mode: DownloadType) -> None:
@@ -927,7 +767,6 @@ class InicioView(QWidget):
         self._on_format_tab_toggled()
 
     def _refresh_audio_bitrate_options(self) -> None:
-        """Actualiza los bitrates ofrecidos según el formato de audio (honestos y producibles)."""
         current = self.combo_audio_fmt.currentData()
         self.combo_audio_br.clear()
 
@@ -939,7 +778,7 @@ class InicioView(QWidget):
             for br in (192, 160, 128):
                 self.combo_audio_br.addItem(f"{br} kbps", userData=br)
             self.combo_audio_br.setEnabled(True)
-        else:  # wav: sin compresión, el bitrate no aplica
+        else:  # wav: sin compresión
             self.combo_audio_br.addItem("Sin compresión", userData=320)
             self.combo_audio_br.setEnabled(False)
 
@@ -990,7 +829,6 @@ class InicioView(QWidget):
             self.txt_dest.setText(directory)
 
     def _validated_dest_dir(self) -> Optional[str]:
-        """Devuelve la carpeta destino si es válida; si no, advierte y devuelve None."""
         dest_dir = self.txt_dest.text().strip()
         if not os.path.isdir(dest_dir):
             self._show_warning("Ruta Inválida", "La carpeta de destino no existe o no es válida.")
@@ -1003,20 +841,32 @@ class InicioView(QWidget):
             return "vq_best", f"{title} - Mejor calidad.mp4"
         return f"vq_{vqo.height}", f"{title} - {vqo.height}p.mp4"
 
-    def _dispatch_row_download(self, row: FormatRow) -> None:
-        """Despacho directo desde la fila: regla de formato exacta a la cola."""
+    def _get_clean_base_title(self) -> str:
+        """Obtiene el nombre base sanitizado del campo editable o del título original."""
+        raw_custom = self.txt_filename.text().strip() if hasattr(self, "txt_filename") else ""
+        if not raw_custom and self.current_metadata:
+            raw_custom = self.current_metadata.title or "descarga"
+        cleaned = self._sanitize_filename(raw_custom)
+        for ext in (".mp4", ".mkv", ".webm", ".mp3", ".m4a", ".wav"):
+            if cleaned.lower().endswith(ext):
+                cleaned = cleaned[:-len(ext)].strip()
+                break
+        return cleaned or "descarga"
+
+    def _dispatch_row_download(self, row: FormatTableRow) -> None:
+        """Despacho directo desde el botón de la fila."""
         if self.current_metadata is None:
             return
         dest_dir = self._validated_dest_dir()
         if not dest_dir:
             return
-        title = self._sanitize_filename(self.current_metadata.title)
+        title = self._get_clean_base_title()
 
         if row.kind == "video":
             assert row.vqo is not None
             fmt_id, filename = self._build_video_request(row.vqo)
             filename = filename.format(title=title)
-            row.radio.setChecked(True)  # ancla visual de la última elección
+            row.radio.setChecked(True)
         else:
             assert row.af is not None
             af = row.af
@@ -1031,8 +881,6 @@ class InicioView(QWidget):
         if not self.current_metadata:
             return
 
-        # Validación inline (sin QMessageBox): si no hay selección posible el botón
-        # permanece deshabilitado y el resumen explica el motivo.
         if not self.btn_download.isEnabled():
             return
 
@@ -1040,12 +888,11 @@ class InicioView(QWidget):
         if not dest_dir:
             return
 
-        title = self._sanitize_filename(self.current_metadata.title)
+        title = self._get_clean_base_title()
 
         if self.selected_type == DownloadType.VIDEO:
             vqo = self._selected_quality_option()
             if vqo is None:
-                # Defensa adicional: sin calidad seleccionada no se emite la descarga.
                 self.lbl_selection_summary.setText(self.TEXT_NO_VIDEO_QUALITIES)
                 return
             fmt_id, filename = self._build_video_request(vqo)
@@ -1059,6 +906,13 @@ class InicioView(QWidget):
             filename = f"{title}.{target_fmt}"
 
         dest_path = os.path.join(dest_dir, filename)
+
+        # Feedback visual en el botón
+        self.btn_download.setText("Iniciando descarga…")
+        self.btn_download.setEnabled(False)
+        QTimer.singleShot(1400, lambda: self.btn_download.setText("Iniciar descarga"))
+        QTimer.singleShot(1400, self._update_download_availability)
+
         self.download_requested.emit(self.current_metadata, fmt_id, dest_path)
 
     def _show_warning(self, title: str, message: str) -> None:
@@ -1067,7 +921,7 @@ class InicioView(QWidget):
 
     @staticmethod
     def _sanitize_filename(name: str) -> str:
-        """Sanitiza un nombre de archivo eliminando caracteres peligrosos."""
+        """Sanitiza un nombre de archivo eliminando caracteres peligrosos en Windows."""
         if not name:
             return "descarga"
         cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name)

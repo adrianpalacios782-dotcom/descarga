@@ -4,6 +4,17 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 
 ---
 
+## [1.0.3] - 2026-08-28
+
+### Mejorado
+- **Presentación:** Rediseño integral de la pantalla de análisis y descarga (`InicioView`) con arquitectura modular (`ContentPreviewCard`, `FormatTableHeader`, `FormatTableRow`, `DownloadConfigWidget`).
+- **Presentación:** Solucionado el colapso vertical de las filas de formato mediante alturas mínimas garantizadas y contenedor responsive con `QScrollArea`.
+- **Formatos:** Nueva tabla estructurada de formatos con columnas técnicas claras (`ELEGIR`, `CALIDAD`, `FORMATO`, `TAMAÑO`, `CÓDEC`, `FPS`, `ESTADO`) y selector circular visible con acento moderno.
+- **Configuración de Descarga:** Incorporación del campo para editar y personalizar el nombre de archivo final con sanitización automática para Windows.
+- **Descarga:** Botón principal de descarga destacado con feedback inmediato y nota informativa de tamaño aproximado.
+
+---
+
 ## [1.0.2] - 2026-08-28
 
 ### Corregido
