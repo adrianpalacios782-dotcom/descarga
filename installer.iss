@@ -2,10 +2,10 @@
 ; La versión se inyecta desde build_release.ps1 leyendo src/__init__.py
 ; (única fuente de verdad). El default permite compilar standalone.
 #ifndef APP_VERSION
-#define APP_VERSION "1.0.2"
+#define APP_VERSION "1.0.3"
 #endif
 #ifndef APP_VERSION_QUAD
-#define APP_VERSION_QUAD "1.0.2.0"
+#define APP_VERSION_QUAD "1.0.3.0"
 #endif
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName=osvaldoDownloaderPro

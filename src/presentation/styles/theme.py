@@ -819,16 +819,98 @@ QLabel#QualityTitle {{
 
 QRadioButton#QualityRadio {{
     background-color: transparent;
-    color: transparent;
-    font-size: 1px;
     spacing: 0px;
 }}
 
 QRadioButton#QualityRadio::indicator {{
-    width: 0px;
-    height: 0px;
-    border: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    border: 2px solid {p.border_strong};
+    background-color: {p.surface_sunken};
+}}
+
+QRadioButton#QualityRadio::indicator:hover {{
+    border-color: {p.accent_hover};
+}}
+
+QRadioButton#QualityRadio::indicator:checked {{
+    border: 2px solid {p.accent};
+    background-color: {p.accent};
+}}
+
+QFrame#FormatTableHeader {{
     background-color: transparent;
+    border-bottom: 1px solid {p.border};
+    margin-bottom: 2px;
+}}
+
+QLabel#TableHeaderCol {{
+    color: {p.text_secondary};
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+}}
+
+QLabel#FormatColText {{
+    color: {p.text_primary};
+    font-size: 12px;
+    font-weight: 600;
+}}
+
+QLabel#TechColText {{
+    color: {p.text_secondary};
+    font-size: 12px;
+}}
+
+QLabel#BadgeRecommended {{
+    background-color: rgba(99, 102, 241, 0.2);
+    color: #818CF8;
+    border: 1px solid rgba(99, 102, 241, 0.45);
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    letter-spacing: 0.3px;
+}}
+
+QLabel#BadgeHD {{
+    background-color: rgba(34, 197, 94, 0.16);
+    color: #4ADE80;
+    border: 1px solid rgba(34, 197, 94, 0.35);
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+}}
+
+QLabel#BadgeQuality {{
+    background-color: rgba(148, 163, 184, 0.14);
+    color: {p.text_secondary};
+    border: 1px solid {p.border};
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+}}
+
+QFrame#DownloadConfigBox {{
+    background-color: {p.surface_sunken};
+    border: 1px solid {p.border};
+    border-radius: 12px;
+}}
+
+QLineEdit#FilenameInput, QLineEdit#PathInput {{
+    background-color: {p.surface};
+    border: 1px solid {p.border};
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: {p.text_primary};
+    font-size: 13px;
+}}
+
+QLineEdit#FilenameInput:focus, QLineEdit#PathInput:focus {{
+    border-color: {p.border_focus};
 }}
 
 QPushButton#FormatRowDownload {{
