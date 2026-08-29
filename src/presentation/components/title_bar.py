@@ -6,7 +6,11 @@ mediante WM_NCHITTEST en MainWindow (HTCAPTION sobre esta zona), por lo que
 no se reimplementa lógica frágil de movimiento manual.
 """
 
+import os
+import sys
+
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizeGrip, QWidget
 
 import src as app_pkg
@@ -32,7 +36,22 @@ class TitleBar(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(14, 0, 10, 0)
-        layout.setSpacing(6)
+        layout.setSpacing(8)
+
+        # Icono de la marca en la barra de título
+        self.brand_icon = QLabel()
+        self.brand_icon.setObjectName("TitleBrandIcon")
+        self.brand_icon.setFixedSize(22, 22)
+        self.brand_icon.setScaledContents(True)
+        icon_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "assets", "icon_256.png")
+        if not os.path.exists(icon_path):
+            base = getattr(sys, "_MEIPASS", "")
+            icon_path = os.path.join(base, "assets", "icon_256.png")
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(os.path.dirname(sys.executable), "assets", "icon_256.png")
+        if os.path.exists(icon_path):
+            self.brand_icon.setPixmap(QPixmap(icon_path))
+            layout.addWidget(self.brand_icon)
 
         self.brand = QLabel("osvaldoDownloaderPro")
         self.brand.setObjectName("TitleBrand")

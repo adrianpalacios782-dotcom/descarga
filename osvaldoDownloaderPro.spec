@@ -51,7 +51,7 @@ a = Analysis(
     # (src/presentation/styles/theme.py -> build_qss), no hay archivos
     # externos que empacar. Si se agregan iconos/recursos, van aqui:
     #   datas=[(os.path.join(ROOT, 'assets'), 'assets')] + ...
-    datas=ytdlp_datas + curl_datas + iio_datas,
+    datas=ytdlp_datas + curl_datas + iio_datas + [(os.path.join(ROOT, 'assets'), 'assets')],
     hiddenimports=(
         ytdlp_hiddenimports
         + curl_hiddenimports
@@ -89,7 +89,7 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     version=os.path.join(ROOT, 'scripts', 'version_info.txt'),
-    # icon=... : pendiente hasta existir assets/brand.ico
+    icon=os.path.join(ROOT, 'assets', 'icon.ico'),
 )
 
 coll = COLLECT(
