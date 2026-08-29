@@ -1,125 +1,146 @@
 # osvaldoDownloaderPro
 
-Aplicación de escritorio nativa para Windows 10/11 diseñada para la descarga, conversión y organización de contenido multimedia desde múltiples plataformas web.
+Aplicación de escritorio nativa para Windows 10/11 diseñada para el análisis, descarga, conversión y organización de contenido multimedia desde múltiples plataformas web.
 
 ---
 
-## 🚀 osvaldoDownloaderPro v1.0.1 BETA
+## 🚀 osvaldoDownloaderPro v1.0.3 BETA (Última versión)
 
 ## ⬇️ DESCARGAR PARA WINDOWS
 
-### [ DESCARGAR osvaldoDownloaderPro v1.0.1 ](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.0.1)
+### [ ⬇️ DESCARGAR osvaldoDownloaderPro v1.0.3 (Instalador Oficial) ](https://github.com/adrianpalacios782-dotcom/descarga/releases/latest)
 
-En la página que se abre, busca la sección **Assets** (al final de la descripción) y haz clic en:
+En la página de lanzamientos, dirígete a la sección **Assets** y descarga:
 
-> **`osvaldoDownloaderPro-1.0.1-Setup.exe`**
+> **`osvaldoDownloaderPro-1.0.3-Setup.exe`** (114 MB — incluye instalador, motor y dependencias completas)
 
-Ese es el único archivo que necesitas.
+**Instalación rápida en 4 pasos:**
 
-**Instalación en 4 pasos:**
+1. Haz clic en el enlace de descarga superior o visita [Releases](../../releases/latest).
+2. Descarga `osvaldoDownloaderPro-1.0.3-Setup.exe`.
+3. Ejecuta el instalador (no requiere permisos de administrador).
+4. Sigue los pasos del asistente y listo.
 
-1. Haz clic en **DESCARGAR**.
-2. Descarga `osvaldoDownloaderPro-1.0.1-Setup.exe`.
-3. Ejecuta el archivo.
-4. Sigue el instalador.
-
-**Compatibilidad:**
-
-- Windows 10 x64 versión 1809 o superior
+**Compatibilidad del sistema:**
+- Windows 10 x64 (versión 1809 o superior)
 - Windows 11 x64
+- *No compatible con versiones de Windows de 32 bits.*
 
-No compatible con: Windows 10 LTSB/LTSC 2016 o anteriores, ni Windows de 32 bits.
+**No requiere instalaciones adicionales:**
+- ✅ No requiere Python.
+- ✅ No requiere instalar FFmpeg por separado (incluido y verificado automáticamente).
+- ✅ No requiere .NET Runtime adicional.
 
-**No requiere:**
-
-- Python
-- FFmpeg
-- .NET
-- Instalar dependencias manualmente
-
-**⚠️ Aviso de Windows SmartScreen:** Windows puede mostrar una advertencia porque esta versión BETA todavía no tiene firma digital. Si aparece "Windows protegió tu PC", pulsa **Más información** y luego **Ejecutar de todas formas**. En Windows 11 con Smart App Control activado, el sistema puede bloquear aplicaciones sin firma y la aplicación no podrá abrirse.
+> **⚠️ Aviso sobre Windows SmartScreen:** Como esta versión BETA es de código abierto y no cuenta con certificado de firma comercial de pago, Windows puede mostrar la pantalla *"Windows protegió tu PC"*. Para continuar, simplemente pulsa en **Más información** y luego en **Ejecutar de todas formas**.
 
 ---
 
-## Plataformas soportadas
+## 🌐 Plataformas Soportadas
 
-- YouTube
-- TikTok
-- Instagram
-- Facebook
+- **YouTube** (Videos individuales, shorts, calidades hasta 4K/60fps y pistas de audio).
+- **TikTok** (Videos en alta definición sin marca de agua).
+- **Instagram** (Reels y publicaciones de video).
+- **Facebook** (Videos públicos y transmisiones grabadas).
 
-## Características
+---
 
-- Descarga de **video** con selección dinámica de calidad (144p hasta la máxima disponible, según el contenido).
-- Descarga de **audio MP3** (también M4A y WAV) con selección de tasa de bits (320 / 256 / 192 / 128 kbps).
-- **Selección de calidad** real basada en los formatos que el servidor ofrece para cada URL.
-- Procesamiento con **FFmpeg** embebido: fusión de flujos DASH (video + audio) sin re-codificación y extracción de audio.
-- Persistencia local con **SQLite** (modo WAL): historial, favoritos y configuración.
-- Arquitectura Hexagonal + Event-Driven: capas Domain, Application, Infrastructure y Presentation estrictamente desacopladas.
-- Interfaz moderna rediseñada en modo oscuro construida con PySide6: barra de título propia, sidebar por secciones, sistema de diseño con tokens (preparado para futuro modo claro) y microinteracciones.
+## ✨ Características Principales
 
-## Seguridad
+### 🎯 Nueva Pantalla de Análisis y Descarga Modular (v1.0.3)
+- **Previsualización Inteligente (`ContentPreviewCard`):** Miniatura real con relación de aspecto 16:9 preservada, esquinas redondeadas y badge de duración superpuesto.
+- **Metadatos Técnicos Claros:** Chips visuales para plataforma, tipo de contenido (*Vídeo / Audio*), duración formateada, año de publicación y calidad máxima disponible.
+- **Sinopsis Colapsable:** Resumen compacto con botón interactivo `[Ver más]` / `[Ver menos]` para optimizar el espacio vertical.
+- **Tabla Estructurada de Formatos (`FormatTableRow`):**
+  - Cabecera con columnas técnicas alineadas: `ELEGIR` | `CALIDAD` | `FORMATO` | `TAMAÑO` | `CÓDEC` | `FPS` | `ESTADO`.
+  - Selector circular visible y estilizado con acento moderno.
+  - Selección de fila completa con realce en hover y borde de acento.
+  - Altura mínima garantizada de 48px por fila y contenedor montado sobre un `QScrollArea` responsive que previene el colapso visual en pantallas de baja resolución.
+  - Badge distintivo `Recomendado` para la mejor opción de calidad detectada.
+- **Configuración de Descarga Personalizada (`DownloadConfigWidget`):**
+  - Selector de carpeta de destino con explorador nativo de Windows (`QFileDialog`).
+  - Campo editable para el nombre del archivo final con sanitización automática contra caracteres reservados (`<>:"/\|?*`).
+- **Acción Principal Destacada:** Botón grande `[ ⭳ Iniciar descarga ]` de 50px con retroalimentación inmediata de estado (`Iniciando descarga…`), validación inline de errores y advertencia de que *"El tamaño es aproximado"*.
 
-El proyecto incorpora las siguientes protecciones, cubiertas por una suite automatizada de pruebas:
+### ⚡ Motor de Descarga y Conversión
+- **Selección de Calidad Dinámica:** 144p, 240p, 360p, 480p (SD), 720p (HD), 1080p (Full HD), 1440p (2K) y 2160p (4K).
+- **Extracción y Conversión de Audio:** Descarga en formato MP3, M4A o WAV con tasa de bits configurable (320, 256, 192, 128 kbps).
+- **FFmpeg Integrado:** Fusión automática de flujos DASH (video + audio) sin recodificación innecesaria para máxima velocidad y fidelidad.
+- **Gestor de Cola Concurrente:** Control de descargas simultáneas, pausas, reanudación y reintentos automáticos.
 
-- **Protección SSRF:** bloqueo de localhost, direcciones IP privadas, loopback IPv6, rangos reservados y puertos peligrosos.
-- **Allowlist de dominios:** solo se aceptan URLs de las plataformas soportadas.
-- **Protección contra path traversal:** validación de rutas de destino y contención de archivos resultantes.
-- **Validación de formatos:** sanitización de `format_id` y nombres de archivo contra inyección.
-- **Validación del binario FFmpeg:** solo se ejecutan binarios con nombre esperado ubicados en rutas controladas.
-- **Sanitización de logs:** tokens, credenciales y cabeceras sensibles se redactan antes de escribirse al log.
-- **SQLite parametrizado:** todas las consultas usan consultas preparadas.
+### 🔄 Actualizador Automático Integrado
+- Detección automática de nuevas versiones consultando la API de GitHub Releases.
+- Descarga segura en segundo plano con validación estricta de sumas de verificación SHA-256 contra `SHA256SUMS.txt`.
+- Instalación silenciosa y reinicio automático de la aplicación sin bloqueos de proceso.
 
-Nota: el software se ofrece como BETA. Analiza siempre los resultados de tus descargas y úsalo respetando los términos de servicio de cada plataforma.
+---
 
-## Instalación (usuarios)
+## 🛡️ Seguridad y Resiliencia
 
-1. Ve a la sección [Releases](../../releases) del repositorio.
-2. Descarga `osvaldoDownloaderPro-1.0.1-Setup.exe`.
-3. Ejecuta el instalador y sigue el asistente (no requiere permisos de administrador).
-4. Guía completa paso a paso: [`docs/BETA_TESTING.md`](docs/BETA_TESTING.md).
+El sistema ha sido auditado y cuenta con protecciones integradas verificadas mediante pruebas continuas:
 
-> **Nota:** el instalador de la beta no está firmado digitalmente. Windows SmartScreen puede mostrar un aviso ("Windows protegió tu PC"); usa "Más información" → "Ejecutar de todas formas". En Windows 11 con Smart App Control en modo de enforcement, la ejecución de aplicaciones sin firma puede bloquearse por política del sistema.
->
-> Installer currently unsigned. Code-signing certificate required for production distribution.
+- **Protección contra SSRF y Spoofing:** Validación estricta de `hostname` (`netloc`) en URLs, bloqueando localhost, IPs privadas, loopback y parámetros engañosos.
+- **Anti-Path Traversal:** Validación y contención de rutas de descarga y nombres de archivo en el sistema de archivos.
+- **Sanitización de Nombres de Archivo:** Eliminación automática de caracteres no permitidos en sistemas Windows.
+- **Sanitización de Logs:** Redacción automática de tokens, credenciales y cabeceras sensibles en `osvaldo_downloader.log`.
+- **Persistencia Segura:** Base de datos SQLite (modo WAL) con consultas 100% parametrizadas (historial, favoritos y configuración).
+- **Thread-Safety en GUI:** Todas las tareas de red, análisis y descarga se ejecutan en hilos secundarios asíncronos comunicándose mediante `Signal` de Qt, garantizando que la interfaz nunca se congele.
 
-Los datos de la aplicación (base de datos y logs) se guardan en `%USERPROFILE%\.osvaldoDownloaderPro\`. Las descargas, por defecto, en la carpeta `Downloads` del usuario.
+---
 
-## Desarrollo
+## 🛠️ Desarrollo y Pruebas
 
 ### Requisitos previos
+- Python 3.11 o superior (probado en Python 3.13)
+- PySide6 (Qt6)
+- Git
 
-- Python 3.11 o superior
-- FFmpeg y ffprobe accesibles (colocar `ffmpeg.exe` y `ffprobe.exe` en `bin\`, o disponibles en PATH)
-
-### Puesta en marcha
+### Instalación en entorno de desarrollo
 
 ```powershell
+# Clonar el repositorio
+git clone https://github.com/adrianpalacios782-dotcom/descarga.git
+cd descarga
+
+# Crear entorno virtual e instalar dependencias
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
+
+# Ejecutar la aplicación
 python src/main.py
 ```
 
-### Suite de pruebas
+### Ejecución de Pruebas Automatizadas
 
-349 tests unitarios, de integración y E2E (incluye 83 tests de seguridad):
+El proyecto cuenta con **512 pruebas automatizadas** que cubren dominio, adaptadores de infraestructura, casos de uso, seguridad, interfaz gráfica y regresiones:
 
 ```powershell
 python -m pytest
 ```
 
-### Build del instalador
+### Compilación del Instalador (.exe)
+
+Para compilar el binario ejecutable con PyInstaller y generar el instalador con Inno Setup:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1
+powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1 -SkipSigning
 ```
 
-Pipeline: tests → PyInstaller (`osvaldoDownloaderPro.spec`) → verificación de artefactos → firma opcional → Inno Setup (`installer.iss`). Sin certificado configurado, el pipeline se detiene antes de firmar con código de salida 3.
+El script genera automáticamente:
+- `dist\osvaldoDownloaderPro\`: Binario portable desempaquetado.
+- `installer\osvaldoDownloaderPro-1.0.3-Setup.exe`: Instalador ejecutable para Windows.
+- `dist\SHA256SUMS.txt`: Sumas de comprobación SHA-256 de los artefactos.
 
-## Documentación técnica
+---
 
-- [`docs/BETA_TESTING.md`](docs/BETA_TESTING.md): guía de prueba para beta testers.
-- [`docs/AUDIT_REPORT.md`](docs/AUDIT_REPORT.md): informe de auditoría integral.
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): especificación de arquitectura de capas.
-- [`docs/TESTING.md`](docs/TESTING.md): estrategia y cobertura de pruebas.
-- [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md): solución de problemas frecuentes.
-- [`docs/CHANGELOG.md`](docs/CHANGELOG.md): historial de cambios.
+## 📂 Documentación Adicional
+
+- [`docs/CHANGELOG.md`](docs/CHANGELOG.md): Historial cronológico detallado de versiones y correcciones.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Arquitectura hexagonal, capas de dominio y contratos.
+- [`docs/TESTING.md`](docs/TESTING.md): Estrategia de pruebas, cobertura y suites E2E.
+- [`docs/BETA_TESTING.md`](docs/BETA_TESTING.md): Guía de instalación y pruebas para beta testers.
+- [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md): Solución de problemas comunes de red, permisos y FFmpeg.
+
+---
+
+**osvaldoDownloaderPro Team © 2026** — Software libre para la gestión y descarga multimedia.
