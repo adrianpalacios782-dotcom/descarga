@@ -164,9 +164,9 @@ class MainWindow(QMainWindow):
             msg = wintypes.MSG.from_address(int(message))
             if msg.message != 0x0084:  # WM_NCHITTEST
                 return None
-            x = ctypes.c_short(msg.lParam & 0xFFFF).value
-            y = ctypes.c_short((msg.lParam >> 16) & 0xFFFF).value
-            pos = self.mapFromGlobal(QPoint(x, y))
+            from PySide6.QtGui import QCursor
+
+            pos = self.mapFromGlobal(QCursor.pos())
             width, height = self.width(), self.height()
 
             if not self.isMaximized():
@@ -195,9 +195,9 @@ class MainWindow(QMainWindow):
             if title_bar is not None and title_bar.isVisible():
                 local = title_bar.mapFrom(self, pos)
                 if 0 <= local.x() <= title_bar.width() and 0 <= local.y() <= title_bar.height():
-                    child = title_bar.childAt(local)
-                    if not isinstance(child, QPushButton) and title_bar.is_drag_zone(local):
-                        return True, _HT_CAPTION
+                    if not title_bar.is_drag_zone(local):
+                        return None
+                    return True, _HT_CAPTION
         except Exception:  # pragma: no cover - nunca romper por el hit-test
             logger.debug("WM_NCHITTEST no gestionado", exc_info=True)
         return None
