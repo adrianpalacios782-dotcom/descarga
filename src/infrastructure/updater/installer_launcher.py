@@ -177,13 +177,20 @@ class InstallerLauncher:
         if not app_exe.is_file():
             raise UpdateError("No se localizó el ejecutable de la aplicación.")
 
-        inner = (
-            f'timeout /t 2 /nobreak >nul '
-            f'& start /wait "" "{installer}" /SILENT /SUPPRESSMSGBOXES '
-            f'& timeout /t 1 /nobreak >nul '
-            f'& start "" "{app_exe}"'
+        bat_path = installer.parent / "apply_update.bat"
+        bat_content = (
+            "@echo off\r\n"
+            "ping 127.0.0.1 -n 3 >nul\r\n"
+            'taskkill /F /IM osvaldoDownloaderPro.exe >nul 2>&1\r\n'
+            "ping 127.0.0.1 -n 2 >nul\r\n"
+            f'start /wait "" "{installer}" /SILENT /SUPPRESSMSGBOXES\r\n'
+            "ping 127.0.0.1 -n 2 >nul\r\n"
+            f'start "" "{app_exe}"\r\n'
+            'del "%~f0"\r\n'
         )
-        command_line = f'cmd.exe /c "{inner}"'
+        bat_path.write_text(bat_content, encoding="utf-8")
+
+        command_line = f'cmd.exe /c "{bat_path}"'
 
         logger.info("Actualización: lanzando instalador verificado (silencioso).")
         self._popen(  # noqa: S603 - línea construida solo con rutas verificadas internamente
