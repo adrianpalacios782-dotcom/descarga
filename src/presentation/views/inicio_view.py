@@ -566,6 +566,9 @@ class InicioView(QWidget):
 
     def show_error(self, message: str) -> None:
         self.current_metadata = None
+        self.btn_analyze.setEnabled(True)
+        self.btn_analyze.setText("Analizar")
+        self.url_input.setEnabled(True)
         self.preview_card.hide()
         self.hero_wrap.hide()
         self.analyzing_bar.hide()
