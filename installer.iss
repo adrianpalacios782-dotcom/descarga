@@ -2,10 +2,10 @@
 ; La versión se inyecta desde build_release.ps1 leyendo src/__init__.py
 ; (única fuente de verdad). El default permite compilar standalone.
 #ifndef APP_VERSION
-#define APP_VERSION "1.0.3"
+#define APP_VERSION "1.0.4"
 #endif
 #ifndef APP_VERSION_QUAD
-#define APP_VERSION_QUAD "1.0.3.0"
+#define APP_VERSION_QUAD "1.0.4.0"
 #endif
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName=osvaldoDownloaderPro
@@ -71,9 +71,9 @@ Source: "dist\osvaldoDownloaderPro\_internal\*"; DestDir: "{app}\_internal"; Fla
 Source: "dist\osvaldoDownloaderPro\assets\*"; DestDir: "{app}\assets"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\osvaldoDownloaderPro"; Filename: "{app}\osvaldoDownloaderPro.exe"; IconFilename: "{app}\osvaldoDownloaderPro.exe"
+Name: "{group}\osvaldoDownloaderPro"; Filename: "{app}\osvaldoDownloaderPro.exe"; IconFilename: "{app}\assets\icon.ico"
 Name: "{group}\{cm:UninstallProgram,osvaldoDownloaderPro}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\osvaldoDownloaderPro"; Filename: "{app}\osvaldoDownloaderPro.exe"; IconFilename: "{app}\osvaldoDownloaderPro.exe"; Tasks: desktopicon
+Name: "{autodesktop}\osvaldoDownloaderPro"; Filename: "{app}\osvaldoDownloaderPro.exe"; IconFilename: "{app}\assets\icon.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\osvaldoDownloaderPro.exe"; Description: "{cm:LaunchProgram,osvaldoDownloaderPro}"; Flags: nowait postinstall skipifsilent
