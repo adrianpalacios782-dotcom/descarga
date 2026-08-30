@@ -162,6 +162,41 @@ QToolTip {{
     font-size: 12px;
 }}
 
+/* ------------------------------------------------ Menús contextuales */
+QMenu {{
+    background-color: {p.surface};
+    color: {p.text_primary};
+    border: 1px solid {p.border_strong};
+    border-radius: 8px;
+    padding: 6px 4px;
+}}
+
+QMenu::item {{
+    background-color: transparent;
+    color: {p.text_primary};
+    padding: 8px 24px 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+}}
+
+QMenu::item:selected {{
+    background-color: {p.surface_active};
+    color: {p.accent_text};
+}}
+
+QMenu::item:disabled {{
+    color: {p.text_tertiary};
+    background-color: transparent;
+}}
+
+QMenu::separator {{
+    height: 1px;
+    background-color: {p.border};
+    margin: 4px 8px;
+}}
+
+
 /* ------------------------------------------------ Barra de título */
 QWidget#TitleBar {{
     background-color: {p.bg_titlebar};
