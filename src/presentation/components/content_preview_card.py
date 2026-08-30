@@ -7,11 +7,12 @@ Presenta de forma compacta y visualmente jerarquizada:
 - Sinopsis corta colapsable con control [Ver más] / [Ver menos].
 """
 
-import re
-from typing import Optional
+from typing import List, Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -22,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.domain.entities.media_metadata import MediaMetadata
+from src.domain.entities.subtitle import SubtitleConfig, SubtitleMode, SubtitleTrack
 from src.domain.services.content_preview import (
     extract_publication_year,
     truncate_text,
@@ -47,6 +49,8 @@ class ThumbWithBadge(QFrame):
 class ContentPreviewCard(QFrame):
     """Tarjeta de previsualización de información del contenido analizado."""
 
+    favorite_toggled = Signal(bool)
+
     TEXT_NO_DESCRIPTION = "Sin descripción disponible."
     TEXT_NOT_AVAILABLE = "No disponible"
 
@@ -54,6 +58,7 @@ class ContentPreviewCard(QFrame):
         super().__init__(parent)
         self.setObjectName("Card")
         self._synopsis_full: str = ""
+        self._is_favorite: bool = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 18, 20, 18)
@@ -94,6 +99,16 @@ class ContentPreviewCard(QFrame):
             chip.hide()
 
         chips_row.addStretch()
+
+        self.btn_favorite = QPushButton("♡ Guardar")
+        self.btn_favorite.setObjectName("SecondaryButton")
+        self.btn_favorite.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_favorite.setFixedHeight(28)
+        self.btn_favorite.setToolTip("Guardar en favoritos")
+        self.btn_favorite.clicked.connect(self._on_favorite_clicked)
+        self.btn_favorite.hide()
+        chips_row.addWidget(self.btn_favorite)
+
         info_col.addLayout(chips_row)
 
         # Título principal
@@ -133,12 +148,52 @@ class ContentPreviewCard(QFrame):
         synopsis_box.addWidget(self.btn_toggle_synopsis, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addLayout(synopsis_box)
 
+        # -------------------------------- Fila de Subtítulos
+        self.subtitles_box = QHBoxLayout()
+        self.subtitles_box.setSpacing(12)
+
+        lbl_sub = QLabel("Subtítulos:")
+        lbl_sub.setObjectName("FieldLabel")
+
+        self.combo_subtitles = QComboBox()
+        self.combo_subtitles.setObjectName("SubtitleCombo")
+        self.combo_subtitles.setMinimumWidth(200)
+        self.combo_subtitles.addItem("Sin subtítulos", userData=None)
+
+        self.chk_embed_sub = QCheckBox("Incrustar en video")
+        self.chk_embed_sub.setChecked(True)
+        self.chk_embed_sub.setToolTip("Incrustar la pista de subtítulos directamente en el contenedor del video.")
+
+        self.subtitles_box.addWidget(lbl_sub)
+        self.subtitles_box.addWidget(self.combo_subtitles)
+        self.subtitles_box.addWidget(self.chk_embed_sub)
+        self.subtitles_box.addStretch()
+
+        layout.addLayout(self.subtitles_box)
+
     @staticmethod
     def _make_chip(accent: bool = False) -> QLabel:
         chip = QLabel("")
         chip.setObjectName("ChipAccent" if accent else "Chip")
         chip.setVisible(False)
         return chip
+
+    def set_is_favorite(self, is_fav: bool) -> None:
+        self._is_favorite = is_fav
+        if is_fav:
+            self.btn_favorite.setText("♥ En Favoritos")
+            self.btn_favorite.setStyleSheet(
+                "background-color: #DB2777; color: white; border-radius: 6px; font-weight: bold; padding: 2px 12px;"
+            )
+        else:
+            self.btn_favorite.setText("♡ Guardar")
+            self.btn_favorite.setStyleSheet("")
+        self.btn_favorite.show()
+
+    def _on_favorite_clicked(self) -> None:
+        new_state = not self._is_favorite
+        self.set_is_favorite(new_state)
+        self.favorite_toggled.emit(new_state)
 
     def set_metadata(self, metadata: MediaMetadata) -> None:
         """Carga y visualiza los datos reales del contenido sin inventar nada."""
@@ -151,6 +206,35 @@ class ContentPreviewCard(QFrame):
         self._populate_chips(metadata)
         self.thumbnail.load_from_url(metadata.thumbnail_url or "")
         self._render_synopsis(show_truncated=True)
+        self.populate_subtitles(metadata.subtitles)
+        self.btn_favorite.show()
+
+    def populate_subtitles(self, tracks: List[SubtitleTrack]) -> None:
+        """Llena el combo de subtítulos con las pistas detectadas."""
+        self.combo_subtitles.clear()
+        self.combo_subtitles.addItem("Sin subtítulos", userData=None)
+
+        for track in tracks:
+            auto_tag = " (Auto)" if track.is_auto_generated else ""
+            label = f"{track.name or track.language_code}{auto_tag}"
+            self.combo_subtitles.addItem(label, userData=track)
+
+        has_subs = len(tracks) > 0
+        self.combo_subtitles.setEnabled(has_subs)
+        self.chk_embed_sub.setEnabled(has_subs)
+
+    def get_subtitle_config(self) -> SubtitleConfig:
+        """Devuelve la configuración de subtítulos elegida por el usuario."""
+        selected_track = self.combo_subtitles.currentData()
+        if not selected_track or not isinstance(selected_track, SubtitleTrack):
+            return SubtitleConfig(mode=SubtitleMode.NONE)
+
+        mode = SubtitleMode.EMBED if self.chk_embed_sub.isChecked() else SubtitleMode.EXTERNAL
+        return SubtitleConfig(
+            mode=mode,
+            language_code=selected_track.language_code,
+            is_auto_generated=selected_track.is_auto_generated,
+        )
 
     def _populate_chips(self, metadata: MediaMetadata) -> None:
         # Plataforma

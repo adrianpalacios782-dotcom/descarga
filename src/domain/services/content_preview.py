@@ -55,6 +55,19 @@ def truncate_text(text: Optional[str], max_chars: int = _DEFAULT_MAX_CHARS) -> s
     return cut.rstrip(",;:. ") + _ELLIPSIS
 
 
+def format_duration_seconds(duration_seconds: Optional[float]) -> str:
+    """Convierte segundos en formato MM:SS o HH:MM:SS."""
+    if not duration_seconds or duration_seconds <= 0:
+        return ""
+    total_seconds = int(duration_seconds)
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"
+
+
 def format_size_bytes(size_bytes: Optional[int]) -> str:
     """Convierte bytes a texto humano ("84 MB"). Devuelve "" si no hay dato."""
     if size_bytes is None or size_bytes <= 0:

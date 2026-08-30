@@ -1,6 +1,14 @@
 from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QColor, QFont, QPainter
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QLabel, QProgressBar, QPushButton
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QProgressBar,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from src.domain.entities.download_task import DownloadTask, DownloadState
 from src.presentation.components.status_labels import humanize_download_state
@@ -24,7 +32,7 @@ class DownloadCardWidget(QFrame):
     open_file_requested = Signal(str)
     open_folder_requested = Signal(str)
 
-    def __init__(self, task: DownloadTask, parent=None) -> None:
+    def __init__(self, task: DownloadTask, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("DownloadCard")
         self.task_id = task.id.value
@@ -146,7 +154,7 @@ class DownloadCardWidget(QFrame):
         pixmap = QPixmap(pixmap_size, pixmap_size)
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(DARK_PALETTE.surface_active))
         painter.drawRoundedRect(0, 0, pixmap_size, pixmap_size, 10, 10)

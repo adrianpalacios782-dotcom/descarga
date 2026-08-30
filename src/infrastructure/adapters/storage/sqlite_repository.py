@@ -1,6 +1,7 @@
+import sqlite3
 import threading
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from src.domain.entities.download_task import DownloadTask, DownloadState
 from src.domain.entities.format_option import FormatOption, StreamType, DownloadType
@@ -174,7 +175,7 @@ class SQLiteDownloadRepository(IDownloadRepository):
             with conn:
                 conn.execute("DELETE FROM download_tasks WHERE id = ?", (task_id.value,))
 
-    def _query_single(self, where_clause: str, params: tuple) -> Optional[DownloadTask]:
+    def _query_single(self, where_clause: str, params: tuple[Any, ...]) -> Optional[DownloadTask]:
         conn = self.db_manager.get_connection()
         cur = conn.cursor()
         cur.execute(
@@ -197,7 +198,7 @@ class SQLiteDownloadRepository(IDownloadRepository):
         return self._row_to_task(row)
 
     @staticmethod
-    def _row_to_task(row) -> DownloadTask:
+    def _row_to_task(row: sqlite3.Row) -> DownloadTask:
         url = Url(row["original_url"])
         media_id = MediaId(row["media_id"])
 

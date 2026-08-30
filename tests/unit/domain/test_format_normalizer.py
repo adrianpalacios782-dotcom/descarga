@@ -1,5 +1,3 @@
-import pytest
-from src.domain.entities.format_option import StreamType, VideoFormat, AudioFormat, VideoQualityOption
 from src.domain.services.format_normalizer import FormatNormalizer
 
 

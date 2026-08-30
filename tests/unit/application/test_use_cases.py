@@ -16,7 +16,6 @@ from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.exceptions.domain_exceptions import (
     UnsupportedPlatformError,
     FormatNotFoundError,
-    TaskNotFoundError,
     InvalidUrlError,
 )
 from src.domain.ports.download_engine import IDownloadEngine

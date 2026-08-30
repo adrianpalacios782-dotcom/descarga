@@ -1,15 +1,12 @@
 from src.domain.events.domain_events import (
     DownloadCreatedEvent,
     DownloadProgressChangedEvent,
-    DownloadCompletedEvent,
-    DownloadFailedEvent,
 )
 from src.domain.exceptions.domain_exceptions import (
     DomainError,
     InvalidUrlError,
     UnsupportedPlatformError,
     InvalidStateTransitionError,
-    DownloadError,
 )
 
 

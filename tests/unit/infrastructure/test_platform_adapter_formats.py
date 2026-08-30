@@ -9,7 +9,7 @@ El adapter debe:
 - rechazar esas respuestas como candidatas si otra estrategia entrega formatos reales,
 - lanzar MediaAnalysisError solo si TODAS las estrategias resultan degeneradas.
 """
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pytest
 

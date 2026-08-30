@@ -1,5 +1,4 @@
 """Test de regresión para asegurar que los títulos de video no se pierdan al generar nombres de archivo."""
-import os
 from src.domain.entities.format_option import VideoQualityOption
 from src.presentation.views.inicio_view import InicioView
 

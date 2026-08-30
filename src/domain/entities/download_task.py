@@ -5,6 +5,7 @@ from typing import Dict, Optional, Set
 
 from src.domain.entities.format_option import FormatOption
 from src.domain.entities.media_metadata import MediaMetadata
+from src.domain.entities.subtitle import SubtitleConfig
 from src.domain.exceptions.domain_exceptions import InvalidStateTransitionError
 from src.domain.value_objects.download_id import DownloadId
 
@@ -57,6 +58,7 @@ class DownloadTask:
     # La tarea puede estar COMPLETED y aun así llevar esta advertencia visible:
     # una descarga técnicamente exitosa con calidad inferior NO es un Error.
     quality_warning: Optional[str] = None
+    subtitle_config: Optional[SubtitleConfig] = None
 
     def __post_init__(self) -> None:
         if not self.destination_path or not self.destination_path.strip():

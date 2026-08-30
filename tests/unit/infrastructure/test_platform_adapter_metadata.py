@@ -1,4 +1,3 @@
-import pytest
 
 from src.domain.value_objects.url import Url
 from src.infrastructure.adapters.platforms.base_platform_adapter import BasePlatformAdapter

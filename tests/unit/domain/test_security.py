@@ -9,13 +9,12 @@ Cubre:
 - Validación de format_id para yt-dlp
 """
 import os
-import re
 from unittest.mock import MagicMock
 
 import pytest
 
 from src.domain.value_objects.url import Url
-from src.domain.exceptions.domain_exceptions import InvalidUrlError, UnsupportedPlatformError
+from src.domain.exceptions.domain_exceptions import InvalidUrlError
 from src.infrastructure.adapters.download.ytdlp_download_engine import YtDlpDownloadEngine
 from src.infrastructure.logging.logger_config import sanitize_log_message
 
@@ -375,9 +374,6 @@ class TestYtDlpOptionsSecurity:
         assert "postprocessors" not in opts
 
     def test_probe_opts_no_external_downloader(self):
-        """Verificar que las opciones de sondeo no incluyen configuración peligrosa."""
-        from src.infrastructure.adapters.media.ffmpeg_adapter import FFmpegProcessAdapter
-        engine = YtDlpDownloadEngine(ffmpeg_adapter=FFmpegProcessAdapter())
         cancel = MagicMock()
         cancel.is_set.return_value = False
 
@@ -429,7 +425,6 @@ class TestSqliteSecurity:
         source = inspect.getsource(SQLiteDownloadRepository)
         # Buscar construcciones de WHERE con f-strings (que NO sean SELECTs estáticos)
         lines = source.split("\n")
-        in_select = False
         for line in lines:
             stripped = line.strip()
             if stripped.startswith('"""') or stripped.startswith("'''"):

@@ -9,6 +9,7 @@ from src.domain.exceptions.domain_exceptions import MediaAnalysisError
 from src.domain.ports.platform_adapter import IPlatformAdapter
 from src.domain.value_objects.media_id import MediaId
 from src.domain.value_objects.url import Url
+from src.infrastructure.adapters.download.ytdlp_download_engine import extract_subtitle_tracks
 
 
 class BasePlatformAdapter(IPlatformAdapter):
@@ -32,6 +33,11 @@ class BasePlatformAdapter(IPlatformAdapter):
         ["mweb"],    # cliente web móvil
     ]
 
+    def __init__(self, cookies_from_browser: Optional[str] = None) -> None:
+        self.cookies_from_browser: Optional[str] = (
+            cookies_from_browser.strip() if cookies_from_browser and cookies_from_browser.strip() else None
+        )
+
     def _build_ydl_opts(self, player_clients: Optional[List[str]] = None) -> Dict[str, Any]:
         ydl_opts: Dict[str, Any] = {
             "quiet": True,
@@ -43,6 +49,8 @@ class BasePlatformAdapter(IPlatformAdapter):
             "extract_flat": False,
             "format": "all",
         }
+        if self.cookies_from_browser:
+            ydl_opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
         if player_clients:
             ydl_opts["extractor_args"] = {"youtube": {"player_client": player_clients}}
         return ydl_opts
@@ -138,6 +146,7 @@ class BasePlatformAdapter(IPlatformAdapter):
         video_formats = FormatNormalizer.normalize_video_formats(raw_formats)
         audio_formats = FormatNormalizer.normalize_audio_formats(raw_formats)
         formats_list = FormatNormalizer.normalize(raw_formats)
+        subtitles_list = extract_subtitle_tracks(info)
 
         if not formats_list and info.get("url"):
             default_fmt = FormatOption(
@@ -161,5 +170,6 @@ class BasePlatformAdapter(IPlatformAdapter):
             video_quality_options=video_quality_options,
             video_formats=video_formats,
             audio_formats=audio_formats,
-            formats=formats_list
+            formats=formats_list,
+            subtitles=subtitles_list,
         )

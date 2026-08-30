@@ -134,11 +134,6 @@ LIGHT_PALETTE = Palette(
 
 def build_qss(p: Palette) -> str:
     """Genera la hoja de estilos completa a partir de una paleta y los tokens."""
-
-    s = SPACING
-    r = RADIUS
-    fs = FONT_SIZE
-
     return f"""
 /* ============================================================
    osvaldoDownloaderPro — tema generado desde tokens
@@ -273,7 +268,7 @@ QFrame#SidebarDivider {{
 }}
 
 QLabel#SidebarGroupLabel {{
-    font-size: {fs['micro']}px;
+    font-size: {FONT_SIZE['micro']}px;
     font-weight: 800;
     letter-spacing: 1.2px;
     color: {p.text_tertiary};

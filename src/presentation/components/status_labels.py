@@ -16,7 +16,7 @@ STATUS_TEXT = {
 }
 
 
-def humanize_download_state(state) -> str:
+def humanize_download_state(state: DownloadState | str | object) -> str:
     """Convierte un DownloadState (o su valor textual) en etiqueta legible."""
     try:
         key = state if isinstance(state, DownloadState) else DownloadState(str(state))

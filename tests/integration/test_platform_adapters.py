@@ -1,11 +1,9 @@
-import pytest
 from src.domain.value_objects.url import Url
 from src.infrastructure.adapters.platforms.platform_registry import PlatformRegistry
 from src.infrastructure.adapters.platforms.youtube_adapter import YouTubeAdapter
 from src.infrastructure.adapters.platforms.tiktok_adapter import TikTokAdapter
 from src.infrastructure.adapters.platforms.instagram_adapter import InstagramAdapter
 from src.infrastructure.adapters.platforms.facebook_adapter import FacebookAdapter
-from src.infrastructure.adapters.platforms.generic_adapter import GenericAdapter
 
 
 class TestPlatformAdapters:

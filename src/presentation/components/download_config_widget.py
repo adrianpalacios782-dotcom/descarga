@@ -10,7 +10,7 @@ import os
 import re
 from typing import Optional
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -92,6 +92,11 @@ class DownloadConfigWidget(QFrame):
 
     def get_destination_directory(self) -> str:
         return self.txt_dest.text().strip()
+
+    def set_destination_directory(self, path: str) -> None:
+        """Actualiza la ruta de la carpeta de destino."""
+        if path and path.strip():
+            self.txt_dest.setText(path.strip())
 
     def get_sanitized_filename(self, fallback: str = "descarga") -> str:
         custom_name = self.txt_filename.text().strip()

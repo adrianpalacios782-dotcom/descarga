@@ -9,7 +9,6 @@ Política de actualización (dominio puro):
 from dataclasses import dataclass
 from enum import Enum
 
-from src.domain.exceptions.domain_exceptions import InvalidUpdateInfoError
 from src.domain.ports.update_source import IUpdateSource, RemoteRelease
 from src.domain.value_objects.semantic_version import SemanticVersion
 

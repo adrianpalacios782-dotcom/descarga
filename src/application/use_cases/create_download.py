@@ -1,6 +1,8 @@
+from typing import Optional
 from src.domain.entities.download_task import DownloadTask, DownloadState
 from src.domain.entities.format_option import FormatOption, DownloadType, StreamType, AudioFormat
 from src.domain.entities.media_metadata import MediaMetadata
+from src.domain.entities.subtitle import SubtitleConfig
 from src.domain.exceptions.domain_exceptions import FormatNotFoundError
 from src.domain.ports.download_repository import IDownloadRepository
 from src.domain.value_objects.download_id import DownloadId
@@ -12,7 +14,13 @@ class CreateDownloadUseCase:
     def __init__(self, repository: IDownloadRepository) -> None:
         self.repository = repository
 
-    def execute(self, media: MediaMetadata, format_id: str, destination_path: str) -> DownloadTask:
+    def execute(
+        self,
+        media: MediaMetadata,
+        format_id: str,
+        destination_path: str,
+        subtitle_config: Optional[SubtitleConfig] = None,
+    ) -> DownloadTask:
         selected_format: FormatOption | None = None
 
         if format_id.startswith("vq_"):
@@ -37,7 +45,8 @@ class CreateDownloadUseCase:
             media=media,
             selected_format=selected_format,
             destination_path=destination_path,
-            status=DownloadState.QUEUED
+            status=DownloadState.QUEUED,
+            subtitle_config=subtitle_config,
         )
 
         self.repository.save(task)

@@ -9,7 +9,7 @@ import yt_dlp
 from yt_dlp.utils import DownloadCancelled
 
 from src.domain.entities.download_task import DownloadTask, DownloadState
-from src.domain.entities.format_option import DownloadType
+from src.domain.entities.format_option import DownloadType, FormatOption
 from src.domain.exceptions.domain_exceptions import (
     FormatNotFoundError,
     QualityDegradationError,
@@ -22,6 +22,7 @@ from src.domain.events.domain_events import (
     DownloadResumedEvent,
     DownloadCancelledEvent,
 )
+from src.domain.entities.subtitle import SubtitleConfig, SubtitleMode, SubtitleTrack
 from src.domain.ports.download_engine import IDownloadEngine
 from src.domain.ports.download_repository import IDownloadRepository
 from src.domain.services.format_normalizer import FormatNormalizer
@@ -33,6 +34,103 @@ logger = logging.getLogger(__name__)
 _SAFE_FORMAT_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
+def extract_subtitle_tracks(info: Dict[str, Any]) -> List[SubtitleTrack]:
+    """Extrae y normaliza las pistas de subtítulos (manuales y automáticas) de yt-dlp."""
+    tracks: List[SubtitleTrack] = []
+    seen_codes: set[tuple[str, bool]] = set()
+
+    # 1. Subtítulos manuales / oficiales
+    manual_subs = info.get("subtitles") or {}
+    if isinstance(manual_subs, dict):
+        for lang_code, formats in manual_subs.items():
+            if not lang_code:
+                continue
+            name = ""
+            ext = "vtt"
+            if isinstance(formats, list) and formats:
+                first_fmt = formats[0] if isinstance(formats[0], dict) else {}
+                name = first_fmt.get("name") or first_fmt.get("ext") or ""
+                ext = first_fmt.get("ext") or "vtt"
+            key = (lang_code.lower(), False)
+            if key not in seen_codes:
+                seen_codes.add(key)
+                tracks.append(
+                    SubtitleTrack(
+                        language_code=lang_code,
+                        name=name or lang_code,
+                        extension=ext,
+                        is_auto_generated=False,
+                    )
+                )
+
+    # 2. Subtítulos automáticos (automatic_captions)
+    auto_subs = info.get("automatic_captions") or {}
+    if isinstance(auto_subs, dict):
+        for lang_code, formats in auto_subs.items():
+            if not lang_code:
+                continue
+            name = ""
+            ext = "vtt"
+            if isinstance(formats, list) and formats:
+                first_fmt = formats[0] if isinstance(formats[0], dict) else {}
+                name = first_fmt.get("name") or first_fmt.get("ext") or ""
+                ext = first_fmt.get("ext") or "vtt"
+            key = (lang_code.lower(), True)
+            if key not in seen_codes:
+                seen_codes.add(key)
+                tracks.append(
+                    SubtitleTrack(
+                        language_code=lang_code,
+                        name=name or f"{lang_code} (Auto)",
+                        extension=ext,
+                        is_auto_generated=True,
+                    )
+                )
+
+    return tracks
+
+
+def apply_subtitle_options(
+    ydl_opts: Dict[str, Any],
+    subtitle_config: Optional[SubtitleConfig],
+) -> Dict[str, Any]:
+    """Aplica parámetros de subtítulos a las opciones de YoutubeDL."""
+    if not subtitle_config or subtitle_config.mode == SubtitleMode.NONE:
+        return ydl_opts
+
+    if not subtitle_config.language_code:
+        return ydl_opts
+
+    lang = subtitle_config.language_code
+    ydl_opts["subtitleslangs"] = [lang]
+
+    if subtitle_config.is_auto_generated:
+        ydl_opts["writeautomaticsub"] = True
+    else:
+        ydl_opts["writesubtitles"] = True
+
+    if subtitle_config.mode == SubtitleMode.EMBED:
+        pps = ydl_opts.get("postprocessors")
+        if not isinstance(pps, list):
+            pps = []
+            ydl_opts["postprocessors"] = pps
+        pps.append({
+            "key": "FFmpegEmbedSubtitle",
+            "already_have_subtitle": False,
+        })
+    elif subtitle_config.mode == SubtitleMode.EXTERNAL:
+        pps = ydl_opts.get("postprocessors")
+        if not isinstance(pps, list):
+            pps = []
+            ydl_opts["postprocessors"] = pps
+        pps.append({
+            "key": "FFmpegSubtitlesConvertor",
+            "format": "srt",
+        })
+
+    return ydl_opts
+
+
 class YtDlpDownloadEngine(IDownloadEngine):
     """Motor de descargas real basado en yt-dlp como librería."""
 
@@ -42,16 +140,27 @@ class YtDlpDownloadEngine(IDownloadEngine):
         ffmpeg_adapter: Optional[FFmpegProcessAdapter] = None,
         repository: Optional[IDownloadRepository] = None,
         ydl_factory: Optional[Callable[..., Any]] = None,
+        cookies_from_browser: Optional[str] = None,
     ) -> None:
         self.event_bus = event_bus
         self.ffmpeg_adapter = ffmpeg_adapter or FFmpegProcessAdapter()
         self.repository = repository
         self._ydl_factory = ydl_factory or yt_dlp.YoutubeDL
+        self.cookies_from_browser: Optional[str] = (
+            cookies_from_browser.strip() if cookies_from_browser and cookies_from_browser.strip() else None
+        )
 
         self._cancel_tokens: Dict[str, threading.Event] = {}
         self._pause_tokens: Dict[str, threading.Event] = {}
         self._threads: Dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
+
+    def set_cookies_from_browser(self, browser: Optional[str]) -> None:
+        """Actualiza dinámicamente el navegador configurado para extracción de cookies."""
+        with self._lock:
+            self.cookies_from_browser = (
+                browser.strip() if browser and browser.strip() else None
+            )
 
     # Estrategias de player_client para yt-dlp (extractores que las soportan, p. ej.
     # YouTube). Cuando la plataforma restringe el cliente por defecto ("Sign in to
@@ -276,6 +385,8 @@ class YtDlpDownloadEngine(IDownloadEngine):
         opts["merge_output_format"] = "mp4"
         opts["allow_multi_streams"] = True
 
+        apply_subtitle_options(opts, task.subtitle_config)
+
         info = None
         last_dl_error = None
         for attempt in range(3):
@@ -410,7 +521,7 @@ class YtDlpDownloadEngine(IDownloadEngine):
                     )
 
     @staticmethod
-    def _build_video_format_spec(fmt) -> str:
+    def _build_video_format_spec(fmt: FormatOption) -> str:
         """Construye la especificación de formato para yt-dlp.
 
         PRINCIPIO: la RESOLUCIÓN MANDA; el contenedor/codec es preferencia
@@ -504,6 +615,8 @@ class YtDlpDownloadEngine(IDownloadEngine):
             "format": "all",
             "socket_timeout": 30,
         }
+        if self.cookies_from_browser:
+            base_opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
         first_error: Optional[Exception] = None
         for clients in self.PROBE_CLIENT_STRATEGIES:
             ydl = self._ydl_factory(self._apply_clients(dict(base_opts), clients))
@@ -533,7 +646,7 @@ class YtDlpDownloadEngine(IDownloadEngine):
         Devuelve alturas estándar (1080, 720, 480, etc.) ordenadas descendente.
         """
         formats = info.get("formats") or []
-        heights: set = set()
+        heights: set[int] = set()
         for f in formats:
             vcodec = f.get("vcodec")
             if vcodec and str(vcodec).lower() == "none":
@@ -600,6 +713,8 @@ class YtDlpDownloadEngine(IDownloadEngine):
             "ffmpeg_location": self.ffmpeg_adapter.get_ffmpeg_executable(),
             "progress_hooks": [self._make_progress_hook(task_id, cancel_token, pause_token)],
         }
+        if self.cookies_from_browser:
+            opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
         return opts
 
     def _make_progress_hook(

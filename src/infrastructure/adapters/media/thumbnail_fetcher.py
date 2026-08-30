@@ -13,7 +13,7 @@ import ipaddress
 import socket
 import urllib.error
 import urllib.request
-from typing import List, Optional
+from typing import Any, List, Optional
 from urllib.parse import urlparse
 
 
@@ -101,12 +101,21 @@ class _ValidatingRedirectHandler(urllib.request.HTTPRedirectHandler):
     def __init__(self) -> None:
         self.redirects_left = MAX_REDIRECTS
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D401
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> urllib.request.Request | None:  # noqa: D401
         if self.redirects_left <= 0:
             raise ThumbnailFetchError("Demasiadas redirecciones al descargar la miniatura.")
         self.redirects_left -= 1
         validate_thumbnail_url(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
+        res = super().redirect_request(req, fp, code, msg, headers, newurl)
+        return res
 
 
 def fetch_thumbnail(url_str: str, timeout: float = CONNECT_TIMEOUT_SECONDS) -> bytes:

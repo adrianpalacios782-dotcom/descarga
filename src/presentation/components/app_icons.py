@@ -11,11 +11,11 @@ ICON_SIZE = 40
 _STROKE = 3.0
 
 
-def _base_pixmap() -> tuple:
+def _base_pixmap() -> tuple[QPixmap, QPainter]:
     pixmap = QPixmap(ICON_SIZE, ICON_SIZE)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     return pixmap, painter
 
 
@@ -129,7 +129,7 @@ def check_icon(color: str = "#1db954", size: int = ICON_SIZE) -> QIcon:
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
     p = QPainter(pixmap)
-    p.setRenderHint(QPainter.Antialiasing, True)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     p.setBrush(Qt.BrushStyle.NoBrush)
     circle_pen = QPen(QColor(color))
     circle_pen.setWidthF(size * 0.07)
@@ -158,11 +158,11 @@ NAV_ICONS = {
 }
 
 
-def _small_pixmap(size: int) -> tuple:
+def _small_pixmap(size: int) -> tuple[QPixmap, QPainter]:
     pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
-    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     return pixmap, painter
 
 
@@ -219,7 +219,7 @@ def close_icon(color: str = "#a4a4ad", size: int = 16) -> QIcon:
     pixmap, p = _small_pixmap(size)
     p.setPen(_thin_pen(color, size * 0.09))
     s = size / ICON_SIZE
-    a, b, c, d = 13.0 * s, 13.0 * s, 27.0 * s, 27.0 * s
+    a, c = 13.0 * s, 27.0 * s
     p.drawLine(QPointF(a, a), QPointF(c, c))
     p.drawLine(QPointF(c, a), QPointF(a, c))
     p.end()
@@ -265,7 +265,6 @@ def link_icon(color: str = "#b3b3b3") -> QIcon:
 
 def heart_icon(color: str = "#b3b3b3", filled: bool = False) -> QIcon:
     pixmap, p = _base_pixmap()
-    import math
 
     cx, cy, r = 20.0, 22.0, 11.5
     path = QPainterPath()
@@ -315,7 +314,7 @@ def search_icon(color: str = "#94a3b8") -> QIcon:
 WINDOW_ICON_SIZE = 16
 
 
-def window_control_icons() -> dict:
+def window_control_icons() -> dict[str, QIcon]:
     """Crea los iconos de ventana bajo demanda (requiere QApplication activa)."""
     return {
         "minimize": minimize_icon(),

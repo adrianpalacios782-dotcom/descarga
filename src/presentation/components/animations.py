@@ -4,7 +4,7 @@ Animaciones cortas que nunca dejan la UI en un estado intermedio: si algo
 falla o el widget está oculto, simplemente no se ejecuta la animación.
 """
 
-from PySide6.QtCore import QPropertyAnimation, QEasingCurve, Qt
+from PySide6.QtCore import QPropertyAnimation, QEasingCurve
 from PySide6.QtWidgets import QGraphicsOpacityEffect, QWidget
 
 FADE_IN_MS = 160
@@ -25,7 +25,7 @@ def fade_in(widget: QWidget, duration_ms: int = FADE_IN_MS, enabled: bool = True
     animation.setEasingCurve(QEasingCurve.Type.OutCubic)
 
     def _cleanup() -> None:
-        widget.setGraphicsEffect(None)
+        widget.setGraphicsEffect(None)  # type: ignore[arg-type]
 
     animation.finished.connect(_cleanup)
     animation.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)

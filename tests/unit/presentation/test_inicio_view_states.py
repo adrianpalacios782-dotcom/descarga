@@ -310,7 +310,7 @@ class TestInicioNoQualitiesFlow:
         assert rows[0].vqo.is_best_quality
 
     def test_audio_mode_without_audio_formats_disables_button(self, qapp, monkeypatch) -> None:
-        self._assert_no_qmessagebox(monpatch := monkeypatch)
+        self._assert_no_qmessagebox(monkeypatch)
         metadata = make_metadata(audio_formats=[])
         view = InicioView()
         view.set_metadata(metadata)

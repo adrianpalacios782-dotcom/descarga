@@ -20,7 +20,7 @@ class TestLoggingSystem:
         assert len(logger.handlers) >= 2
 
         logger.info("Prueba de log con token=secret12345")
-        
+
         log_file = tmp_path / "logs" / "osvaldo_downloader.log"
         assert log_file.exists()
         content = log_file.read_text(encoding="utf-8")

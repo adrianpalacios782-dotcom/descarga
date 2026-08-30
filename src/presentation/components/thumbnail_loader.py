@@ -11,7 +11,7 @@ from collections import OrderedDict
 from typing import Optional
 
 from PySide6.QtCore import QObject, Qt, QRectF, Signal
-from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPaintEvent, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from src.infrastructure.adapters.media.thumbnail_fetcher import fetch_thumbnail
@@ -137,18 +137,17 @@ class ThumbnailLabel(QWidget):
     def _on_loaded(self, url: str, image: object) -> None:
         if url != self._current_url or self._current_url == "":
             return  # resultado obsoleto
-        if image is None or isinstance(image, bool):
+        if not isinstance(image, QImage) or image.isNull():
             self._show_placeholder("Sin vista previa")
             return
-        qimage = image  # type: ignore[union-attr]
-        self._pixmap = QPixmap.fromImage(qimage)
+        self._pixmap = QPixmap.fromImage(image)
         self._placeholder_text = ""
         self.update()
 
-    def paintEvent(self, event) -> None:  # noqa: N802 (convención Qt)
+    def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802 (convención Qt)
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
 
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
@@ -179,7 +178,7 @@ class ThumbnailLabel(QWidget):
 
         # Borde sutil encima del recorte redondeado
         border_painter = QPainter(self)
-        border_painter.setRenderHint(QPainter.Antialiasing, True)
+        border_painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         border_path = QPainterPath()
         border_rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         border_path.addRoundedRect(border_rect, self._corner_radius, self._corner_radius)
