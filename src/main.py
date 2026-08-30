@@ -95,6 +95,9 @@ def main() -> None:
             pass
 
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    from src.presentation.styles.styles import DARK_STYLE
+    app.setStyleSheet(DARK_STYLE)
 
     from PySide6.QtGui import QIcon
     icon_candidates = [

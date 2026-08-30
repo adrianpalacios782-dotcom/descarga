@@ -145,6 +145,38 @@ class HistorialView(QWidget):
 
         task = self._current_displayed_tasks[row]
         menu = QMenu(self)
+        menu.setStyleSheet(
+            """
+            QMenu {
+                background-color: #111827;
+                color: #F8FAFC;
+                border: 1px solid rgba(255, 255, 255, 0.18);
+                border-radius: 8px;
+                padding: 6px 4px;
+            }
+            QMenu::item {
+                background-color: transparent;
+                color: #F8FAFC;
+                padding: 8px 24px 8px 14px;
+                border-radius: 6px;
+                font-size: 13px;
+                font-weight: 500;
+            }
+            QMenu::item:selected {
+                background-color: #1E293B;
+                color: #818CF8;
+            }
+            QMenu::item:disabled {
+                color: #64748B;
+                background-color: transparent;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: rgba(255, 255, 255, 0.1);
+                margin: 4px 8px;
+            }
+            """
+        )
 
         # 1. Abrir archivo (si existe)
         file_path = task.destination_path

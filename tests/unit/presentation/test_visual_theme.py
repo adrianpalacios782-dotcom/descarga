@@ -36,6 +36,8 @@ class TestThemeTokens:
             "QFrame#ClipboardBanner",
             "QLabel#StatusLabel[state=\"error\"]",
             "QLabel#SpeedLabel",
+            "QMenu",
+            "QMenu::item:selected",
         ):
             assert selector in DARK_STYLE, f"Falta el selector {selector}"
 
