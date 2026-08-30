@@ -4,11 +4,11 @@ Aplicación de escritorio nativa para Windows 10/11 diseñada para el análisis,
 
 ---
 
-## 🚀 osvaldoDownloaderPro v1.1.0 BETA (Última versión)
+## osvaldoDownloaderPro v1.1.0 BETA (Última versión)
 
-## ⬇️ DESCARGAR PARA WINDOWS
+##  DESCARGAR PARA WINDOWS
 
-### [ ⬇️ DESCARGAR osvaldoDownloaderPro v1.1.0 (Instalador Oficial) ](https://github.com/adrianpalacios782-dotcom/descarga/releases/latest)
+### [  DESCARGAR osvaldoDownloaderPro v1.1.0 (Instalador Oficial) ](https://github.com/adrianpalacios782-dotcom/descarga/releases/latest)
 
 En la página de lanzamientos, dirígete a la sección **Assets** y descarga:
 
@@ -35,7 +35,7 @@ En la página de lanzamientos, dirígete a la sección **Assets** y descarga:
 
 ---
 
-## 🌐 Plataformas Soportadas
+##  Plataformas Soportadas
 
 - **YouTube** (Videos individuales, shorts, calidades hasta 4K/60fps y pistas de audio).
 - **TikTok** (Videos en alta definición sin marca de agua).
@@ -44,9 +44,9 @@ En la página de lanzamientos, dirígete a la sección **Assets** y descarga:
 
 ---
 
-## ✨ Características Principales
+##  Características Principales
 
-### 🎯 Pantalla de Análisis y Descarga Modular
+### Pantalla de Análisis y Descarga Modular
 - **Previsualización Inteligente (`ContentPreviewCard`):** Miniatura real con relación de aspecto 16:9 preservada, esquinas redondeadas y badge de duración superpuesto.
 - **Metadatos Técnicos Claros:** Chips visuales para plataforma, tipo de contenido (*Vídeo / Audio*), duración formateada, año de publicación y calidad máxima disponible.
 - **Sinopsis Colapsable:** Resumen compacto con botón interactivo `[Ver más]` / `[Ver menos]` para optimizar el espacio vertical.
@@ -61,53 +61,53 @@ En la página de lanzamientos, dirígete a la sección **Assets** y descarga:
   - Campo editable para el nombre del archivo final con sanitización automática contra caracteres y nombres reservados de Windows.
 - **Acción Principal Destacada:** Botón grande `[ ⭳ Iniciar descarga ]` de 50px con retroalimentación inmediata de estado (`Iniciando descarga…`), validación inline de errores y advertencia de que *"El tamaño es aproximado"*.
 
-### 💬 Subtítulos y Accesibilidad (Subtitles / CC)
+###  Subtítulos y Accesibilidad (Subtitles / CC)
 - **Detección Automática:** Identificación en tiempo real de subtítulos manuales y autogenerados para múltiples idiomas.
 - **Opciones de Integración:** Incrustación directa en el video vía FFmpeg (`FFmpegEmbedSubtitle`) o descarga como pista externa en formatos `.srt` y `.vtt`.
 - **Selector Intuitivo:** Selector visual integrado directamente en la tarjeta de previsualización del contenido.
 
-### 📦 Descargas Masivas por Lotes (Batch Downloads)
+###  Descargas Masivas por Lotes (Batch Downloads)
 - **Diálogo Modal Multilínea (`BatchDownloadDialog`):** Procesamiento de múltiples URLs simultáneas desde la barra de herramientas.
 - **Importación de Listas:** Carga de listas de enlaces desde archivos de texto `.txt`.
 - **Configuración Global:** Calidad y formato unificados aplicables a toda la lista de reproducción o conjunto de enlaces.
 - **Gestión Concurrente:** Encolamiento secuencial o concurrente respetando los límites de descarga configurados.
 
-### ⭐ Sistema de Favoritos Persistente
+###  Sistema de Favoritos Persistente
 - **Persistencia en SQLite (`user_favorites`):** Registro seguro en base de datos local en modo WAL.
 - **Guardado en 1 Clic:** Botón dinámico (`♡ Guardar` / `♥ En Favoritos`) disponible desde la vista previa.
 - **Pantalla Dedicada (`FavoritosView`):** Exploración, búsqueda rápida, eliminación y re-descarga directa de enlaces favoritos.
 
-### 🔔 Bandeja del Sistema (System Tray) y Notificaciones
+###  Bandeja del Sistema (System Tray) y Notificaciones
 - **Integración Nativa en Windows (`SystemTrayComponent`):** Icono residente en la barra de tareas con soporte para minimizar la aplicación al cerrar.
 - **Notificaciones Toast:** Alertas emergentes nativas al completar o fallar una descarga.
 - **Menú Contextual Oscuro Fusion:** Menú contextual rápido para restaurar ventana, pausar todas las descargas o cerrar la aplicación.
 
-### 📜 Historial Interactivo Mejorado
+###  Historial Interactivo Mejorado
 - **Menú Contextual Avanzado (`QMenu`):** Clic derecho sobre cualquier registro para reproducir el archivo descargado con el reproductor del sistema, abrir la carpeta contenedora en el Explorador de Windows, copiar URL, agregar a favoritos o eliminar.
 
-### ⚙️ Configuración Avanzada y Cookies de Navegador
+###  Configuración Avanzada y Cookies de Navegador
 - **Persistencia en SQLite (`user_settings`):** Ajustes guardados de directorio de descarga, límite de concurrencia, calidad predeterminada y preferencias de inicio.
 - **Soporte de Cookies de Navegador:** Integración con navegadores locales (Chrome, Edge, Firefox, Brave) para descargar contenido protegido o con restricciones de edad.
 
-### ⚡ Motor de Descarga y Conversión
+###  Motor de Descarga y Conversión
 - **Selección de Calidad Dinámica:** 144p, 240p, 360p, 480p (SD), 720p (HD), 1080p (Full HD), 1440p (2K) y 2160p (4K).
 - **Extracción y Conversión de Audio:** Descarga en formato MP3, M4A o WAV con tasa de bits configurable (320, 256, 192, 128 kbps).
 - **FFmpeg Integrado:** Fusión automática de flujos DASH (video + audio) sin recodificación innecesaria para máxima velocidad y fidelidad.
 - **Gestor de Cola Concurrente:** Control de descargas simultáneas, pausas, reanudación y reintentos automáticos.
 
-### 🔄 Actualizador Automático Blindado
+###  Actualizador Automático Blindado
 - **Detección Automática:** Consulta de versiones en tiempo real contra la API de GitHub Releases.
 - **Instalación Segura en Segundo Plano:** Ejecución desacoplada mediante script de actualización sin bloqueos de proceso (`taskkill` seguro).
 - **Reinicio Automático:** La aplicación se cierra, aplica la nueva versión silenciosamente y se vuelve a abrir sola.
 - **Verificación Criptográfica:** Comprobación estricta de sumas SHA-256 antes de permitir cualquier ejecución.
 
-### 🎨 Identidad Visual Oficial (ODP PRO)
+### Identidad Visual Oficial (ODP PRO)
 - **Nuevo Icono Oficial:** Diseño squircle moderno dark neon con hexágono cian y flecha de descarga, integrado en el ejecutable (.exe), instalador, accesos directos y barra de título.
 - **Tema Oscuro Profesional:** Estilos QSS oscuros optimizados con acentos de color consistentes y menús contextuales adaptados.
 
 ---
 
-## 🛡️ Seguridad y Resiliencia
+##  Seguridad y Resiliencia
 
 El sistema ha sido auditado exhaustivamente y cuenta con protecciones verificadas mediante pruebas automatizadas:
 
@@ -121,7 +121,7 @@ El sistema ha sido auditado exhaustivamente y cuenta con protecciones verificada
 
 ---
 
-## 🛠️ Desarrollo y Pruebas
+##  Desarrollo y Pruebas
 
 ### Requisitos previos
 - Python 3.11 o superior (probado en Python 3.13)
