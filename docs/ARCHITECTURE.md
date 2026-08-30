@@ -11,29 +11,29 @@
 ```text
 src/
 ├── domain/                  # Núcleo de Dominio Puro (0% dependencias de infraestructura/GUI)
-│   ├── entities/            # DownloadTask, MediaMetadata, FormatOption, VideoFormat, AudioFormat
+│   ├── entities/            # DownloadTask, MediaMetadata, FormatOption, VideoFormat, AudioFormat, SubtitleTrack, FavoriteItem
 │   ├── value_objects/       # Url (anti-SSRF), DownloadId, MediaId
 │   ├── events/              # DomainEvent y catálogo de 8 subclases de eventos
 │   ├── exceptions/          # DomainError y jerarquía estricta de excepciones
-│   ├── ports/               # Contratos IPlatformAdapter, IDownloadEngine, IDownloadRepository
-│   └── services/            # FormatNormalizer (filtrado y clasificación de formatos)
+│   ├── ports/               # Contratos IPlatformAdapter, IDownloadEngine, IDownloadRepository, IFavoriteRepository, ISettingsRepository
+│   └── services/            # FormatNormalizer, FilenameSanitizer (anti-DOS nombres reservados Windows)
 ├── application/             # Casos de Uso (Orquestación de lógica de negocio)
-│   └── use_cases/           # AnalyzeUrl, CreateDownload, StartDownload, PauseDownload, ResumeDownload, CancelDownload, RetryDownload
+│   └── use_cases/           # AnalyzeUrl, CreateDownload, StartDownload, PauseDownload, ResumeDownload, CancelDownload, RetryDownload, CheckForUpdates
 ├── infrastructure/          # Adaptadores de Infraestructura y E/S
 │   ├── adapters/
 │   │   ├── platforms/       # YouTubeAdapter, TikTokAdapter, InstagramAdapter, FacebookAdapter, GenericAdapter, PlatformRegistry
-│   │   ├── storage/         # DatabaseManager (SQLite WAL), SQLiteDownloadRepository
-│   │   ├── media/           # FFmpegProcessAdapter (Sidecar Process Manager: probe de medios, extracción de audio, merge)
-│   │   └── download/        # YtDlpDownloadEngine (yt-dlp 2026 + pre-probe de estrategias, cancelación real)
+│   │   ├── storage/         # DatabaseManager (SQLite WAL), SQLiteDownloadRepository, SQLiteFavoriteRepository, SQLiteSettingsRepository
+│   │   ├── media/           # FFmpegProcessAdapter, ThumbnailFetcher (con contención SSRF y caché)
+│   │   └── download/        # YtDlpDownloadEngine (yt-dlp 2026 + pre-probe de estrategias, incrustación de subtítulos, cookies)
 │   ├── event_bus/           # InProcessEventBus (Thread-safe)
 │   ├── logging/             # setup_logger y SensitiveDataFilter
-│   └── updater/             # Actualización automática (GitHub Releases oficial)
+│   └── updater/             # Actualizador automático desacoplado y seguro (GitHub Releases oficial)
 └── presentation/            # Capa de Presentación Nativa PySide6 (Qt6)
     ├── main_window.py       # MainWindow (QStackedWidget + Sidebar)
-    ├── view_models/         # MainViewModel (Conexión Signals/Slots y Casos de Uso)
-    ├── components/          # SidebarWidget, DownloadCardWidget
+    ├── view_models/         # MainViewModel, UpdateCoordinator (Signals/Slots reactivos)
+    ├── components/          # SidebarWidget, DownloadCardWidget, ContentPreviewCard, FormatTableWidget, BatchDownloadDialog, SystemTrayComponent
     ├── views/               # InicioView, DescargasView, HistorialView, FavoritosView, ConfiguracionView, AcercaDeView
-    └── styles/              # DARK_STYLE QSS (Estética multimedia oscura moderna, acentos #1db954)
+    └── styles/              # DARK_STYLE QSS, Paleta consistente, soporte Fusion oscuro nativo en menús contextuales
 ```
 
 ---
