@@ -31,27 +31,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.domain.entities.format_option import AudioFormat, DownloadType, VideoQualityOption
+from src.domain.entities.format_option import DownloadType, VideoQualityOption
 from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.exceptions.domain_exceptions import InvalidUrlError
 from src.domain.services.content_preview import (
     format_size_bytes,
 )
+from src.domain.services.filename_sanitizer import sanitize_filename
 from src.domain.services.url_sanitizer import sanitize_single_video_url
 from src.domain.value_objects.url import Url
 from src.presentation.components.animations import fade_in
 from src.presentation.components.app_icons import download_icon, search_icon
-from src.presentation.components.content_preview_card import ContentPreviewCard, ThumbWithBadge
+from src.presentation.components.content_preview_card import ContentPreviewCard
 from src.presentation.components.download_config_widget import DownloadConfigWidget
 from src.presentation.components.format_table_widget import (
     TAB_AUDIO,
     TAB_RECOMMENDED,
     TAB_VIDEO,
-    FormatRow,
     FormatTableHeader,
     FormatTableRow,
 )
-from src.presentation.components.thumbnail_loader import ThumbnailLabel
 from src.presentation.styles.styles import DARK_PALETTE
 
 URL_VALIDATION_DELAY_MS = 350
@@ -76,6 +75,7 @@ class InicioView(QWidget):
 
     analyze_requested = Signal(str)
     download_requested = Signal(object, str, str)  # (media_metadata, format_id, destination_path)
+    batch_requested = Signal()
 
     STATE_EMPTY = "empty"
     STATE_ANALYZING = "analyzing"
@@ -186,10 +186,20 @@ class InicioView(QWidget):
 
         self.btn_analyze = QPushButton("Analizar")
         self.btn_analyze.setObjectName("PrimaryButton")
-        self.btn_analyze.setMinimumWidth(130)
+        self.btn_analyze.setMinimumWidth(110)
         self.btn_analyze.setMinimumHeight(42)
         self.btn_analyze.clicked.connect(self._on_analyze_clicked)
         url_box.addWidget(self.btn_analyze)
+
+        self.btn_batch = QPushButton("Lote...")
+        self.btn_batch.setObjectName("SecondaryButton")
+        self.btn_batch.setToolTip("Descarga masiva de múltiples URLs")
+        self.btn_batch.setMinimumWidth(90)
+        self.btn_batch.setMinimumHeight(42)
+        self.btn_batch.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_batch.clicked.connect(self.batch_requested.emit)
+        url_box.addWidget(self.btn_batch)
+
         root.addLayout(url_box)
 
         # Banner de estado (vacío / analizando / éxito / error)
@@ -628,11 +638,13 @@ class InicioView(QWidget):
     def _clear_format_rows(self) -> None:
         while self.quality_layout.count():
             item = self.quality_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                self.quality_button_group.removeButton(widget.radio)
-                self.audio_button_group.removeButton(widget.radio)
-                widget.deleteLater()
+            if item is not None:
+                widget = item.widget()
+                if isinstance(widget, FormatTableRow):
+                    self.quality_button_group.removeButton(widget.radio)
+                    self.audio_button_group.removeButton(widget.radio)
+                if widget is not None:
+                    widget.deleteLater()
         self._quality_rows.clear()
         self._audio_rows.clear()
         self.quality_container.update()
@@ -714,10 +726,8 @@ class InicioView(QWidget):
             self.lbl_selection_summary.setText(message)
 
     @staticmethod
-    def _fallback_quality_options(metadata: MediaMetadata):
-        from src.domain.entities.format_option import VideoQualityOption
-
-        options = []
+    def _fallback_quality_options(metadata: MediaMetadata) -> List[VideoQualityOption]:
+        options: List[VideoQualityOption] = []
         for vf in metadata.video_formats:
             if not vf.height or vf.is_best_quality:
                 continue
@@ -751,12 +761,17 @@ class InicioView(QWidget):
                 return row.vqo
         return None
 
-    def _iter_quality_rows(self):
+    def _iter_quality_rows(self) -> List[FormatTableRow]:
         """Filas de VIDEO visibles en la pestaña actual (compatibilidad tests/e2e)."""
         return list(self._quality_rows)
 
     def _on_quality_selected(self, row: FormatTableRow) -> None:
         self._update_size_estimate()
+
+    def set_default_download_dir(self, path: str) -> None:
+        """Actualiza la carpeta de descarga por defecto en el widget de configuración."""
+        if hasattr(self, "download_config"):
+            self.download_config.set_destination_directory(path)
 
     def _set_download_mode(self, mode: DownloadType) -> None:
         self.selected_type = mode
@@ -922,10 +937,4 @@ class InicioView(QWidget):
     @staticmethod
     def _sanitize_filename(name: str) -> str:
         """Sanitiza un nombre de archivo eliminando caracteres peligrosos en Windows."""
-        if not name:
-            return "descarga"
-        cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name)
-        cleaned = cleaned.strip().rstrip(".")
-        if not cleaned:
-            return "descarga"
-        return cleaned[:180]
+        return sanitize_filename(name)

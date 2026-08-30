@@ -1,7 +1,6 @@
 import os
 import sys
 import pytest
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from src.infrastructure.adapters.download.ytdlp_download_engine import YtDlpDownloadEngine

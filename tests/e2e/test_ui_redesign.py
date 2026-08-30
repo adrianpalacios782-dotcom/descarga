@@ -7,8 +7,8 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from src.application.use_cases.create_download import CreateDownloadUseCase
-from src.domain.entities.download_task import DownloadTask, DownloadState
-from src.domain.entities.format_option import AudioFormat, DownloadType, FormatOption, VideoQualityOption
+from src.domain.entities.download_task import DownloadTask
+from src.domain.entities.format_option import AudioFormat, FormatOption, VideoQualityOption
 from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.value_objects.download_id import DownloadId
 from src.domain.value_objects.media_id import MediaId
@@ -148,7 +148,6 @@ class TestAnalyzePreviewFlowE2E:
 class TestDescargasCardStates:
 
     def _make_task(self, tmp_path, platform="YouTube", title="Tarea Uno"):
-        url = Url("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
         media = make_metadata(platform=platform, title=title)
         fmt = FormatOption(format_id="vq_best", extension="mp4")
         return DownloadTask(

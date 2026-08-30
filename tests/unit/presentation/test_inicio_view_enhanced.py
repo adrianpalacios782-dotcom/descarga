@@ -9,7 +9,6 @@ Verifica:
 
 import os
 import pytest
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from src.domain.entities.format_option import AudioFormat, VideoQualityOption

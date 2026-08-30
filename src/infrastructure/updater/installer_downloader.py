@@ -21,7 +21,7 @@ import hmac
 import os
 import threading
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from src.domain.exceptions.domain_exceptions import (
     InvalidUpdateInfoError,
@@ -31,10 +31,10 @@ from src.domain.ports.update_source import RemoteAsset
 from src.infrastructure.updater import http_client, update_config
 
 # Tipo del opener inyectable: (url) -> respuesta tipo HTTPResponse (context manager).
-Opener = Callable[[str], object]
+Opener = Callable[[str], Any]
 
 
-def _default_opener(url: str):
+def _default_opener(url: str) -> Any:
     return http_client.open_response(
         url=url,
         allowed_hosts=update_config.ALLOWED_ASSET_HOSTS,
@@ -157,7 +157,7 @@ class InstallerDownloader:
             raise
         except Exception as exc:
             self._discard_part(part_path)
-            raise UpdateDownloadError(f"Error durante la descarga del instalador.") from exc
+            raise UpdateDownloadError("Error durante la descarga del instalador.") from exc
 
         return target_path
 

@@ -64,7 +64,7 @@ class FFmpegProcessAdapter:
 
         try:
             import imageio_ffmpeg
-            bundled = imageio_ffmpeg.get_ffmpeg_exe()
+            bundled = str(imageio_ffmpeg.get_ffmpeg_exe())
             if bundled and os.path.exists(bundled) and self._is_safe_binary(bundled):
                 self._cached_executable = bundled
                 return bundled

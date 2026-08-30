@@ -1,7 +1,7 @@
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import yt_dlp
 
@@ -64,7 +64,7 @@ class TikTokAdapter(BasePlatformAdapter):
                     if not formats:
                         last_error = "TikTok devolvió 0 formatos disponibles"
                         continue
-                    return info
+                    return cast(Dict[str, Any], info)
             except Exception as ex:
                 last_error = str(ex)
                 logger.warning(f"TikTok: intento {attempt + 1} falló: {ex}")

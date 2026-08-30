@@ -4,6 +4,23 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 
 ---
 
+## [1.1.0] - 2026-08-29
+
+### Añadido
+- **Subtítulos y Accesibilidad:** Detección automática de pistas de subtítulos manuales y autogeneradas con `SubtitleTrack`. Opciones de incrustación directa en el video vía FFmpeg (`FFmpegEmbedSubtitle`) o descarga externa convertida a `.srt`.
+- **Descargas Masivas (Batch):** Nuevo diálogo modal `BatchDownloadDialog` con área de texto multilínea e importación de listas `.txt` para encolamiento asíncrono respetando la cola de concurrencia.
+- **Sistema de Favoritos:** Persistencia en SQLite (`user_favorites`), botón dinámico de guardado (`♡ Guardar` / `♥ En Favoritos`) y pantalla `FavoritosView` interactiva con descarga en 1 clic.
+- **System Tray y Notificaciones:** Integración en segundo plano con `AppTrayIcon`, notificaciones Toast nativas en Windows al finalizar descargas y opción de minimizar a la bandeja al cerrar.
+- **Historial Interactivo:** Menú contextual (clic derecho) y doble clic en `HistorialView` con acciones de reproducción local, localización en explorador de Windows, re-descarga y borrado en SQLite.
+- **Configuración y Cookies:** Persistencia en SQLite (`user_settings`) e inyección de `--cookies-from-browser` (Chrome, Edge, Firefox, Brave) para contenido protegido o con restricciones de edad.
+
+### Seguridad y Optimización
+- **Protección de Archivos en Windows:** Prevención de denegación de servicio por nombres de dispositivo reservados (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) en `filename_sanitizer`.
+- **Tipado Estricto y Calidad:** 0 errores en MyPy modo `--strict` sobre 98 módulos y linter Ruff completamente en verde.
+- **Suite de Pruebas:** 560 pruebas unitarias, de integración y E2E superadas al 100% con cero advertencias (`ResourceWarning` erradicado).
+
+---
+
 ## [1.0.4] - 2026-08-29
 
 ### Añadido

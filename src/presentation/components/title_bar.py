@@ -9,13 +9,11 @@ no se reimplementa lógica frágil de movimiento manual.
 import os
 import sys
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSizeGrip, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
-import src as app_pkg
 from src.presentation.components.app_icons import window_control_icons
-from src.presentation.styles.styles import DARK_PALETTE
 
 
 class TitleBar(QWidget):
@@ -27,7 +25,7 @@ class TitleBar(QWidget):
 
     HEIGHT = 46
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("TitleBar")
         self.setFixedHeight(self.HEIGHT)
@@ -95,7 +93,7 @@ class TitleBar(QWidget):
             "Restaurar" if maximized else "Maximizar"
         )
 
-    def is_drag_zone(self, pos) -> bool:
+    def is_drag_zone(self, pos: QPoint) -> bool:
         """True si el punto pertenece a la zona arrastrable (excluye botones)."""
         for button in (self.btn_minimize, self.btn_maximize, self.btn_close):
             if button.geometry().contains(pos):

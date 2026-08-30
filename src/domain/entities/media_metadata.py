@@ -4,6 +4,7 @@ from typing import List, Optional
 from src.domain.entities.format_option import (
     FormatOption, VideoFormat, AudioFormat, VideoQualityOption
 )
+from src.domain.entities.subtitle import SubtitleTrack
 from src.domain.value_objects.media_id import MediaId
 from src.domain.value_objects.url import Url
 
@@ -24,6 +25,7 @@ class MediaMetadata:
     video_formats: List[VideoFormat] = field(default_factory=list)
     audio_formats: List[AudioFormat] = field(default_factory=list)
     formats: List[FormatOption] = field(default_factory=list)
+    subtitles: List[SubtitleTrack] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.title or not self.title.strip():

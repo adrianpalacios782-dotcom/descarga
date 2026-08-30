@@ -28,8 +28,8 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
-addopts = "-v --strict-markers"
+pythonpath = ["src", "."]
+addopts = "-v --strict-markers --basetemp=scratch/pytest_tmp"
 
 # La versión se deriva de la única fuente de verdad: src/__init__.py::__version__
 [tool.setuptools.dynamic]
@@ -40,3 +40,12 @@ python_version = "3.11"
 strict = true
 ignore_missing_imports = true
 files = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "E731"]
+

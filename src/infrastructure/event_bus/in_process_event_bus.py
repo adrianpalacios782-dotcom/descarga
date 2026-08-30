@@ -22,14 +22,14 @@ class InProcessEventBus:
         with self._lock:
             if event_type not in self._subscribers:
                 self._subscribers[event_type] = []
-            if handler not in self._subscribers[event_type]: # type: ignore[comparison-overlap]
+            if handler not in self._subscribers[event_type]:
                 self._subscribers[event_type].append(handler) # type: ignore[arg-type]
 
     def unsubscribe(self, event_type: Type[E], handler: EventHandler[E]) -> None:
         """Remueve un manejador previamente registrado."""
         with self._lock:
-            if event_type in self._subscribers and handler in self._subscribers[event_type]: # type: ignore[comparison-overlap]
-                self._subscribers[event_type].remove(handler) # type: ignore[arg-type]
+            if event_type in self._subscribers and handler in self._subscribers[event_type]:
+                self._subscribers[event_type].remove(handler)
 
     def publish(self, event: DomainEvent) -> None:
         """Publica un evento a todos los manejadores suscritos de forma segura."""

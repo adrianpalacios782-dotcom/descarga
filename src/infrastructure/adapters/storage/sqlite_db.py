@@ -78,6 +78,16 @@ class DatabaseManager:
                     category TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS user_favorites (
+                    url TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    author TEXT NOT NULL DEFAULT '',
+                    platform TEXT NOT NULL DEFAULT '',
+                    duration_seconds REAL NOT NULL DEFAULT 0.0,
+                    thumbnail_url TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS system_error_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TEXT NOT NULL,
@@ -128,5 +138,20 @@ class DatabaseManager:
     def close(self) -> None:
         """Cierra la conexión activa."""
         if self._connection is not None:
-            self._connection.close()
+            try:
+                self._connection.close()
+            except Exception:
+                pass
             self._connection = None
+
+    def __enter__(self) -> "DatabaseManager":
+        return self
+
+    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass

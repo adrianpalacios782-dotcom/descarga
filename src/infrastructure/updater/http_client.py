@@ -8,6 +8,7 @@ Características de seguridad:
 - Sin cookies, sin tokens, sin proxies personalizados; TLS verificado por el
   contexto por defecto (validación de certificados del sistema activa).
 """
+from typing import Any
 from urllib.parse import urlparse
 from urllib.request import (
     HTTPRedirectHandler,
@@ -51,7 +52,7 @@ class _AllowlistRedirectHandler(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
         if not _url_host_allowed(newurl, self._allowed_hosts):
             raise DisallowedRedirectError(
-                f"Redirección hacia host no permitido bloqueada."
+                "Redirección hacia host no permitido bloqueada."
             )
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -69,18 +70,18 @@ def validate_url_or_raise(url: str, allowed_hosts: frozenset[str]) -> None:
     try:
         parsed = urlparse(url)
     except ValueError as exc:
-        raise UnsafeUrlError(f"URL malformada rechazada.") from exc
+        raise UnsafeUrlError("URL malformada rechazada.") from exc
     if parsed.scheme != "https":
-        raise UnsafeUrlError(f"Esquema no permitido (solo HTTPS).")
+        raise UnsafeUrlError("Esquema no permitido (solo HTTPS).")
     if not parsed.hostname or parsed.hostname.lower() not in allowed_hosts:
-        raise UnsafeUrlError(f"Host no permitido.")
+        raise UnsafeUrlError("Host no permitido.")
 
 
 def open_response(
     url: str,
     allowed_hosts: frozenset[str],
     timeout: float,
-):
+) -> Any:
     """Abre una respuesta HTTPS validando URL y siguiendo solo redirecciones seguras.
 
     Devuelve un objeto similar a http.client.HTTPResponse (context manager).
@@ -107,4 +108,4 @@ def fetch_bytes(
         data = response.read(max_bytes + 1)
     if len(data) > max_bytes:
         raise UpdateError("El payload remoto excede la cota de tamaño permitida.")
-    return data
+    return bytes(data)

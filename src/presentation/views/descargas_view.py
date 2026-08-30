@@ -15,7 +15,7 @@ class DescargasView(QWidget):
     open_file_requested = Signal(str)
     open_folder_requested = Signal(str)
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.cards: Dict[str, DownloadCardWidget] = {}
 
@@ -41,9 +41,9 @@ class DescargasView(QWidget):
         layout.addSpacing(24)
         layout.addWidget(self.lbl_empty)
 
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
 
         self.container = QWidget()
         self.card_layout = QVBoxLayout(self.container)
@@ -51,8 +51,8 @@ class DescargasView(QWidget):
         self.card_layout.setSpacing(12)
         self.card_layout.addStretch()
 
-        self.scroll.setWidget(self.container)
-        layout.addWidget(self.scroll)
+        self.scroll_area.setWidget(self.container)
+        layout.addWidget(self.scroll_area)
 
     def add_task(self, task: DownloadTask) -> None:
         if task.id.value in self.cards:

@@ -13,6 +13,7 @@ Garantías:
 """
 import logging
 import threading
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
@@ -53,7 +54,7 @@ class UpdateCoordinator(QObject):
         self._checking = False
         self._updating = False
         self._cancel_event = threading.Event()
-        self._temp_dir = None
+        self._temp_dir: Path | None = None
 
     # ------------------------------------------------------------ Consulta
     def check_for_updates(self, manual: bool = False) -> None:
@@ -119,6 +120,10 @@ class UpdateCoordinator(QObject):
 
     def _download_worker(self, asset) -> None:  # type: ignore[no-untyped-def]
         temp_dir = self._temp_dir
+        if temp_dir is None:
+            self._updating = False
+            self.update_failed.emit("No se pudo preparar el directorio temporal.")
+            return
         installer_path = None
         try:
             self.download_status.emit("Descargando actualización…")

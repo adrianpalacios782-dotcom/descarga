@@ -7,18 +7,16 @@ Proporciona:
 - Panel de conversión de audio con selectores honestos de contenedor y bitrate.
 """
 
-from typing import List, Optional
+from typing import Optional
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import (
-    QButtonGroup,
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QRadioButton,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -214,7 +212,7 @@ class FormatTableRow(QFrame):
             style.unpolish(self)
             style.polish(self)
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         self.radio.setChecked(True)
         super().mousePressEvent(event)
 

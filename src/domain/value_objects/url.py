@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from urllib.parse import urlparse
 import ipaddress
-import re
 
 from src.domain.exceptions.domain_exceptions import InvalidUrlError
 

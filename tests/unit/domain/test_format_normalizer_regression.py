@@ -7,7 +7,6 @@
 - Las tarjetas solo se generan a partir de formatos realmente disponibles,
   en WEBM, MP4, video-only + audio-only.
 """
-from src.domain.entities.format_option import VideoQualityOption
 from src.domain.services.format_normalizer import FormatNormalizer
 
 

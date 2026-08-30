@@ -39,8 +39,14 @@ def main() -> None:
     from src.infrastructure.adapters.media.ffmpeg_adapter import FFmpegProcessAdapter
     from src.infrastructure.adapters.platforms.platform_registry import PlatformRegistry
     from src.infrastructure.adapters.storage.sqlite_db import DatabaseManager
+    from src.infrastructure.adapters.storage.sqlite_favorite_repository import (
+        SQLiteFavoriteRepository,
+    )
     from src.infrastructure.adapters.storage.sqlite_repository import (
         SQLiteDownloadRepository,
+    )
+    from src.infrastructure.adapters.storage.sqlite_settings_repository import (
+        SQLiteSettingsRepository,
     )
     from src.infrastructure.event_bus.in_process_event_bus import InProcessEventBus
     from src.presentation.main_window import MainWindow
@@ -51,21 +57,33 @@ def main() -> None:
     db_manager.init_tables()
 
     repository = SQLiteDownloadRepository(db_manager=db_manager)
+    settings_repository = SQLiteSettingsRepository(db_manager=db_manager)
+    favorite_repository = SQLiteFavoriteRepository(db_manager=db_manager)
     event_bus = InProcessEventBus()
-    platform_registry = PlatformRegistry()
+
+    # Cargar preferencias persistidas
+    saved_browser = settings_repository.get("cookies_browser", default="")
+    saved_max_concurrent = settings_repository.get("max_concurrent_downloads", default=2)
+    saved_default_dir = settings_repository.get(
+        "default_download_dir",
+        default=os.path.join(os.path.expanduser("~"), "Downloads"),
+    )
+
+    platform_registry = PlatformRegistry(cookies_from_browser=saved_browser or None)
     ffmpeg_adapter = FFmpegProcessAdapter()
     download_engine = YtDlpDownloadEngine(
         event_bus=event_bus,
         ffmpeg_adapter=ffmpeg_adapter,
-        repository=repository
+        repository=repository,
+        cookies_from_browser=saved_browser or None,
     )
 
-    # Cola de descargas: 2 descargas simultáneas por defecto, resto "En cola".
+    # Cola de descargas: concurrencia según preferencia guardada, resto "En cola".
     download_queue = DownloadQueueManager(
         engine=download_engine,
         event_bus=event_bus,
         repository=repository,
-        max_concurrent=2,
+        max_concurrent=int(saved_max_concurrent),
     )
 
     # 4. ViewModel & GUI
@@ -96,9 +114,12 @@ def main() -> None:
         repository=repository,
         event_bus=event_bus,
         download_queue=download_queue,
+        settings_repository=settings_repository,
     )
 
-    window = MainWindow(view_model=view_model)
+    window = MainWindow(view_model=view_model, favorite_repository=favorite_repository)
+    if saved_default_dir:
+        window.inicio_view.set_default_download_dir(str(saved_default_dir))
     if not app.windowIcon().isNull():
         window.setWindowIcon(app.windowIcon())
     window.show()
@@ -106,7 +127,12 @@ def main() -> None:
     # Chequeo único de actualizaciones al iniciar (no bloqueante; falla en silencio).
     window.schedule_startup_update_check()
 
-    sys.exit(app.exec())
+    exit_code = app.exec()
+    try:
+        db_manager.close()
+    except Exception:
+        pass
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

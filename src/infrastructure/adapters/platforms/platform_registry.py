@@ -1,9 +1,10 @@
-from typing import List
+from typing import List, Optional
 
 from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.exceptions.domain_exceptions import UnsupportedPlatformError
 from src.domain.ports.platform_adapter import IPlatformAdapter
 from src.domain.value_objects.url import Url
+from src.infrastructure.adapters.platforms.base_platform_adapter import BasePlatformAdapter
 from src.infrastructure.adapters.platforms.facebook_adapter import FacebookAdapter
 from src.infrastructure.adapters.platforms.generic_adapter import GenericAdapter
 from src.infrastructure.adapters.platforms.instagram_adapter import InstagramAdapter
@@ -14,14 +15,22 @@ from src.infrastructure.adapters.platforms.youtube_adapter import YouTubeAdapter
 class PlatformRegistry(IPlatformAdapter):
     """Orquestador/Registro de adaptadores de plataforma (Plugin Strategy)."""
 
-    def __init__(self) -> None:
+    def __init__(self, cookies_from_browser: Optional[str] = None) -> None:
         self._adapters: List[IPlatformAdapter] = [
-            YouTubeAdapter(),
-            TikTokAdapter(),
-            InstagramAdapter(),
-            FacebookAdapter(),
-            GenericAdapter(),
+            YouTubeAdapter(cookies_from_browser=cookies_from_browser),
+            TikTokAdapter(cookies_from_browser=cookies_from_browser),
+            InstagramAdapter(cookies_from_browser=cookies_from_browser),
+            FacebookAdapter(cookies_from_browser=cookies_from_browser),
+            GenericAdapter(cookies_from_browser=cookies_from_browser),
         ]
+
+    def set_cookies_from_browser(self, browser: Optional[str]) -> None:
+        """Propaga el navegador de cookies a todos los adaptadores."""
+        for adapter in self._adapters:
+            if isinstance(adapter, BasePlatformAdapter):
+                adapter.cookies_from_browser = (
+                    browser.strip() if browser and browser.strip() else None
+                )
 
     def register_adapter(self, adapter: IPlatformAdapter) -> None:
         """Registra un nuevo adaptador de plataforma en tiempo de ejecución."""

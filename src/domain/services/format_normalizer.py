@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import re
 
 from src.domain.entities.format_option import (
-    FormatOption, StreamType, VideoFormat, AudioFormat, VideoQualityOption
+    FormatOption, VideoFormat, AudioFormat, VideoQualityOption
 )
 
 
@@ -240,7 +240,8 @@ class FormatNormalizer:
             ext = str(f.get("ext") or "mp4")
             raw_height_present = bool(f.get("height"))
             std_height = cls.infer_standard_height(f)
-            fps = float(f.get("fps")) if f.get("fps") else 0.0
+            raw_fps = f.get("fps")
+            fps = float(raw_fps) if raw_fps is not None else 0.0
             res = str(f.get("format_note") or f.get("resolution") or "")
             if not res and std_height:
                 res = f"{std_height}p"

@@ -7,7 +7,6 @@ import pytest
 from src.domain.entities.download_task import DownloadTask, DownloadState
 from src.domain.entities.format_option import FormatOption, StreamType
 from src.domain.entities.media_metadata import MediaMetadata
-from src.domain.exceptions.domain_exceptions import FormatNotFoundError, QualityDegradationError
 from src.domain.events.domain_events import (
     DownloadCompletedEvent,
     DownloadFailedEvent,

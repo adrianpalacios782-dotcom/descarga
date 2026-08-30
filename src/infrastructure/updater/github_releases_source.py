@@ -15,7 +15,7 @@ sin red real.
 import json
 import logging
 import urllib.error
-from typing import Callable
+from typing import Any, Callable
 
 from src.domain.exceptions.domain_exceptions import (
     InvalidUpdateInfoError,
@@ -40,7 +40,7 @@ _MAX_JSON_BYTES = 1024 * 1024
 _MAX_CHECKSUM_FILE_BYTES = 256 * 1024
 
 
-def _default_fetch_json(url: str) -> dict:
+def _default_fetch_json(url: str) -> dict[str, Any]:
     raw = http_client.fetch_bytes(
         url=url,
         allowed_hosts=ALLOWED_METADATA_HOSTS,
@@ -75,7 +75,7 @@ class GitHubReleasesSource(IUpdateSource):
     def __init__(
         self,
         api_url: str = RELEASES_API_URL,
-        fetch_json: Callable[[str], dict] | None = None,
+        fetch_json: Callable[[str], dict[str, Any]] | None = None,
         fetch_text: Callable[[str], str] | None = None,
     ) -> None:
         if not update_config.is_allowed_metadata_url(api_url):
@@ -123,7 +123,7 @@ class GitHubReleasesSource(IUpdateSource):
     # ------------------------------------------------------------- Internos
     @staticmethod
     def _select_installer_asset(
-        data: dict, tag_name: str
+        data: dict[str, Any], tag_name: str
     ) -> tuple[str, str, int | None, str | None] | None:
         """Selecciona el asset instalador de Windows del release.
 
@@ -178,7 +178,7 @@ class GitHubReleasesSource(IUpdateSource):
 
     def _resolve_sha256(
         self,
-        data: dict,
+        data: dict[str, Any],
         installer_name: str,
         installer_url: str,
         digest_hex: str | None,
@@ -208,7 +208,7 @@ class GitHubReleasesSource(IUpdateSource):
             )
         return resolved
 
-    def _sha256_from_checksum_assets(self, data: dict, installer_name: str) -> str | None:
+    def _sha256_from_checksum_assets(self, data: dict[str, Any], installer_name: str) -> str | None:
         assets = data.get("assets")
         if not isinstance(assets, list):
             return None
@@ -242,7 +242,7 @@ class GitHubReleasesSource(IUpdateSource):
         return result
 
 
-def _digest_from_entry(entry: dict) -> str | None:
+def _digest_from_entry(entry: dict[str, Any]) -> str | None:
     """Extrae y valida el campo `digest` del asset ('sha256:<hex64>')."""
     digest = entry.get("digest")
     if not isinstance(digest, str) or ":" not in digest:
