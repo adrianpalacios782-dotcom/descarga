@@ -228,8 +228,20 @@ class ConfiguracionView(QWidget):
         self.combo_theme = QComboBox()
         self.combo_theme.setMinimumWidth(260)
         self.combo_theme.setFixedHeight(36)
-        self.combo_theme.addItems(["Oscuro Multimedia (Default)", "Oscuro OLED"])
+        self.combo_theme.addItems([
+            "Oscuro Multimedia (Default)",
+            "Oscuro OLED",
+            "Claro Moderno",
+        ])
+        self.combo_theme.currentTextChanged.connect(self._on_theme_preview)
         return self.combo_theme
+
+    def _on_theme_preview(self, theme_name: str) -> None:
+        from src.presentation.styles.theme import get_theme_qss
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        if app:
+            app.setStyleSheet(get_theme_qss(theme_name))
 
     def _combo_browser(self) -> QComboBox:
         self.combo_browser = QComboBox()

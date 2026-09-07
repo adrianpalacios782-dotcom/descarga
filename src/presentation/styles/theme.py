@@ -107,29 +107,73 @@ DARK_PALETTE = Palette(
 
 
 LIGHT_PALETTE = Palette(
-    bg_window="#f5f5f7",
-    bg_sidebar="#eeeef1",
-    bg_titlebar="#eeeef1",
-    surface="#ffffff",
-    surface_hover="#f2f2f5",
-    surface_active="#e6e6ea",
-    surface_sunken="#fafafa",
-    border="#e2e2e6",
-    border_strong="#cfced6",
+    bg_window="#F8FAFC",
+    bg_sidebar="#F1F5F9",
+    bg_titlebar="#F1F5F9",
+    surface="#FFFFFF",
+    surface_hover="#F1F5F9",
+    surface_active="#E2E8F0",
+    surface_sunken="#F8FAFC",
+    border="rgba(0, 0, 0, 0.08)",
+    border_strong="rgba(0, 0, 0, 0.16)",
+    border_focus="#4F46E5",
+    text_primary="#0F172A",
+    text_secondary="#475569",
+    text_tertiary="#94A3B8",
+    text_on_accent="#FFFFFF",
+    accent="#4F46E5",
+    accent_hover="#6366F1",
+    accent_pressed="#4338CA",
+    accent_dim="rgba(79, 70, 229, 0.12)",
+    accent_text="#4F46E5",
+    danger="#EF4444",
+    warning="#F59E0B",
+    close_hover_bg="#e81123",
+)
+
+
+OLED_PALETTE = Palette(
+    bg_window="#000000",
+    bg_sidebar="#000000",
+    bg_titlebar="#000000",
+    surface="#0B0B0B",
+    surface_hover="#141414",
+    surface_active="#1F1F1F",
+    surface_sunken="#050505",
+    border="rgba(255, 255, 255, 0.12)",
+    border_strong="rgba(255, 255, 255, 0.22)",
     border_focus="#6366F1",
-    text_primary="#1a1a1e",
-    text_secondary="#5c5c66",
-    text_tertiary="#9a9aa2",
-    text_on_accent="#ffffff",
+    text_primary="#FFFFFF",
+    text_secondary="#A1A1AA",
+    text_tertiary="#71717A",
+    text_on_accent="#FFFFFF",
     accent="#6366F1",
     accent_hover="#818CF8",
     accent_pressed="#4F46E5",
-    accent_dim="rgba(99, 102, 241, 0.12)",
-    accent_text="#4F46E5",
-    danger="#dc2626",
-    warning="#b45309",
+    accent_dim="rgba(99, 102, 241, 0.16)",
+    accent_text="#A5B4FC",
+    danger="#EF4444",
+    warning="#F59E0B",
     close_hover_bg="#e81123",
 )
+
+
+THEME_PALETTES: dict[str, Palette] = {
+    "Oscuro Multimedia (Default)": DARK_PALETTE,
+    "Oscuro OLED": OLED_PALETTE,
+    "Claro Moderno": LIGHT_PALETTE,
+    "Claro": LIGHT_PALETTE,
+    "Oscuro": DARK_PALETTE,
+}
+
+
+def get_theme_palette(theme_name: str) -> Palette:
+    return THEME_PALETTES.get(theme_name, DARK_PALETTE)
+
+
+def get_theme_qss(theme_name: str) -> str:
+    palette = get_theme_palette(theme_name)
+    return build_qss(palette)
 
 
 def build_qss(p: Palette) -> str:
