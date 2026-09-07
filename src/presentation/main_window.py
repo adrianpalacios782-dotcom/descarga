@@ -4,7 +4,7 @@ import threading
 from typing import Any
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QDragEnterEvent, QDragMoveEvent, QDropEvent
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -152,6 +152,9 @@ class MainWindow(QMainWindow):
             self.tray_icon.show()
         self._setup_tray_signals()
 
+        # Soporte para Drag & Drop global en la ventana
+        self.setAcceptDrops(True)
+
     def _apply_frameless(self) -> None:
         """Activa el modo frameless solo si es estable en esta plataforma."""
         try:
@@ -187,6 +190,36 @@ class MainWindow(QMainWindow):
                 self._tray_balloon_shown = True
         else:
             super().closeEvent(event)
+
+    # ----------------------------------------------------------- Drag & Drop
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 (API Qt)
+        if hasattr(self, "inicio_view") and self.inicio_view._can_accept_drag(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:  # noqa: N802 (API Qt)
+        if hasattr(self, "inicio_view") and self.inicio_view._can_accept_drag(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 (API Qt)
+        if not hasattr(self, "inicio_view"):
+            event.ignore()
+            return
+        urls = self.inicio_view._extract_urls_from_mime(event.mimeData())
+        if not urls:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        if len(urls) == 1:
+            self.sidebar.button_group.button(0).setChecked(True)
+            self.stacked.setCurrentIndex(0)
+            self.inicio_view.set_url(urls[0])
+            self.inicio_view._on_analyze_clicked()
+        else:
+            self._open_batch_download_dialog(initial_urls=urls)
 
     # ------------------------------------------- Redimensionado nativo
     def nativeEvent(self, event_type: Any, message: Any) -> Any:  # noqa: N802 (API Qt)
@@ -285,6 +318,8 @@ class MainWindow(QMainWindow):
 
         # ConfiguracionView -> ViewModel / InicioView
         self.configuracion_view.settings_saved.connect(self._on_settings_saved)
+        self.inicio_view.batch_requested.connect(self._open_batch_download_dialog)
+        self.inicio_view.batch_requested_with_urls.connect(self._open_batch_download_dialog)
 
         # HistorialView -> acciones interactivas
         self.historial_view.open_file_requested.connect(self._open_file)
@@ -450,11 +485,13 @@ class MainWindow(QMainWindow):
         dlg.playlist_download_requested.connect(self._on_start_batch_download)
         dlg.exec()
 
-    def _open_batch_download_dialog(self) -> None:
+    def _open_batch_download_dialog(self, initial_urls: Any = None) -> None:
         """Abre el diálogo modal de descarga masiva por lotes."""
         from src.presentation.components.batch_download_dialog import BatchDownloadDialog
         default_dir = self.inicio_view.download_config.get_destination_directory() or ""
         dlg = BatchDownloadDialog(default_dir=default_dir, parent=self)
+        if initial_urls and isinstance(initial_urls, list):
+            dlg.txt_urls.setPlainText("\n".join(initial_urls))
         dlg.batch_requested.connect(self._on_start_batch_download)
         dlg.exec()
 

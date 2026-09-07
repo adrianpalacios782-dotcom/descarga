@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
 )
 
 from src.domain.entities.playlist_metadata import PlaylistMetadata
-from src.presentation.styles.styles import DARK_STYLE
 
 
 class PlaylistDownloadDialog(QDialog):
@@ -40,7 +39,6 @@ class PlaylistDownloadDialog(QDialog):
         self.setWindowTitle(f"Descargar Playlist — {playlist.title}")
         self.resize(750, 580)
         self.setMinimumSize(600, 460)
-        self.setStyleSheet(DARK_STYLE)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)

@@ -132,6 +132,13 @@ class MainViewModel(QObject):
             except (ValueError, TypeError):
                 pass
 
+        concurrent_fragments = settings.get("concurrent_fragments")
+        if concurrent_fragments is not None and hasattr(self.download_engine, "set_concurrent_fragments"):
+            try:
+                self.download_engine.set_concurrent_fragments(int(concurrent_fragments))
+            except (ValueError, TypeError):
+                pass
+
     @staticmethod
     def _parse_speed_limit(val: str) -> Optional[int]:
         if not val or val == "0" or "sin límite" in val.lower():

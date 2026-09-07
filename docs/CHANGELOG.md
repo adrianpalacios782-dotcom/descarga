@@ -2,6 +2,25 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [1.3.0] - 2026-09-07
+
+### Añadido & Optimizado (Modernización y Expansión Integral)
+- **Expansión Universal de Plataformas y Modo Genérico Seguro:**
+  - Reconocimiento nativo y badges dedicados para **X / Twitter** (`x.com`, `twitter.com`, `t.co`), **Reddit** (`reddit.com`, `v.redd.it`), **Vimeo** (`vimeo.com`), **SoundCloud** (`soundcloud.com`), **Pinterest** (`pinterest.com`, `pin.it`), **Dailymotion** (`dailymotion.com`, `dai.ly`), **Bilibili** (`bilibili.com`, `b23.tv`), **Bluesky** (`bsky.app`), y **Threads** (`threads.net`).
+  - Modo `Generic` seguro que permite analizar y descargar desde cualquier sitio web público compatible con yt-dlp.
+  - Blindaje estricto anti-SSRF: bloqueo de localhost, direcciones privadas RFC 1918, loopback, redes link-local (`169.254.x.x`), rangos reservados, multicast, puertos peligrosos y TLDs internos reservados (`.local`, `.internal`, `.lan`, etc.).
+  - `GenericAdapter` mejorado para inferir dinámicamente el nombre de plataforma y extractor de yt-dlp.
+- **Resiliencia en Persistencia SQLite y Paginación:**
+  - Sustitución de `INNER JOIN format_options` por `LEFT JOIN format_options` en `SqliteDownloadRepository`, garantizando que ninguna tarea histórica quede oculta por discrepancias menores de formato.
+  - Nuevos métodos `get_paginated(limit, offset, search_query, platform_filter, order_by, descending)` y `count()` con consultas 100% parametrizadas y ordenamiento validado contra lista blanca.
+- **Sincronización Completa del Sistema de Temas (Claro / Oscuro / OLED):**
+  - Refactorización de `ThumbnailLabel` (`thumbnail_loader.py`) sustituyendo colores hexadecimales oscuros hardcodeados por tokens dinámicos de `get_current_palette()`.
+  - Conexión reactiva en `ThumbnailLabel.changeEvent` para redibujado instantáneo al conmutar entre Claro Moderno, Oscuro Multimedia y Oscuro OLED.
+  - Eliminación de estilos forzados en `PlaylistDownloadDialog`, `BatchDownloadDialog`, `UpdateDialog` y menús contextuales (`QMenu`), permitiendo herencia pura de los tokens de diseño.
+- **Rendimiento de Descargas y Drag & Drop Intuitivo:**
+  - Configuración de fragmentos concurrentes DASH/HLS (1 a 8 fragmentos, por defecto 4) en `ConfiguracionView` y `YtDlpDownloadEngine`, persistida en `SettingsRepository`.
+  - Soporte para Drag & Drop (arrastrar y soltar) tanto de URLs individuales como de archivos `.txt` masivos directamente sobre `InicioView` y `MainWindow` con retroalimentación visual en tiempo real.
+
 ## [1.2.2] - 2026-09-07
 
 ### Añadido & Optimizado

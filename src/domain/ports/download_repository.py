@@ -26,3 +26,25 @@ class IDownloadRepository(ABC):
     def delete(self, task_id: DownloadId) -> None:
         """Elimina una tarea de descarga de la persistencia."""
         pass
+
+    @abstractmethod
+    def get_paginated(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        search_query: Optional[str] = None,
+        platform_filter: Optional[str] = None,
+        order_by: str = "created_at",
+        descending: bool = True,
+    ) -> List[DownloadTask]:
+        """Obtiene una lista paginada de tareas de descarga con filtros y ordenamiento configurables."""
+        pass
+
+    @abstractmethod
+    def count(
+        self,
+        search_query: Optional[str] = None,
+        platform_filter: Optional[str] = None,
+    ) -> int:
+        """Retorna el número total de tareas que coinciden con los filtros especificados."""
+        pass

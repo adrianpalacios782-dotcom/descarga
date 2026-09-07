@@ -102,13 +102,69 @@ class Url:
 
     @staticmethod
     def _validate_allowed_domain(hostname: str) -> None:
+        """Valida que el host corresponda a un dominio público seguro (prevención anti-SSRF)."""
+        Url._validate_public_domain(hostname)
+
+    @staticmethod
+    def _validate_public_domain(hostname: str) -> None:
+        """Valida que el host sea un FQDN o IP pública válida, bloqueando redes internas o no enrutables."""
         h = hostname.lower().rstrip(".")
-        for allowed in ALLOWED_DOMAINS:
-            if h == allowed or h.endswith("." + allowed):
-                return
-        raise InvalidUrlError(
-            f"El dominio '{hostname}' no pertenece a una plataforma soportada."
-        )
+        if not h:
+            raise InvalidUrlError("El hostname no puede estar vacío.")
+
+        # Si es una dirección IP válida, _validate_not_private_ip ya confirmó que no es privada ni reservada.
+        try:
+            ipaddress.ip_address(h)
+            return
+        except ValueError:
+            pass
+
+        # Para dominios: debe contener al menos un punto para evitar hosts de intranet/LAN (ej. http://intranet/)
+        if "." not in h:
+            raise InvalidUrlError(
+                f"El host '{hostname}' no es un dominio público válido (debe contener un TLD)."
+            )
+
+        if len(h) > 253:
+            raise InvalidUrlError("El nombre de dominio excede la longitud máxima permitida (253 caracteres).")
+
+        labels = h.split(".")
+        tld = labels[-1]
+
+        # Bloquear TLDs reservados para redes locales o pruebas (RFC 6761, RFC 8375)
+        RESERVED_TLDS = {
+            "local", "localhost", "internal", "lan", "home", "corp",
+            "arpa", "test", "example", "invalid", "onion",
+        }
+        if tld in RESERVED_TLDS:
+            raise InvalidUrlError(
+                f"El dominio '{hostname}' utiliza un TLD reservado o de red interna no permitido."
+            )
+
+        import re
+        for label in labels:
+            if not label:
+                raise InvalidUrlError(
+                    f"El dominio '{hostname}' contiene etiquetas vacías no válidas."
+                )
+            if len(label) > 63:
+                raise InvalidUrlError(
+                    f"La etiqueta de dominio '{label}' excede los 63 caracteres máximos."
+                )
+            if label.startswith("-") or label.endswith("-"):
+                raise InvalidUrlError(
+                    f"La etiqueta de dominio '{label}' no puede empezar ni terminar con guión."
+                )
+            if not re.match(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", label):
+                raise InvalidUrlError(
+                    f"La etiqueta de dominio '{label}' contiene caracteres no permitidos."
+                )
+
+        # Validar formato del TLD (alfabético o punycode de al menos 2 caracteres)
+        if not (re.match(r"^[a-z]{2,}$", tld) or tld.startswith("xn--")):
+            raise InvalidUrlError(
+                f"El TLD '{tld}' no es un dominio de nivel superior público válido."
+            )
 
     def detect_platform(self) -> str:
         parsed = urlparse(self.value)
@@ -127,6 +183,24 @@ class Url:
             return "Twitch"
         elif host in ("kick.com",) or host.endswith(".kick.com"):
             return "Kick"
+        elif host in ("twitter.com", "x.com", "t.co") or host.endswith(".twitter.com") or host.endswith(".x.com"):
+            return "Twitter"
+        elif host in ("reddit.com", "v.redd.it") or host.endswith(".reddit.com"):
+            return "Reddit"
+        elif host in ("vimeo.com", "player.vimeo.com") or host.endswith(".vimeo.com"):
+            return "Vimeo"
+        elif host in ("soundcloud.com", "snd.sc") or host.endswith(".soundcloud.com"):
+            return "SoundCloud"
+        elif host in ("pinterest.com", "pin.it") or host.endswith(".pinterest.com"):
+            return "Pinterest"
+        elif host in ("dailymotion.com", "dai.ly") or host.endswith(".dailymotion.com"):
+            return "Dailymotion"
+        elif host in ("bilibili.com", "b23.tv") or host.endswith(".bilibili.com"):
+            return "Bilibili"
+        elif host in ("bsky.app",) or host.endswith(".bsky.app"):
+            return "Bluesky"
+        elif host in ("threads.net",) or host.endswith(".threads.net"):
+            return "Threads"
         return "Generic"
 
     def is_playlist(self) -> bool:
