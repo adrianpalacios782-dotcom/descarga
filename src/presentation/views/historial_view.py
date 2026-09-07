@@ -51,10 +51,12 @@ class HistorialView(QWidget):
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Buscar por título...")
         self.search_input.setClearButtonEnabled(True)
+        self.search_input.setFixedHeight(36)
 
         self.combo_platform = QComboBox()
+        self.combo_platform.setFixedHeight(36)
         self.combo_platform.addItems([
-            "Todas las plataformas", "YouTube", "TikTok", "Instagram", "Facebook", "Twitch", "Kick"
+            "Todas las plataformas", "YouTube", "TikTok", "Instagram", "Facebook", "Twitch", "Kick", "SoundCloud", "Reddit", "Twitter"
         ])
 
         self.lbl_count = QLabel("")

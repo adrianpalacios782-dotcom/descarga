@@ -158,6 +158,7 @@ class ContentPreviewCard(QFrame):
         self.combo_subtitles = QComboBox()
         self.combo_subtitles.setObjectName("SubtitleCombo")
         self.combo_subtitles.setMinimumWidth(200)
+        self.combo_subtitles.setFixedHeight(36)
         self.combo_subtitles.addItem("Sin subtítulos", userData=None)
 
         self.chk_embed_sub = QCheckBox("Incrustar en video")

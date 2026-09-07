@@ -54,10 +54,12 @@ class DownloadConfigWidget(QFrame):
         default_downloads = os.path.join(os.path.expanduser("~"), "Downloads")
         self.txt_dest = QLineEdit(default_downloads)
         self.txt_dest.setObjectName("PathInput")
+        self.txt_dest.setFixedHeight(36)
 
         self.btn_browse = QPushButton("Examinar...")
         self.btn_browse.setObjectName("SecondaryButton")
         self.btn_browse.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_browse.setFixedHeight(36)
         self.btn_browse.clicked.connect(self._on_browse_clicked)
 
         dest_row.addWidget(self.txt_dest, stretch=1)
@@ -78,6 +80,7 @@ class DownloadConfigWidget(QFrame):
         self.txt_filename.setObjectName("FilenameInput")
         self.txt_filename.setPlaceholderText("Nombre del archivo final...")
         self.txt_filename.setClearButtonEnabled(True)
+        self.txt_filename.setFixedHeight(36)
 
         file_box.addWidget(lbl_filename)
         file_box.addWidget(self.txt_filename)
@@ -100,11 +103,13 @@ class DownloadConfigWidget(QFrame):
         self.txt_start = QLineEdit("")
         self.txt_start.setPlaceholderText("00:00")
         self.txt_start.setMaximumWidth(90)
+        self.txt_start.setFixedHeight(36)
 
         lbl_end = QLabel("Hasta:")
         self.txt_end = QLineEdit("")
         self.txt_end.setPlaceholderText("02:30")
         self.txt_end.setMaximumWidth(90)
+        self.txt_end.setFixedHeight(36)
 
         trim_layout.addWidget(lbl_start)
         trim_layout.addWidget(self.txt_start)
@@ -126,6 +131,7 @@ class DownloadConfigWidget(QFrame):
         lbl_preset = QLabel("Preset de audio profesional:")
         lbl_preset.setObjectName("FieldLabel")
         self.combo_audio_preset = QComboBox()
+        self.combo_audio_preset.setFixedHeight(36)
         for preset in AudioPreset:
             self.combo_audio_preset.addItem(preset.display_name, preset.value)
 
