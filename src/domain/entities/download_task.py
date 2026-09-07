@@ -166,3 +166,18 @@ class DownloadTask:
         self.quality_warning = None
         self.started_at = None
         self.completed_at = None
+
+
+@dataclass(frozen=True)
+class DownloadRequest:
+    """Solicitud inmutable para parametrizar la creación de una tarea de descarga."""
+
+    media: MediaMetadata
+    format_id: str
+    destination_path: str
+    subtitle_config: Optional[SubtitleConfig] = None
+    time_range: Optional[TimeRange] = None
+    audio_preset: Optional[AudioPreset] = None
+    embed_thumbnail: bool = True
+    selected_format: Optional[FormatOption] = None
+

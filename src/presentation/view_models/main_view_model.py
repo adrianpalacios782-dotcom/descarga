@@ -13,7 +13,7 @@ from src.application.use_cases import (
     CancelDownloadUseCase,
     RetryDownloadUseCase,
 )
-from src.domain.entities.download_task import DownloadTask
+from src.domain.entities.download_task import DownloadRequest, DownloadTask
 from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.entities.subtitle import SubtitleConfig
 from src.domain.value_objects.audio_preset import AudioPreset
@@ -225,6 +225,39 @@ class MainViewModel(QObject):
         mgr.check_for_updates_async(
             on_finished=on_check_done,
             on_error=on_check_error,
+        )
+
+    def build_download_request(
+        self,
+        media: MediaMetadata,
+        format_id: str,
+        destination_path: str,
+        subtitle_config: Optional[SubtitleConfig] = None,
+        time_range: Optional[TimeRange] = None,
+        audio_preset: Optional[AudioPreset] = None,
+        embed_thumbnail: bool = False,
+    ) -> DownloadRequest:
+        """Construye un DownloadRequest desacoplado con soporte para TimeRange y presets."""
+        return DownloadRequest(
+            media=media,
+            format_id=format_id,
+            destination_path=destination_path,
+            subtitle_config=subtitle_config,
+            time_range=time_range,
+            audio_preset=audio_preset,
+            embed_thumbnail=embed_thumbnail,
+        )
+
+    def create_and_start_download_from_request(self, request: DownloadRequest) -> DownloadTask:
+        """Inicia una descarga a partir de un objeto DownloadRequest."""
+        return self.create_and_start_download(
+            media=request.media,
+            format_id=request.format_id,
+            destination_path=request.destination_path,
+            subtitle_config=request.subtitle_config,
+            time_range=request.time_range,
+            audio_preset=request.audio_preset,
+            embed_thumbnail=request.embed_thumbnail,
         )
 
     def create_and_start_download(

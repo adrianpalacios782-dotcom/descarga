@@ -40,6 +40,7 @@ from src.domain.services.content_preview import (
 )
 from src.domain.services.filename_sanitizer import sanitize_filename
 from src.domain.services.url_sanitizer import sanitize_single_video_url
+from src.domain.value_objects.time_range import TimeRange
 from src.domain.value_objects.url import Url
 from src.presentation.components.animations import fade_in
 from src.presentation.components.app_icons import download_icon, search_icon
@@ -52,6 +53,7 @@ from src.presentation.components.format_table_widget import (
     FormatTableHeader,
     FormatTableRow,
 )
+from src.presentation.components.time_range_selector import TimeRangeSelectorWidget
 from src.presentation.styles.theme import get_current_palette
 
 URL_VALIDATION_DELAY_MS = 350
@@ -261,6 +263,11 @@ class InicioView(QWidget):
         self.lbl_synopsis = self.preview_card.lbl_synopsis
         self.btn_toggle_synopsis = self.preview_card.btn_toggle_synopsis
         scroll_layout.addWidget(self.preview_card)
+
+        # 5.1.1 Selector interactivo de recorte de tiempo (Lossless Time-Clipper)
+        self.time_range_selector = TimeRangeSelectorWidget()
+        self.time_range_selector.hide()
+        scroll_layout.addWidget(self.time_range_selector)
 
         # 5.2 Card de opciones de formato
         self.format_card = QFrame()
@@ -498,6 +505,8 @@ class InicioView(QWidget):
         self.btn_analyze.setText("Analizar")
         self.url_input.setEnabled(True)
         self.preview_card.hide()
+        self.time_range_selector.hide()
+        self.time_range_selector.reset()
         self.scroll_area.hide()
         self.hero_wrap.hide()
         self.analyzing_bar.hide()
@@ -606,6 +615,14 @@ class InicioView(QWidget):
 
         # Cargar tarjeta de preview
         self.preview_card.set_metadata(metadata)
+
+        # Configurar Time-Clipper si la duración es conocida
+        if metadata.duration_seconds and metadata.duration_seconds > 0:
+            self.time_range_selector.set_total_duration(metadata.duration_seconds)
+            self.time_range_selector.show()
+        else:
+            self.time_range_selector.hide()
+            self.time_range_selector.reset()
 
         # Cargar sugerencia de nombre de archivo editable
         self.download_config.set_suggested_title(metadata.title)
@@ -918,6 +935,13 @@ class InicioView(QWidget):
         if not self.btn_download.isEnabled():
             return
 
+        if self.time_range_selector.is_enabled() and not self.time_range_selector.is_valid():
+            self._show_warning(
+                "Intervalo de recorte inválido",
+                "El tiempo de inicio debe ser estrictamente menor que el tiempo final para poder recortar.",
+            )
+            return
+
         dest_dir = self._validated_dest_dir()
         if not dest_dir:
             return
@@ -952,6 +976,13 @@ class InicioView(QWidget):
     def _show_warning(self, title: str, message: str) -> None:
         from PySide6.QtWidgets import QMessageBox
         QMessageBox.warning(self, title, message)
+
+    def get_time_range(self) -> Optional[TimeRange]:
+        """Retorna el TimeRange seleccionado si el recorte está activo."""
+        tr = self.time_range_selector.get_time_range()
+        if tr is not None:
+            return tr
+        return self.download_config.get_time_range()
 
     @staticmethod
     def _sanitize_filename(name: str) -> str:

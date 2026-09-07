@@ -6,17 +6,17 @@
 
 ### Gestor Profesional y Universal de Descargas Multimedia para Windows
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg?style=flat-square)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.3.0)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg?style=flat-square)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.4.0)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg?style=flat-square)](https://www.python.org/)
 [![GUI](https://img.shields.io/badge/Qt6-PySide6-41CD52.svg?style=flat-square)](https://pyside.org/)
 [![Architecture](https://img.shields.io/badge/Clean%20Architecture-Hexagonal%20%2B%20DDD-orange.svg?style=flat-square)]()
 [![Type Checking](https://img.shields.io/badge/mypy-strict%20100%25-brightgreen.svg?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/tests-623%20passed%20(100%25)-brightgreen.svg?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/tests-passed%20(100%25)-brightgreen.svg?style=flat-square)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
 
-*Aplicación de escritorio nativa, moderna e independiente diseñada para el análisis, descarga acelerada, conversión y organización de contenido multimedia desde más de 15 plataformas web y cualquier sitio público con vídeo o audio.*
+*Aplicación de escritorio nativa, moderna e independiente diseñada para el análisis, descarga acelerada, recorte de segmentos, conversión y organización de contenido multimedia desde más de 15 plataformas web y cualquier sitio público con vídeo o audio.*
 
-[📥 Descargar v1.3.0](#-descargar-para-windows) • [✨ Novedades v1.3.0](#-novedades-en-la-versión-130) • [🌐 Plataformas](#-plataformas-soportadas) • [🚀 Características](#-características-principales) • [🛡️ Seguridad](#-seguridad-y-resiliencia) • [💻 Desarrollo](#-desarrollo-y-pruebas)
+[📥 Descargar v1.4.0](#-descargar-para-windows) • [✨ Novedades v1.4.0](#-novedades-en-la-versión-140) • [🌐 Plataformas](#-plataformas-soportadas) • [🚀 Características](#-características-principales) • [🛡️ Seguridad](#-seguridad-y-resiliencia) • [💻 Desarrollo](#-desarrollo-y-pruebas)
 
 </div>
 
@@ -24,11 +24,11 @@
 
 ## 📥 Descargar para Windows
 
-### 🚀 [Descargar osvaldoDownloaderPro v1.3.0 (Instalador Oficial)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.3.0)
+### 🚀 [Descargar osvaldoDownloaderPro v1.4.0 (Instalador Oficial)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.4.0)
 
 En la sección **Assets** del lanzamiento oficial de GitHub encontrarás el instalador listo para usar:
 
-> **📦 `osvaldoDownloaderPro-1.3.0-Setup.exe`** (~114 MB)  
+> **📦 `osvaldoDownloaderPro-1.4.0-Setup.exe`** (~114 MB)  
 > *Incluye el ejecutable completo, nuevo icono vectorial HD, motor yt-dlp integrado, FFmpeg nativo y todas las dependencias.*
 
 ```
@@ -37,7 +37,7 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 ```
 
 ### ⚡ Instalación Rápida
-1. Descarga **`osvaldoDownloaderPro-1.3.0-Setup.exe`** desde [GitHub Releases](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.3.0).
+1. Descarga **`osvaldoDownloaderPro-1.4.0-Setup.exe`** desde [GitHub Releases](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.4.0).
 2. Ejecuta el archivo instalador (no requiere privilegios de administrador para la instalación por usuario).
 3. Sigue el asistente de instalación y abre **osvaldoDownloaderPro** desde el Menú Inicio o acceso directo de escritorio.
 
@@ -54,10 +54,12 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 
 ---
 
-## ✨ Novedades en la Versión 1.3.0
+## ✨ Novedades en la Versión 1.4.0
 
-- 🌐 **Soporte Universal de Plataformas (15+ Plataformas y Modo Genérico Seguro):** Ahora analiza y descarga desde YouTube, TikTok, Instagram, Facebook, Twitch, Kick, Twitter/X, Reddit, Vimeo, SoundCloud, Pinterest, Dailymotion, Bilibili, Bluesky, Threads y cualquier sitio web público con protección Anti-SSRF.
-- 🎨 **Temas Visuales Dinámicos (Modo Claro Moderno & Oscuro OLED):** Soporte de cambio de tema en tiempo real entre *Oscuro Multimedia (Default)*, *Oscuro OLED (Negro Puro)* y *Claro Moderno* con paletas tipográficas y de acento adaptativas.
+- ✂️ **Recorte de Tiempo en Vivo y Descarga por Segmentos (Lossless Time-Clipper):** Descarga únicamente el intervalo deseado (ej. 01:25 - 03:40) sin transferir archivos completos de horas o gigabytes. Incorpora entradas numéricas sincronizadas, control deslizante dual interactivo (`DualRangeSlider`), presets rápidos (`Primer minuto`, `Últimos 30s`, `Clip de 1 min`, `Restablecer todo`), duración calculada en tiempo real y validación visual instantánea.
+- ⚡ **Aceleración yt-dlp `--download-sections` y Precisión de Keyframes FFmpeg:** Cortes limpios sin desincronización de audio y video con `force_keyframes_at_cuts`.
+- 🌐 **Soporte Universal de Plataformas (15+ Plataformas y Modo Genérico Seguro):** Analiza y descarga desde YouTube, TikTok, Instagram, Facebook, Twitch, Kick, Twitter/X, Reddit, Vimeo, SoundCloud, Pinterest, Dailymotion, Bilibili, Bluesky, Threads y cualquier sitio web público con protección Anti-SSRF.
+- 🎨 **Sincronización Total de Temas Visuales:** Compatibilidad reactiva con los temas *Oscuro Multimedia*, *Oscuro OLED* y *Claro Moderno* mediante `get_current_palette()`.
 - ⚡ **Aceleración Concurrente DASH/HLS:** Configuración de 1 a 8 fragmentos simultáneos (`concurrent_fragments`) para descargas a máxima velocidad.
 - 🎯 **Arrastrar y Soltar Global (Drag & Drop):** Arrastra enlaces o texto con URLs directamente sobre cualquier parte de la ventana para iniciar el análisis automático.
 - 🔄 **Actualizador Dinámico del Motor yt-dlp:** Actualiza el motor de extracción en caliente desde la vista de Configuración o Acerca de, con verificación de integridad criptográfica SHA-256.

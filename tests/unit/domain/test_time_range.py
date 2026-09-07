@@ -52,3 +52,25 @@ def test_time_range_to_ytdlp_section():
 
     tr_open = TimeRange(start_seconds=60.0, end_seconds=None)
     assert tr_open.to_ytdlp_section() == "*00:01:00-inf"
+
+
+def test_time_range_duration_calculation():
+    tr = TimeRange(start_seconds=15.5, end_seconds=45.5)
+    assert tr.duration == 30.0
+
+    tr_open = TimeRange(start_seconds=10.0, end_seconds=None)
+    assert tr_open.duration is None
+
+
+def test_time_range_to_section_spec_and_format_range():
+    tr = TimeRange(start_seconds=85.0, end_seconds=220.0)
+    assert tr.to_section_spec() == "*00:01:25-00:03:40"
+    assert tr.format_range() == "00:01:25 - 00:03:40"
+
+    tr_frac = TimeRange(start_seconds=10.5, end_seconds=20.25)
+    assert tr_frac.to_section_spec() == "*00:00:10.500-00:00:20.250"
+
+    tr_open = TimeRange(start_seconds=90.0, end_seconds=None)
+    assert tr_open.to_section_spec() == "*00:01:30-inf"
+    assert tr_open.format_range() == "00:01:30 - Fin"
+

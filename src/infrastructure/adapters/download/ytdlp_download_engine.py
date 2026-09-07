@@ -343,6 +343,7 @@ class YtDlpDownloadEngine(IDownloadEngine):
                 opts["download_ranges"] = yt_dlp.utils.download_range_func(
                     None, [(task.time_range.start_seconds, task.time_range.end_seconds or float("inf"))]
                 )
+                opts["force_keyframes_at_cuts"] = True
             except Exception as e:
                 logger.debug(f"No se pudo asignar download_ranges en opts: {e}")
 
@@ -487,6 +488,7 @@ class YtDlpDownloadEngine(IDownloadEngine):
                 opts["download_ranges"] = yt_dlp.utils.download_range_func(
                     None, [(task.time_range.start_seconds, task.time_range.end_seconds or float("inf"))]
                 )
+                opts["force_keyframes_at_cuts"] = True
             except Exception as e:
                 logger.debug(f"No se pudo asignar download_ranges en opts: {e}")
 
@@ -866,14 +868,22 @@ class YtDlpDownloadEngine(IDownloadEngine):
 
     def _resolve_final_path(self, info: Dict[str, Any], dest_dir: str, base: str) -> Optional[str]:
         requested = info.get("requested_downloads") or []
-        if requested:
-            filepath = requested[0].get("filepath")
-            if filepath:
-                resolved = self._ensure_within_dest(filepath, dest_dir)
+        for req in requested:
+            for key in ("filepath", "_filename", "filename"):
+                filepath = req.get(key)
+                if filepath and isinstance(filepath, str):
+                    resolved = self._ensure_within_dest(filepath, dest_dir)
+                    if resolved and os.path.exists(resolved):
+                        return resolved
+                    if resolved and os.path.exists(resolved.replace(".part", "")):
+                        return resolved.replace(".part", "")
+
+        for key in ("_filename", "filepath"):
+            fp = info.get(key)
+            if fp and isinstance(fp, str):
+                resolved = self._ensure_within_dest(fp, dest_dir)
                 if resolved and os.path.exists(resolved):
                     return resolved
-                if resolved and os.path.exists(resolved.replace(".part", "")):
-                    return resolved.replace(".part", "")
 
         if os.path.isdir(dest_dir):
             candidates = [

@@ -2,6 +2,17 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [1.4.0] - 2026-09-07
+
+### Añadido & Optimizado (Recorte de Tiempo en Vivo y Descarga por Segmentos - Lossless Time-Clipper)
+- **Recorte de Tiempo en Vivo y Descarga por Segmentos (Lossless Time-Clipper):**
+  - Permite recortar y descargar exclusivamente intervalos específicos de tiempo (ej. de 01:25 a 03:40) sin descargar archivos multimedia completos de horas o gigabytes.
+  - Value Object inmutable `TimeRange` en el dominio con propiedades `duration`, `to_section_spec()` (`*HH:MM:SS-HH:MM:SS`), `format_range()` e invariantes matemáticas estrictas.
+  - Aceleración en `YtDlpDownloadEngine` mediante `download_ranges` de yt-dlp y precisión de keyframes FFmpeg (`force_keyframes_at_cuts = True`).
+  - Nuevo caso de uso `DownloadMediaUseCase` y entidad `DownloadRequest` desacoplada para parametrización flexible en la capa de aplicación.
+  - Componente PySide6 interactivo `TimeRangeSelectorWidget` integrado en `InicioView` con slider dual interactivo (`DualRangeSlider`), chips de presets rápidos (`Primer minuto`, `Últimos 30s`, `Clip de 1 min`, `Restablecer todo`), duración calculada en tiempo real y validación visual inline.
+  - 100% de sincronización con los temas visuales (Oscuro Multimedia, Oscuro OLED y Claro Moderno) vía `get_current_palette()`.
+
 ## [1.3.0] - 2026-09-07
 
 ### Añadido & Optimizado (Modernización y Expansión Integral)
