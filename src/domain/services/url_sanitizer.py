@@ -1,15 +1,13 @@
-"""Sanitización de URLs con parámetros de playlist.
+"""Sanitización y extracción limpia de URLs.
 
-Al pegar o analizar un enlace de video individual, YouTube suele incluir
-parámetros de lista de reproducción (`?list=...`, `&list=...`, `index`,
-`start_radio`). Para el flujo de descarga única interesa SOLO el video:
-estos parámetros se eliminan para que la plataforma resuelva exactamente
-el recurso visualizado y yt-dlp no intente expandir la lista.
-
-Las URLs de playlist explícitas (`/playlist?list=...`) NO se tocan: ahí el
-usuario pidió la lista completa.
+1. `sanitize_single_video_url`: Elimina parámetros de lista de reproducción
+   (`?list=...`, `index`, `start_radio`) de enlaces a videos individuales.
+2. `extract_clean_url`: Extrae una URL válida de medios desde un texto arbitrario
+   o portapapeles, descartando texto envolvente, corchetes, comillas y signos de
+   puntuación final.
 """
-from typing import List, Tuple
+import re
+from typing import List, Optional, Tuple
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 # Parámetros que referencian contexto de playlist/radio en URLs de video.
@@ -18,6 +16,79 @@ _PLAYLIST_CONTEXT_PARAMS = frozenset({"list", "index", "start_radio", "pp"})
 # Rutas que SON una playlist (el parámetro list es la intención del usuario).
 _PLAYLIST_PATH_MARKERS = ("/playlist", "/channel/", "/c/", "/user/", "/@")
 _WATCH_PATH_MARKERS = ("/watch", "/shorts/", "/embed/", "/live/")
+
+# Signos de puntuación y delimitadores que suelen quedar pegados al final de una URL.
+_TRAILING_PUNCTUATION = ".,;:!?)]}\u00ab\u00bb\u201d\u201c\u2026'\""
+_LEADING_DELIMITERS = "([<{«\"'"
+
+# Regex para detectar URLs completas (con o sin esquema explícito)
+_MEDIA_URL_REGEX = re.compile(
+    r'(?:https?://)?(?:www\.)?(?:'
+    r'youtube\.com|youtu\.be|'
+    r'instagram\.com|instagr\.am|'
+    r'facebook\.com|fb\.watch|'
+    r'tiktok\.com|vm\.tiktok\.com|'
+    r'twitch\.tv|'
+    r'kick\.com|'
+    r'vimeo\.com|'
+    r'twitter\.com|x\.com|'
+    r'reddit\.com|'
+    r'soundcloud\.com|'
+    r'pinterest\.com|pin\.it|'
+    r'dailymotion\.com|dai\.ly|'
+    r'bilibili\.com|'
+    r'bsky\.app|'
+    r'threads\.net'
+    r')[^\s<>"\']*',
+    re.IGNORECASE,
+)
+
+_GENERIC_HTTP_URL_REGEX = re.compile(
+    r'https?://[^\s<>"\']+',
+    re.IGNORECASE,
+)
+
+
+def extract_clean_url(text: Optional[str]) -> Optional[str]:
+    """Extrae una URL limpia desde un texto o portapapeles.
+
+    - Busca primero plataformas conocidas o cualquier URL http/https.
+    - Elimina delimitadores iniciales y signos de puntuación final adheridos.
+    - Si la URL carece de esquema pero coincide con un host conocido, antepone 'https://'.
+    - Aplica sanitización de parámetros de playlist para videos individuales.
+    - Retorna None si no hay ninguna URL válida.
+    """
+    if not text or not isinstance(text, str):
+        return None
+
+    raw = text.strip()
+    if not raw:
+        return None
+
+    match = _MEDIA_URL_REGEX.search(raw)
+    if not match:
+        match = _GENERIC_HTTP_URL_REGEX.search(raw)
+    if not match:
+        return None
+
+    candidate = match.group(0)
+    candidate = candidate.lstrip(_LEADING_DELIMITERS)
+    candidate = candidate.rstrip(_TRAILING_PUNCTUATION)
+
+    if not candidate:
+        return None
+
+    if not candidate.startswith(("http://", "https://")):
+        candidate = f"https://{candidate}"
+
+    try:
+        parsed = urlparse(candidate)
+        if not parsed.netloc:
+            return None
+    except Exception:
+        return None
+
+    return sanitize_single_video_url(candidate)
 
 
 def sanitize_single_video_url(url: str) -> str:
@@ -70,3 +141,4 @@ def sanitize_single_video_url(url: str) -> str:
             parsed.fragment,
         )
     )
+

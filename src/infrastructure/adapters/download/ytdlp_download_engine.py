@@ -13,6 +13,7 @@ from src.domain.entities.download_task import DownloadTask, DownloadState
 from src.domain.entities.format_option import DownloadType, FormatOption
 from src.domain.exceptions.domain_exceptions import (
     FormatNotFoundError,
+    InvalidUrlError,
     QualityDegradationError,
 )
 from src.domain.events.domain_events import (
@@ -26,73 +27,23 @@ from src.domain.events.domain_events import (
 from src.domain.entities.subtitle import SubtitleConfig, SubtitleMode, SubtitleTrack
 from src.domain.ports.download_engine import IDownloadEngine
 from src.domain.ports.download_repository import IDownloadRepository
+from src.domain.services.error_classifier import ErrorClassifier
 from src.domain.services.format_normalizer import FormatNormalizer
 from src.domain.services.quality_validator import QualityValidator, QualityMatchStatus
 from src.infrastructure.adapters.media.ffmpeg_adapter import FFmpegProcessAdapter, CancelledOperationError
+from src.infrastructure.adapters.media.subtitle_extractor import extract_subtitle_tracks
+from src.infrastructure.adapters.platforms.browser_detector import get_first_available_browser
 from src.infrastructure.event_bus.in_process_event_bus import InProcessEventBus
+
+
 
 logger = logging.getLogger(__name__)
 
 _SAFE_FORMAT_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
-def extract_subtitle_tracks(info: Dict[str, Any]) -> List[SubtitleTrack]:
-    """Extrae y normaliza las pistas de subtítulos (manuales y automáticas) de yt-dlp."""
-    tracks: List[SubtitleTrack] = []
-    seen_codes: set[tuple[str, bool]] = set()
-
-    # 1. Subtítulos manuales / oficiales
-    manual_subs = info.get("subtitles") or {}
-    if isinstance(manual_subs, dict):
-        for lang_code, formats in manual_subs.items():
-            if not lang_code:
-                continue
-            name = ""
-            ext = "vtt"
-            if isinstance(formats, list) and formats:
-                first_fmt = formats[0] if isinstance(formats[0], dict) else {}
-                name = first_fmt.get("name") or first_fmt.get("ext") or ""
-                ext = first_fmt.get("ext") or "vtt"
-            key = (lang_code.lower(), False)
-            if key not in seen_codes:
-                seen_codes.add(key)
-                tracks.append(
-                    SubtitleTrack(
-                        language_code=lang_code,
-                        name=name or lang_code,
-                        extension=ext,
-                        is_auto_generated=False,
-                    )
-                )
-
-    # 2. Subtítulos automáticos (automatic_captions)
-    auto_subs = info.get("automatic_captions") or {}
-    if isinstance(auto_subs, dict):
-        for lang_code, formats in auto_subs.items():
-            if not lang_code:
-                continue
-            name = ""
-            ext = "vtt"
-            if isinstance(formats, list) and formats:
-                first_fmt = formats[0] if isinstance(formats[0], dict) else {}
-                name = first_fmt.get("name") or first_fmt.get("ext") or ""
-                ext = first_fmt.get("ext") or "vtt"
-            key = (lang_code.lower(), True)
-            if key not in seen_codes:
-                seen_codes.add(key)
-                tracks.append(
-                    SubtitleTrack(
-                        language_code=lang_code,
-                        name=name or f"{lang_code} (Auto)",
-                        extension=ext,
-                        is_auto_generated=True,
-                    )
-                )
-
-    return tracks
-
-
 def apply_subtitle_options(
+
     ydl_opts: Dict[str, Any],
     subtitle_config: Optional[SubtitleConfig],
 ) -> Dict[str, Any]:
@@ -290,14 +241,24 @@ class YtDlpDownloadEngine(IDownloadEngine):
                     )
             else:
                 self._cleanup_task_files(task.destination_path)
+                if isinstance(ex, (FormatNotFoundError, QualityDegradationError, InvalidUrlError)):
+                    friendly_err = str(ex)
+                else:
+                    plat_name = task.media.url.detect_platform() if task.media and task.media.url else ""
+                    classified = ErrorClassifier.classify(ex, platform_name=plat_name)
+                    friendly_err = classified.user_message
+                    if classified.technical_detail and classified.technical_detail != classified.user_message:
+                        friendly_err += f" [{classified.technical_detail}]"
+                    if classified.suggestion:
+                        friendly_err += f" · Sugerencia: {classified.suggestion}"
                 try:
-                    task.fail(str(ex))
+                    task.fail(friendly_err)
                 except Exception:
                     task.status = DownloadState.FAILED
-                    task.error_message = str(ex)
+                    task.error_message = friendly_err
                 self._save(task)
                 if self.event_bus:
-                    self.event_bus.publish(DownloadFailedEvent(task_id=task_id, error_message=str(ex)))
+                    self.event_bus.publish(DownloadFailedEvent(task_id=task_id, error_message=friendly_err))
         finally:
             with self._lock:
                 self._cancel_tokens.pop(task_id, None)
@@ -363,8 +324,28 @@ class YtDlpDownloadEngine(IDownloadEngine):
                     ydl.close()
                 except Exception:
                     pass
+        if info is None and last_error and not opts.get("cookiesfrombrowser") and not opts.get("cookiefile"):
+            plat_name = task.media.url.detect_platform() if task.media and task.media.url else ""
+            if ErrorClassifier.classify(last_error, platform_name=plat_name).is_cookie_recoverable:
+                auto_browser = get_first_available_browser()
+                if auto_browser:
+                    logger.info(f"Reintentando descarga de audio con sesión del navegador '{auto_browser}'")
+                    fallback_opts = dict(opts)
+                    fallback_opts["cookiesfrombrowser"] = (auto_browser,)
+                    ydl = self._ydl_factory(fallback_opts)
+                    try:
+                        info = ydl.extract_info(task.media.url.value, download=True)
+                    except Exception as auto_ex:
+                        logger.warning(f"Reintento de audio con navegador {auto_browser} falló: {auto_ex}")
+                    finally:
+                        try:
+                            ydl.close()
+                        except Exception:
+                            pass
+
         if info is None:
             raise last_error or RuntimeError("La descarga de audio falló tras agotar las estrategias de cliente.")
+
 
         source_path = self._resolve_final_path(info, dest_dir, base + ".audio_src")
         if not source_path or not os.path.exists(source_path):
@@ -521,8 +502,28 @@ class YtDlpDownloadEngine(IDownloadEngine):
                 except Exception:
                     pass
 
+        if info is None and last_dl_error and not opts.get("cookiesfrombrowser") and not opts.get("cookiefile"):
+            plat_name = task.media.url.detect_platform() if task.media and task.media.url else ""
+            if ErrorClassifier.classify(last_dl_error, platform_name=plat_name).is_cookie_recoverable:
+                auto_browser = get_first_available_browser()
+                if auto_browser:
+                    logger.info(f"Reintentando descarga de video con sesión del navegador '{auto_browser}'")
+                    fallback_opts = dict(opts)
+                    fallback_opts["cookiesfrombrowser"] = (auto_browser,)
+                    ydl = self._ydl_factory(fallback_opts)
+                    try:
+                        info = ydl.extract_info(url, download=True)
+                    except Exception as auto_ex:
+                        logger.warning(f"Reintento de video con navegador {auto_browser} falló: {auto_ex}")
+                    finally:
+                        try:
+                            ydl.close()
+                        except Exception:
+                            pass
+
         if info is None:
             raise last_dl_error or RuntimeError("La descarga falló tras 3 intentos.")
+
 
         # ── Fase 4: Resolver y renombrar archivo final ──
         final_path = self._resolve_final_path(info, dest_dir, base)
@@ -819,6 +820,7 @@ class YtDlpDownloadEngine(IDownloadEngine):
             "outtmpl": outtmpl,
             "ffmpeg_location": self.ffmpeg_adapter.get_ffmpeg_executable(),
             "progress_hooks": [self._make_progress_hook(task_id, cancel_token, pause_token)],
+            "postprocessor_hooks": [self._make_postprocessor_hook(task_id, cancel_token)],
         }
         if shutil.which("node"):
             opts["js_runtimes"] = {"node": {}}
@@ -833,6 +835,30 @@ class YtDlpDownloadEngine(IDownloadEngine):
         elif self.cookies_from_browser:
             opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
         return opts
+
+    def _make_postprocessor_hook(
+        self, task_id: str, cancel: threading.Event
+    ) -> Callable[[Dict[str, Any]], None]:
+        def hook(d: Dict[str, Any]) -> None:
+            if cancel.is_set():
+                raise DownloadCancelled("Descarga cancelada por el usuario.")
+            status = d.get("status")
+            if status == "started":
+                postprocessor_name = d.get("postprocessor") or "FFmpeg"
+                logger.info(f"Postprocesador iniciado ({postprocessor_name}) para tarea {task_id}")
+                if self.event_bus:
+                    self.event_bus.publish(
+                        DownloadProgressChangedEvent(
+                            task_id=task_id,
+                            progress_percent=99.0,
+                            downloaded_bytes=0,
+                            total_bytes=0,
+                            speed_bps=0.0,
+                            eta_seconds=0,
+                        )
+                    )
+
+        return hook
 
     def _make_progress_hook(
         self, task_id: str, cancel: threading.Event, pause: threading.Event
