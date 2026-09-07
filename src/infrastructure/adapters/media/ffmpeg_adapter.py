@@ -416,7 +416,7 @@ class FFmpegProcessAdapter:
         cmd = [exe, "-y", "-hide_banner", "-loglevel", "error", "-i", input_path]
         has_thumbnail = bool(thumbnail_path and os.path.exists(thumbnail_path) and os.path.getsize(thumbnail_path) > 0)
 
-        if has_thumbnail:
+        if has_thumbnail and thumbnail_path:
             cmd.extend(["-i", thumbnail_path])
 
         if has_thumbnail and fmt in ("mp3", "m4a", "flac"):

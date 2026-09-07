@@ -240,7 +240,7 @@ class ConfiguracionView(QWidget):
         from src.presentation.styles.theme import get_theme_qss
         from PySide6.QtWidgets import QApplication
         app = QApplication.instance()
-        if app:
+        if isinstance(app, QApplication):
             app.setStyleSheet(get_theme_qss(theme_name))
 
     def _combo_browser(self) -> QComboBox:

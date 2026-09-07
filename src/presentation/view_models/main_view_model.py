@@ -152,9 +152,9 @@ class MainViewModel(QObject):
 
         def _worker() -> None:
             try:
-                from src.domain.value_objects.url import is_playlist
+                from src.domain.value_objects.url import Url, is_playlist
                 if is_playlist(url_str):
-                    playlist = self.platform_adapter.analyze_playlist(url_str)
+                    playlist = self.platform_adapter.analyze_playlist(Url(url_str))
                     self.playlist_analyzed.emit(playlist)
                 else:
                     metadata = self.analyze_uc.execute(url_str)
@@ -171,7 +171,8 @@ class MainViewModel(QObject):
 
         def _worker() -> None:
             try:
-                playlist = self.platform_adapter.analyze_playlist(url_str)
+                from src.domain.value_objects.url import Url
+                playlist = self.platform_adapter.analyze_playlist(Url(url_str))
                 self.playlist_analyzed.emit(playlist)
             except Exception as ex:
                 self.analysis_failed.emit(str(ex))

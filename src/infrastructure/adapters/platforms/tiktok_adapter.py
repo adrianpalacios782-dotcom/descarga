@@ -84,7 +84,11 @@ class TikTokAdapter(BasePlatformAdapter):
             f"TikTok no pudo extraer los datos del video: {clean_msg}"
         )
 
-    def _build_ydl_opts(self, player_clients: Optional[List[str]] = None) -> Dict[str, Any]:
+    def _build_ydl_opts(
+        self,
+        player_clients: Optional[List[str]] = None,
+        disable_browser_cookies: bool = False,
+    ) -> Dict[str, Any]:
         """Opciones mínimas para TikTok — sin extractor_args, sin player_client."""
         return {
             "quiet": True,

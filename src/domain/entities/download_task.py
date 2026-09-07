@@ -7,6 +7,7 @@ from src.domain.entities.format_option import FormatOption
 from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.entities.subtitle import SubtitleConfig
 from src.domain.exceptions.domain_exceptions import InvalidStateTransitionError
+from src.domain.value_objects.audio_preset import AudioPreset
 from src.domain.value_objects.download_id import DownloadId
 from src.domain.value_objects.time_range import TimeRange
 
@@ -75,7 +76,7 @@ class DownloadTask:
     quality_warning: Optional[str] = None
     subtitle_config: Optional[SubtitleConfig] = None
     time_range: Optional[TimeRange] = None
-    audio_preset: Optional[str] = None
+    audio_preset: Optional[AudioPreset] = None
     embed_thumbnail: bool = True
 
     def __post_init__(self) -> None:
