@@ -170,12 +170,98 @@ class SQLiteDownloadRepository(IDownloadRepository):
                        fo.video_codec, fo.audio_codec
                 FROM download_tasks dt
                 JOIN media_items mi ON dt.media_id = mi.id
-                JOIN format_options fo ON (fo.media_id = mi.id AND fo.format_id = dt.chosen_format_id)
+                LEFT JOIN format_options fo ON (fo.media_id = mi.id AND fo.format_id = dt.chosen_format_id)
                 ORDER BY dt.created_at DESC
                 """
             )
             rows = cur.fetchall()
             return [self._row_to_task(r) for r in rows]
+
+    def get_paginated(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        search_query: Optional[str] = None,
+        platform_filter: Optional[str] = None,
+        order_by: str = "created_at",
+        descending: bool = True,
+    ) -> List[DownloadTask]:
+        ALLOWED_SORT_COLUMNS = {
+            "created_at": "dt.created_at",
+            "started_at": "dt.started_at",
+            "completed_at": "dt.completed_at",
+            "progress_percent": "dt.progress_percent",
+            "title": "mi.title",
+            "platform_name": "mi.platform_name",
+        }
+        sort_col = ALLOWED_SORT_COLUMNS.get(order_by, "dt.created_at")
+        direction = "DESC" if descending else "ASC"
+
+        clauses: list[str] = []
+        params: list[Any] = []
+
+        if search_query and search_query.strip():
+            q = f"%{search_query.strip()}%"
+            clauses.append("(mi.title LIKE ? OR mi.author LIKE ? OR mi.original_url LIKE ?)")
+            params.extend([q, q, q])
+
+        if platform_filter and platform_filter.strip() and platform_filter.lower() != "todas":
+            clauses.append("LOWER(mi.platform_name) = LOWER(?)")
+            params.append(platform_filter.strip())
+
+        where_clause = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+
+        query = (
+            "SELECT dt.*, mi.original_url, mi.platform_name, mi.title, mi.author, mi.duration_seconds, mi.thumbnail_url, "
+            "fo.format_id, fo.extension, fo.resolution, fo.width, fo.height, fo.fps, fo.filesize_bytes, "
+            "fo.is_audio_only, fo.is_video_only, fo.stream_type, fo.needs_ffmpeg_merge, fo.audio_format_id, "
+            "fo.bitrate_kbps, fo.target_audio_format, fo.target_audio_bitrate, fo.is_best_quality, "
+            "fo.video_codec, fo.audio_codec "
+            "FROM download_tasks dt "
+            "JOIN media_items mi ON dt.media_id = mi.id "
+            "LEFT JOIN format_options fo ON (fo.media_id = mi.id AND fo.format_id = dt.chosen_format_id)"
+            + where_clause
+            + f" ORDER BY {sort_col} {direction} LIMIT ? OFFSET ?"
+        )
+        params.extend([max(1, limit), max(0, offset)])
+
+        with self._lock:
+            conn = self.db_manager.get_connection()
+            cur = conn.cursor()
+            cur.execute(query, params)
+            rows = cur.fetchall()
+            return [self._row_to_task(r) for r in rows]
+
+    def count(
+        self,
+        search_query: Optional[str] = None,
+        platform_filter: Optional[str] = None,
+    ) -> int:
+        clauses: list[str] = []
+        params: list[Any] = []
+
+        if search_query and search_query.strip():
+            q = f"%{search_query.strip()}%"
+            clauses.append("(mi.title LIKE ? OR mi.author LIKE ? OR mi.original_url LIKE ?)")
+            params.extend([q, q, q])
+
+        if platform_filter and platform_filter.strip() and platform_filter.lower() != "todas":
+            clauses.append("LOWER(mi.platform_name) = LOWER(?)")
+            params.append(platform_filter.strip())
+
+        where_clause = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+
+        query = (
+            "SELECT COUNT(*) FROM download_tasks dt "
+            "JOIN media_items mi ON dt.media_id = mi.id"
+            + where_clause
+        )
+        with self._lock:
+            conn = self.db_manager.get_connection()
+            cur = conn.cursor()
+            cur.execute(query, params)
+            row = cur.fetchone()
+            return int(row[0]) if row else 0
 
     def delete(self, task_id: DownloadId) -> None:
         with self._lock:
@@ -186,20 +272,18 @@ class SQLiteDownloadRepository(IDownloadRepository):
     def _query_single(self, where_clause: str, params: tuple[Any, ...]) -> Optional[DownloadTask]:
         conn = self.db_manager.get_connection()
         cur = conn.cursor()
-        cur.execute(
-            f"""
-            SELECT dt.*, mi.original_url, mi.platform_name, mi.title, mi.author, mi.duration_seconds, mi.thumbnail_url,
-                   fo.format_id, fo.extension, fo.resolution, fo.width, fo.height, fo.fps, fo.filesize_bytes,
-                   fo.is_audio_only, fo.is_video_only, fo.stream_type, fo.needs_ffmpeg_merge, fo.audio_format_id,
-                   fo.bitrate_kbps, fo.target_audio_format, fo.target_audio_bitrate, fo.is_best_quality,
-                   fo.video_codec, fo.audio_codec
-            FROM download_tasks dt
-            JOIN media_items mi ON dt.media_id = mi.id
-            JOIN format_options fo ON (fo.media_id = mi.id AND fo.format_id = dt.chosen_format_id)
-            {where_clause}
-            """,
-            params
+        query = (
+            "SELECT dt.*, mi.original_url, mi.platform_name, mi.title, mi.author, mi.duration_seconds, mi.thumbnail_url, "
+            "fo.format_id, fo.extension, fo.resolution, fo.width, fo.height, fo.fps, fo.filesize_bytes, "
+            "fo.is_audio_only, fo.is_video_only, fo.stream_type, fo.needs_ffmpeg_merge, fo.audio_format_id, "
+            "fo.bitrate_kbps, fo.target_audio_format, fo.target_audio_bitrate, fo.is_best_quality, "
+            "fo.video_codec, fo.audio_codec "
+            "FROM download_tasks dt "
+            "JOIN media_items mi ON dt.media_id = mi.id "
+            "LEFT JOIN format_options fo ON (fo.media_id = mi.id AND fo.format_id = dt.chosen_format_id) "
+            + where_clause
         )
+        cur.execute(query, params)
         row = cur.fetchone()
         if not row:
             return None
@@ -215,9 +299,15 @@ class SQLiteDownloadRepository(IDownloadRepository):
         except ValueError:
             stream_type = StreamType.VIDEO_AUDIO
 
+        # Fallback seguro en caso de registros huérfanos de formato (LEFT JOIN)
+        fmt_id = str(row["format_id"] or row["chosen_format_id"] or "default")
+        ext = str(row["extension"] or "mp4")
+        is_audio = bool(row["is_audio_only"]) if row["is_audio_only"] is not None else False
+        is_video = bool(row["is_video_only"]) if row["is_video_only"] is not None else False
+
         fmt = FormatOption(
-            format_id=row["format_id"],
-            extension=row["extension"],
+            format_id=fmt_id,
+            extension=ext,
             resolution=row["resolution"] or "",
             width=row["width"],
             height=row["height"],
@@ -225,11 +315,11 @@ class SQLiteDownloadRepository(IDownloadRepository):
             video_codec=row["video_codec"],
             audio_codec=row["audio_codec"],
             stream_type=stream_type,
-            download_type=DownloadType.AUDIO if bool(row["is_audio_only"]) else DownloadType.VIDEO,
-            is_audio_only=bool(row["is_audio_only"]),
-            is_video_only=bool(row["is_video_only"]),
-            is_best_quality=bool(row["is_best_quality"]),
-            needs_ffmpeg_merge=bool(row["needs_ffmpeg_merge"]),
+            download_type=DownloadType.AUDIO if is_audio else DownloadType.VIDEO,
+            is_audio_only=is_audio,
+            is_video_only=is_video,
+            is_best_quality=bool(row["is_best_quality"]) if row["is_best_quality"] is not None else True,
+            needs_ffmpeg_merge=bool(row["needs_ffmpeg_merge"]) if row["needs_ffmpeg_merge"] is not None else False,
             audio_format_id=row["audio_format_id"],
             filesize_bytes=row["filesize_bytes"],
             bitrate_kbps=row["bitrate_kbps"],

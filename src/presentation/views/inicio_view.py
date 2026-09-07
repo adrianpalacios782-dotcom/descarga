@@ -12,9 +12,10 @@ Estructura modular:
 
 import os
 import re
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QDragEnterEvent, QDragLeaveEvent, QDragMoveEvent, QDropEvent
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -58,7 +59,10 @@ CLIPBOARD_POLL_INTERVAL_MS = 1200
 
 _CLIPBOARD_URL_PATTERN = re.compile(
     r"https?://(?:www\.|m\.)?(youtube\.com|youtu\.be|tiktok\.com|"
-    r"instagram\.com|facebook\.com|fb\.watch|twitch\.tv|clips\.twitch\.tv|kick\.com)/\S+",
+    r"instagram\.com|facebook\.com|fb\.watch|twitch\.tv|clips\.twitch\.tv|kick\.com|"
+    r"twitter\.com|x\.com|reddit\.com|v\.redd\.it|vimeo\.com|soundcloud\.com|"
+    r"pinterest\.com|pin\.it|dailymotion\.com|dai\.ly|bilibili\.com|bsky\.app|threads\.net|"
+    r"[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/\S*",
     re.IGNORECASE,
 )
 
@@ -69,6 +73,14 @@ _PLATFORM_SPOTLIGHT = [
     ("Facebook", "#6ea8ff"),
     ("Twitch", "#9146ff"),
     ("Kick", "#53fc18"),
+    ("X / Twitter", "#1da1f2"),
+    ("Reddit", "#ff4500"),
+    ("Vimeo", "#1ab7ea"),
+    ("SoundCloud", "#ff5500"),
+    ("Pinterest", "#e60023"),
+    ("Dailymotion", "#0066dc"),
+    ("Bilibili", "#00a1d6"),
+    ("+1000 Sitios", "#a855f7"),
 ]
 
 
@@ -78,6 +90,7 @@ class InicioView(QWidget):
     analyze_requested = Signal(str)
     download_requested = Signal(object, str, str)  # (media_metadata, format_id, destination_path)
     batch_requested = Signal()
+    batch_requested_with_urls = Signal(list)
 
     STATE_EMPTY = "empty"
     STATE_ANALYZING = "analyzing"
@@ -96,6 +109,7 @@ class InicioView(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
+        self.setAcceptDrops(True)
         self.current_metadata: Optional[MediaMetadata] = None
         self.selected_type: DownloadType = DownloadType.VIDEO
         self._synopsis_full: str = ""
@@ -943,3 +957,88 @@ class InicioView(QWidget):
     def _sanitize_filename(name: str) -> str:
         """Sanitiza un nombre de archivo eliminando caracteres peligrosos en Windows."""
         return sanitize_filename(name)
+
+    # ----------------------------------------------------------- Drag & Drop
+    def set_url(self, url_str: str) -> None:
+        """Establece el texto de la barra de URL."""
+        self.url_input.setText(url_str.strip())
+
+    def _can_accept_drag(self, event: Any) -> bool:
+        md = event.mimeData()
+        if md.hasUrls():
+            for u in md.urls():
+                if u.isLocalFile():
+                    fn = u.toLocalFile().lower()
+                    if fn.endswith((".txt", ".text")):
+                        return True
+                elif u.toString().startswith(("http://", "https://")):
+                    return True
+        if md.hasText():
+            t = md.text().strip()
+            if "http://" in t or "https://" in t:
+                return True
+        return False
+
+    def _extract_urls_from_mime(self, md: Any) -> list[str]:
+        found: list[str] = []
+        if md.hasUrls():
+            for u in md.urls():
+                if u.isLocalFile():
+                    fn = u.toLocalFile()
+                    if fn.lower().endswith((".txt", ".text")) and os.path.isfile(fn):
+                        try:
+                            with open(fn, "r", encoding="utf-8", errors="ignore") as f:
+                                for line in f:
+                                    s = line.strip()
+                                    if s.startswith(("http://", "https://")):
+                                        found.append(s)
+                        except Exception:
+                            pass
+                else:
+                    s = u.toString().strip()
+                    if s.startswith(("http://", "https://")):
+                        found.append(s)
+        if not found and md.hasText():
+            for line in md.text().strip().splitlines():
+                s = line.strip()
+                if s.startswith(("http://", "https://")):
+                    found.append(s)
+        return found
+
+    def _set_drag_feedback(self, active: bool) -> None:
+        self.url_bar.setProperty("drag_active", "true" if active else "false")
+        self.url_bar.style().unpolish(self.url_bar)
+        self.url_bar.style().polish(self.url_bar)
+        self.url_bar.update()
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802
+        if self._can_accept_drag(event):
+            event.acceptProposedAction()
+            self._set_drag_feedback(True)
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:  # noqa: N802
+        if self._can_accept_drag(event):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:  # noqa: N802
+        self._set_drag_feedback(False)
+        event.accept()
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802
+        self._set_drag_feedback(False)
+        urls = self._extract_urls_from_mime(event.mimeData())
+        if not urls:
+            event.ignore()
+            return
+
+        event.acceptProposedAction()
+        if len(urls) == 1:
+            self.set_url(urls[0])
+            self._on_analyze_clicked()
+        else:
+            self.batch_requested_with_urls.emit(urls)
+            self.batch_requested.emit()

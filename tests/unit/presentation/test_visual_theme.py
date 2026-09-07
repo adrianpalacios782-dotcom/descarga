@@ -83,3 +83,43 @@ class TestTitleBar:
         bar.refresh_window_state_icon(maximized=True)
         assert bar.btn_maximize.toolTip() == "Restaurar"
         assert tooltip_max == "Maximizar"
+
+
+class TestThemeSynchronization:
+
+    def test_theme_switching_tracks_current_palette(self, qapp):
+        from src.presentation.styles.theme import (
+            DARK_PALETTE,
+            LIGHT_PALETTE,
+            OLED_PALETTE,
+            get_current_palette,
+            get_current_theme,
+            get_theme_qss,
+        )
+
+        get_theme_qss("Claro Moderno")
+        assert get_current_theme() == "Claro Moderno"
+        assert get_current_palette() == LIGHT_PALETTE
+
+        get_theme_qss("Oscuro OLED")
+        assert get_current_theme() == "Oscuro OLED"
+        assert get_current_palette() == OLED_PALETTE
+
+        get_theme_qss("Oscuro Multimedia (Default)")
+        assert get_current_theme() == "Oscuro Multimedia (Default)"
+        assert get_current_palette() == DARK_PALETTE
+
+    def test_thumbnail_label_reacts_to_theme_change(self, qapp):
+        from PySide6.QtCore import QEvent
+        from src.presentation.components.thumbnail_loader import ThumbnailLabel
+        from src.presentation.styles.theme import get_theme_qss
+
+        label = ThumbnailLabel(display_width=160, display_height=90)
+        get_theme_qss("Claro Moderno")
+        label.changeEvent(QEvent(QEvent.Type.StyleChange))
+        label.repaint()
+        assert label._placeholder_text == ThumbnailLabel.LOADING_TEXT
+
+        get_theme_qss("Oscuro Multimedia (Default)")
+        label.changeEvent(QEvent(QEvent.Type.StyleChange))
+        label.repaint()

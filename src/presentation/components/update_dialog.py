@@ -19,11 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.application.use_cases.check_for_updates import UpdateCheckResult
-from src.presentation.styles.styles import DARK_PALETTE, DARK_STYLE
-
-_COLOR_TEXT_DIM = DARK_PALETTE.text_secondary
-_COLOR_ACCENT = DARK_PALETTE.accent
-_COLOR_WARNING = DARK_PALETTE.warning
+from src.presentation.styles.theme import get_current_palette
 
 
 def _format_bytes(num_bytes: float) -> str:
@@ -44,7 +40,7 @@ class UpdateDialog(QDialog):
 
     def __init__(self, result: UpdateCheckResult, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setStyleSheet(DARK_STYLE)
+        p = get_current_palette()
         self.setWindowTitle("Actualización de osvaldoDownloaderPro")
         self.setModal(True)
         self.setMinimumWidth(560)
@@ -57,15 +53,17 @@ class UpdateDialog(QDialog):
 
         # --- Título -----------------------------------------------------
         title = QLabel("Nueva actualización disponible")
+        title.setObjectName("ViewTitle")
         title.setStyleSheet(
-            f"font-size: 19px; font-weight: 800; color: {DARK_PALETTE.text_primary};"
+            f"font-size: 19px; font-weight: 800; color: {p.text_primary};"
         )
         layout.addWidget(title)
 
         subtitle = QLabel(
             "Hay una nueva versión de osvaldoDownloaderPro lista para instalarse."
         )
-        subtitle.setStyleSheet(f"font-size: 13px; color: {_COLOR_TEXT_DIM};")
+        subtitle.setObjectName("ViewSubtitle")
+        subtitle.setStyleSheet(f"font-size: 13px; color: {p.text_secondary};")
         layout.addWidget(subtitle)
 
         # --- Versiones (tarjeta integrada) -------------------------------
@@ -76,9 +74,9 @@ class UpdateDialog(QDialog):
 
         row_current = QHBoxLayout()
         lbl_cur = QLabel("Versión actual:")
-        lbl_cur.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {DARK_PALETTE.text_secondary};")
+        lbl_cur.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {p.text_secondary};")
         val_cur = QLabel(str(result.current_version))
-        val_cur.setStyleSheet(f"font-size: 14px; font-weight: 700; color: {DARK_PALETTE.text_primary};")
+        val_cur.setStyleSheet(f"font-size: 14px; font-weight: 700; color: {p.text_primary};")
         row_current.addWidget(lbl_cur)
         row_current.addWidget(val_cur)
         row_current.addStretch()
@@ -86,10 +84,10 @@ class UpdateDialog(QDialog):
 
         row_new = QHBoxLayout()
         lbl_new = QLabel("Nueva versión:")
-        lbl_new.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {DARK_PALETTE.text_secondary};")
+        lbl_new.setStyleSheet(f"font-size: 14px; font-weight: 600; color: {p.text_secondary};")
         val_new = QLabel(str(result.latest_version))
         val_new.setStyleSheet(
-            f"font-size: 14px; font-weight: 700; color: {_COLOR_ACCENT};"
+            f"font-size: 14px; font-weight: 700; color: {p.accent};"
         )
         row_new.addWidget(lbl_new)
         row_new.addWidget(val_new)
@@ -103,7 +101,7 @@ class UpdateDialog(QDialog):
         if notes:
             notes_title = QLabel("Novedades de esta versión")
             notes_title.setStyleSheet(
-                f"font-size: 13px; font-weight: 700; color: {DARK_PALETTE.text_secondary};"
+                f"font-size: 13px; font-weight: 700; color: {p.text_secondary};"
             )
             layout.addWidget(notes_title)
 
@@ -111,7 +109,7 @@ class UpdateDialog(QDialog):
             notes_label.setTextFormat(Qt.TextFormat.PlainText)
             notes_label.setWordWrap(True)
             notes_label.setStyleSheet(
-                f"font-size: 13px; color: {DARK_PALETTE.text_primary};"
+                f"font-size: 13px; color: {p.text_primary};"
             )
 
             scroll = QScrollArea()
@@ -129,7 +127,7 @@ class UpdateDialog(QDialog):
         layout.addWidget(self.progress_bar)
 
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet(f"font-size: 12px; color: {_COLOR_TEXT_DIM};")
+        self.status_label.setStyleSheet(f"font-size: 12px; color: {p.text_secondary};")
         self.status_label.setVisible(False)
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
@@ -185,7 +183,8 @@ class UpdateDialog(QDialog):
             self.set_status(f"Descargando… {_format_bytes(downloaded)}")
 
     def set_status(self, text: str, is_error: bool = False) -> None:
-        color = _COLOR_WARNING if is_error else _COLOR_TEXT_DIM
+        p = get_current_palette()
+        color = p.warning if is_error else p.text_secondary
         self.status_label.setStyleSheet(f"font-size: 12px; font-weight: 600; color: {color};")
         self.status_label.setText(text)
 

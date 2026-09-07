@@ -173,3 +173,88 @@ class TestSQLiteDownloadRepository:
         assert "audio_preset" in cols
         assert "embed_thumbnail" in cols
         db_mgr.close()
+
+    def test_left_join_resilience_missing_format_option(
+        self, db_repo: SQLiteDownloadRepository, sample_task: DownloadTask
+    ) -> None:
+        """Verifica que si una tarea pierde sus registros de format_options, LEFT JOIN previene su ocultamiento."""
+        db_repo.save(sample_task)
+        # Forzar borrado de los registros en format_options
+        conn = db_repo.db_manager.get_connection()
+        with conn:
+            conn.execute("DELETE FROM format_options WHERE media_id = ?", (sample_task.media.media_id.value,))
+
+        # Tarea debe seguir siendo visible en get_all, get_by_id y get_paginated
+        all_tasks = db_repo.get_all()
+        assert len(all_tasks) == 1
+        assert all_tasks[0].id == sample_task.id
+        assert all_tasks[0].selected_format.format_id == sample_task.selected_format.format_id
+
+        single = db_repo.get_by_id(sample_task.id)
+        assert single is not None
+        assert single.id == sample_task.id
+
+        paginated = db_repo.get_paginated(limit=10)
+        assert len(paginated) == 1
+        assert paginated[0].id == sample_task.id
+
+    def test_get_paginated_and_filtering(
+        self, db_repo: SQLiteDownloadRepository, sample_task: DownloadTask
+    ) -> None:
+        """Verifica la paginación, filtros de búsqueda y plataforma, y conteo."""
+        db_repo.save(sample_task)
+
+        from src.domain.value_objects.url import Url
+        from src.domain.value_objects.media_id import MediaId
+        from src.domain.value_objects.download_id import DownloadId
+        from src.domain.entities.media_metadata import MediaMetadata
+        from copy import deepcopy
+
+        task2 = deepcopy(sample_task)
+        object.__setattr__(task2, "id", DownloadId.generate())
+        media2 = MediaMetadata(
+            media_id=MediaId.from_string("https://www.tiktok.com/@user/video/999"),
+            url=Url("https://www.tiktok.com/@user/video/999"),
+            platform="TikTok",
+            title="Bailando en TikTok",
+            author="tiktoker",
+            duration_seconds=30.0,
+            thumbnail_url="",
+            formats=[sample_task.selected_format],
+        )
+        object.__setattr__(task2, "media", media2)
+        from datetime import timedelta
+        object.__setattr__(task2, "created_at", sample_task.created_at + timedelta(seconds=10))
+        db_repo.save(task2)
+
+        # Total count
+        assert db_repo.count() == 2
+
+        # Paginación limit 1
+        p1 = db_repo.get_paginated(limit=1, offset=0)
+        assert len(p1) == 1
+        p2 = db_repo.get_paginated(limit=1, offset=1)
+        assert len(p2) == 1
+        assert p1[0].id != p2[0].id
+
+        # Filtro de plataforma
+        yt_only = db_repo.get_paginated(platform_filter="YouTube")
+        assert len(yt_only) == 1
+        assert yt_only[0].media.platform == "YouTube"
+        assert db_repo.count(platform_filter="YouTube") == 1
+
+        tt_only = db_repo.get_paginated(platform_filter="TikTok")
+        assert len(tt_only) == 1
+        assert tt_only[0].media.platform == "TikTok"
+        assert db_repo.count(platform_filter="TikTok") == 1
+
+        # Filtro de búsqueda por texto
+        search_res = db_repo.get_paginated(search_query="Bailando")
+        assert len(search_res) == 1
+        assert search_res[0].media.title == "Bailando en TikTok"
+        assert db_repo.count(search_query="Bailando") == 1
+
+        # Ordenamiento
+        asc_tasks = db_repo.get_paginated(order_by="created_at", descending=False)
+        desc_tasks = db_repo.get_paginated(order_by="created_at", descending=True)
+        assert asc_tasks[0].id == desc_tasks[-1].id

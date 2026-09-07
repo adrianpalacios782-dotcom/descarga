@@ -41,6 +41,11 @@ class TestUrlValueObject:
             ("https://www.instagram.com/reel/C123/", "Instagram"),
             ("https://www.facebook.com/watch/?v=456", "Facebook"),
             ("https://fb.watch/xyz/", "Facebook"),
+            ("https://x.com/user/status/123", "Twitter"),
+            ("https://www.reddit.com/r/videos/comments/xyz/", "Reddit"),
+            ("https://vimeo.com/123456789", "Vimeo"),
+            ("https://soundcloud.com/artist/track", "SoundCloud"),
+            ("https://archive.org/details/example", "Generic"),
         ],
     )
     def test_platform_detection(self, url_str: str, expected_platform: str) -> None:

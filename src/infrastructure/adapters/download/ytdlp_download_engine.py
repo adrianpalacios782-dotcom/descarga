@@ -145,6 +145,7 @@ class YtDlpDownloadEngine(IDownloadEngine):
         cookies_from_browser: Optional[str] = None,
         cookiefile: Optional[str] = None,
         rate_limit_bytes: Optional[int] = None,
+        concurrent_fragments: int = 4,
     ) -> None:
         self.event_bus = event_bus
         self.ffmpeg_adapter = ffmpeg_adapter or FFmpegProcessAdapter()
@@ -157,11 +158,17 @@ class YtDlpDownloadEngine(IDownloadEngine):
             cookiefile.strip() if cookiefile and cookiefile.strip() else None
         )
         self.rate_limit_bytes: Optional[int] = rate_limit_bytes
+        self.concurrent_fragments: int = max(1, min(8, int(concurrent_fragments)))
 
         self._cancel_tokens: Dict[str, threading.Event] = {}
         self._pause_tokens: Dict[str, threading.Event] = {}
         self._threads: Dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
+
+    def set_concurrent_fragments(self, fragments: int) -> None:
+        """Actualiza el número de fragmentos concurrentes para descargas DASH/HLS (1 a 8)."""
+        with self._lock:
+            self.concurrent_fragments = max(1, min(8, int(fragments)))
 
     def set_rate_limit(self, limit_bytes: Optional[int]) -> None:
         """Actualiza el límite de velocidad en bytes por segundo (None o 0 para sin límite)."""
@@ -805,7 +812,7 @@ class YtDlpDownloadEngine(IDownloadEngine):
             "retries": 5,
             "fragment_retries": 5,
             "file_access_retries": 5,
-            "concurrent_fragment_downloads": 4,
+            "concurrent_fragment_downloads": self.concurrent_fragments,
             "buffersize": 65536,
             "outtmpl": outtmpl,
             "ffmpeg_location": self.ffmpeg_adapter.get_ffmpeg_executable(),

@@ -97,7 +97,8 @@ class ConfiguracionView(QWidget):
             self.chk_tray_notifications,
             self._row("Límite de velocidad de descarga:", self.combo_speed_limit),
             self._row("Descargas simultáneas máximas:", self._spin_concurrent()),
-            self._hint("Número máximo de descargas ejecutándose a la vez y ancho de banda."),
+            self._row("Fragmentos concurrentes (DASH/HLS):", self._spin_fragments()),
+            self._hint("Número máximo de descargas ejecutándose a la vez y fragmentos concurrentes para acelerar transferencias."),
         ]))
 
         # ----------------------------------------------------- APARIENCIA
@@ -224,6 +225,14 @@ class ConfiguracionView(QWidget):
         self.spin_concurrent.setFixedHeight(36)
         return self.spin_concurrent
 
+    def _spin_fragments(self) -> QSpinBox:
+        self.spin_fragments = QSpinBox()
+        self.spin_fragments.setRange(1, 8)
+        self.spin_fragments.setValue(4)
+        self.spin_fragments.setFixedWidth(100)
+        self.spin_fragments.setFixedHeight(36)
+        return self.spin_fragments
+
     def _combo_theme(self) -> QComboBox:
         self.combo_theme = QComboBox()
         self.combo_theme.setMinimumWidth(260)
@@ -305,6 +314,11 @@ class ConfiguracionView(QWidget):
                 self.spin_concurrent.setValue(int(saved["max_concurrent_downloads"]))
             except (ValueError, TypeError):
                 pass
+        if "concurrent_fragments" in saved:
+            try:
+                self.spin_fragments.setValue(int(saved["concurrent_fragments"]))
+            except (ValueError, TypeError):
+                pass
         if "theme" in saved:
             idx = self.combo_theme.findText(str(saved["theme"]))
             if idx >= 0:
@@ -360,6 +374,7 @@ class ConfiguracionView(QWidget):
             "ask_destination": self.chk_ask_destination.isChecked(),
             "tray_notifications": self.chk_tray_notifications.isChecked(),
             "max_concurrent_downloads": self.spin_concurrent.value(),
+            "concurrent_fragments": self.spin_fragments.value(),
             "speed_limit": str(speed_val) if speed_val is not None else "0",
             "theme": self.combo_theme.currentText(),
             "animations_enabled": self.chk_animations.isChecked(),
@@ -380,6 +395,9 @@ class ConfiguracionView(QWidget):
             )
             self.settings_repo.set(
                 "max_concurrent_downloads", settings["max_concurrent_downloads"], "int", "downloads"
+            )
+            self.settings_repo.set(
+                "concurrent_fragments", settings["concurrent_fragments"], "int", "downloads"
             )
             self.settings_repo.set(
                 "speed_limit", settings["speed_limit"], "str", "downloads"

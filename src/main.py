@@ -65,6 +65,7 @@ def main() -> None:
     saved_browser = settings_repository.get("cookies_browser", default="")
     saved_cookies_file = settings_repository.get("cookies_file", default="")
     saved_max_concurrent = settings_repository.get("max_concurrent_downloads", default=2)
+    saved_fragments = settings_repository.get("concurrent_fragments", default=4)
     saved_speed_limit = settings_repository.get("speed_limit", default="0")
     saved_default_dir = settings_repository.get(
         "default_download_dir",
@@ -82,6 +83,7 @@ def main() -> None:
         repository=repository,
         cookies_from_browser=saved_browser or None,
         cookiefile=saved_cookies_file or None,
+        concurrent_fragments=int(saved_fragments) if saved_fragments else 4,
     )
     if saved_speed_limit:
         parsed_limit = MainViewModel._parse_speed_limit(str(saved_speed_limit))

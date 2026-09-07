@@ -6,15 +6,28 @@
   recortada con esquinas redondeadas, con placeholder mientras carga o si falla.
 """
 
+import re
 import threading
 from collections import OrderedDict
 from typing import Optional
 
-from PySide6.QtCore import QObject, Qt, QRectF, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, QRectF, Signal
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPaintEvent, QPixmap
 from PySide6.QtWidgets import QWidget
 
 from src.infrastructure.adapters.media.thumbnail_fetcher import fetch_thumbnail
+from src.presentation.styles.theme import get_current_palette
+
+
+def _to_qcolor(color_str: str) -> QColor:
+    """Convierte cadenas hexadecimales o rgba() en un QColor válido."""
+    c = color_str.strip()
+    m = re.match(r"rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)", c)
+    if m:
+        r, g, b = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        a = int(float(m.group(4)) * 255) if m.group(4) is not None else 255
+        return QColor(r, g, b, a)
+    return QColor(c)
 
 _CACHE_MAX_ENTRIES = 64
 _CACHE_LOCK = threading.Lock()
@@ -144,6 +157,11 @@ class ThumbnailLabel(QWidget):
         self._placeholder_text = ""
         self.update()
 
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 (convención Qt)
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.StyleChange, QEvent.Type.PaletteChange):
+            self.update()
+
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802 (convención Qt)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -154,8 +172,10 @@ class ThumbnailLabel(QWidget):
         path.addRoundedRect(rect, self._corner_radius, self._corner_radius)
         painter.setClipPath(path)
 
+        palette = get_current_palette()
+
         if self._pixmap is not None and not self._pixmap.isNull():
-            painter.fillRect(rect, QColor("#101010"))
+            painter.fillRect(rect, _to_qcolor(palette.bg_window))
             scaled = self._pixmap.scaled(
                 self.width(),
                 self.height(),
@@ -166,8 +186,8 @@ class ThumbnailLabel(QWidget):
             y = (self.height() - scaled.height()) / 2.0
             painter.drawPixmap(int(x), int(y), scaled)
         else:
-            painter.fillRect(rect, QColor("#181818"))
-            painter.setPen(QColor("#3e3e3e"))
+            painter.fillRect(rect, _to_qcolor(palette.surface_sunken))
+            painter.setPen(_to_qcolor(palette.text_tertiary))
             font = QFont(self.font())
             font.setPointSize(max(9, self.height() // 14))
             font.setBold(False)
@@ -182,6 +202,6 @@ class ThumbnailLabel(QWidget):
         border_path = QPainterPath()
         border_rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         border_path.addRoundedRect(border_rect, self._corner_radius, self._corner_radius)
-        border_painter.setPen(QColor("#282828"))
+        border_painter.setPen(_to_qcolor(palette.border_strong))
         border_painter.drawPath(border_path)
         border_painter.end()

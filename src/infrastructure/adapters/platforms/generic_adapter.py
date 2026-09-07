@@ -11,4 +11,10 @@ class GenericAdapter(BasePlatformAdapter):
 
     def analyze(self, url: Url) -> MediaMetadata:
         info = self._extract_with_ytdlp(url)
-        return self._parse_ytdlp_info(url, info, platform_name="Generic")
+        detected = url.detect_platform()
+        if detected != "Generic":
+            platform_name = detected
+        else:
+            extractor = info.get("extractor_key") or info.get("extractor") or "Generic"
+            platform_name = str(extractor).capitalize()
+        return self._parse_ytdlp_info(url, info, platform_name=platform_name)

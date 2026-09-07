@@ -166,12 +166,35 @@ THEME_PALETTES: dict[str, Palette] = {
     "Oscuro": DARK_PALETTE,
 }
 
+ThemeTokens = Palette
+
+_CURRENT_THEME: str = "Oscuro Multimedia (Default)"
+_CURRENT_PALETTE: Palette = DARK_PALETTE
+
+
+def set_current_theme(theme_name: str) -> None:
+    """Actualiza el tema actual y sincroniza la paleta activa."""
+    global _CURRENT_THEME, _CURRENT_PALETTE
+    _CURRENT_THEME = theme_name
+    _CURRENT_PALETTE = get_theme_palette(theme_name)
+
+
+def get_current_theme() -> str:
+    """Retorna el nombre del tema activo."""
+    return _CURRENT_THEME
+
+
+def get_current_palette() -> Palette:
+    """Retorna la paleta de tokens activa del sistema."""
+    return _CURRENT_PALETTE
+
 
 def get_theme_palette(theme_name: str) -> Palette:
     return THEME_PALETTES.get(theme_name, DARK_PALETTE)
 
 
 def get_theme_qss(theme_name: str) -> str:
+    set_current_theme(theme_name)
     palette = get_theme_palette(theme_name)
     return build_qss(palette)
 
@@ -1045,6 +1068,11 @@ QFrame#UrlBar[property~="invalid"] {{
 
 QFrame#UrlBar[property~="valid"] {{
     border: 1px solid {p.border_focus};
+}}
+
+QFrame#UrlBar[drag_active="true"] {{
+    border: 2px dashed {p.accent};
+    background-color: {p.surface_active};
 }}
 
 QLineEdit#UrlInput {{

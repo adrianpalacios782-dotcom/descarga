@@ -82,6 +82,31 @@ class MockDownloadRepository(IDownloadRepository):
     def delete(self, task_id: DownloadId) -> None:
         self.tasks.pop(task_id.value, None)
 
+    def get_paginated(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        search_query: Optional[str] = None,
+        platform_filter: Optional[str] = None,
+        order_by: str = "created_at",
+        descending: bool = True,
+    ) -> List[DownloadTask]:
+        tasks = list(self.tasks.values())
+        if search_query:
+            q = search_query.lower()
+            tasks = [t for t in tasks if q in t.media.title.lower() or q in t.media.url.value.lower()]
+        if platform_filter and platform_filter.lower() != "todas":
+            p = platform_filter.lower()
+            tasks = [t for t in tasks if t.media.platform.lower() == p]
+        return tasks[offset : offset + limit]
+
+    def count(
+        self,
+        search_query: Optional[str] = None,
+        platform_filter: Optional[str] = None,
+    ) -> int:
+        return len(self.get_paginated(limit=999999, search_query=search_query, platform_filter=platform_filter))
+
 
 class TestApplicationUseCases:
 

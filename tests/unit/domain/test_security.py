@@ -98,13 +98,40 @@ class TestUrlSecurity:
         url = Url("http://www.youtube.com:80/watch?v=123")
         assert url.value == "http://www.youtube.com:80/watch?v=123"
 
-    def test_reject_unsupported_domain(self):
-        with pytest.raises(InvalidUrlError, match="plataforma soportada"):
-            Url("https://evil-site.com/video.mp4")
+    def test_accept_generic_public_domain(self):
+        url = Url("https://evil-site.com/video.mp4")
+        assert url.detect_platform() == "Generic"
 
-    def test_reject_arbitrary_subdomain_not_platform(self):
-        with pytest.raises(InvalidUrlError, match="plataforma soportada"):
-            Url("https://evil.youtube.com.evil.com/video.mp4")
+    def test_accept_arbitrary_subdomain_generic(self):
+        url = Url("https://evil.youtube.com.evil.com/video.mp4")
+        assert url.detect_platform() == "Generic"
+
+    def test_reject_dotless_intranet_host(self):
+        with pytest.raises(InvalidUrlError, match="dominio público válido"):
+            Url("http://intranet/video.mp4")
+        with pytest.raises(InvalidUrlError, match="dominio público válido"):
+            Url("http://router/status")
+
+    def test_reject_reserved_internal_tld(self):
+        with pytest.raises(InvalidUrlError, match="TLD reservado"):
+            Url("http://metadata.google.internal/computeMetadata/v1/")
+        with pytest.raises(InvalidUrlError, match="TLD reservado"):
+            Url("https://my-nas.local/video.mp4")
+        with pytest.raises(InvalidUrlError, match="TLD reservado"):
+            Url("https://device.lan/stream")
+
+    def test_accept_expanded_platforms(self):
+        assert Url("https://x.com/user/status/123").detect_platform() == "Twitter"
+        assert Url("https://twitter.com/user/status/123").detect_platform() == "Twitter"
+        assert Url("https://www.reddit.com/r/videos/comments/xyz/").detect_platform() == "Reddit"
+        assert Url("https://v.redd.it/12345").detect_platform() == "Reddit"
+        assert Url("https://vimeo.com/123456789").detect_platform() == "Vimeo"
+        assert Url("https://soundcloud.com/artist/track").detect_platform() == "SoundCloud"
+        assert Url("https://www.pinterest.com/pin/123/").detect_platform() == "Pinterest"
+        assert Url("https://www.dailymotion.com/video/x123").detect_platform() == "Dailymotion"
+        assert Url("https://www.bilibili.com/video/BV123").detect_platform() == "Bilibili"
+        assert Url("https://bsky.app/profile/user.bsky.social/post/123").detect_platform() == "Bluesky"
+        assert Url("https://www.threads.net/@user/post/123").detect_platform() == "Threads"
 
     def test_accept_youtube(self):
         url = Url("https://www.youtube.com/watch?v=dQw4w9WgXcQ")

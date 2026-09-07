@@ -18,9 +18,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.presentation.styles.styles import DARK_STYLE
-
-
 class BatchDownloadDialog(QDialog):
     """Diálogo modal para el procesamiento y encolamiento de descargas masivas."""
 
@@ -35,7 +32,6 @@ class BatchDownloadDialog(QDialog):
         self.setWindowTitle("Descarga Masiva por Lotes")
         self.resize(600, 520)
         self.setMinimumSize(520, 440)
-        self.setStyleSheet(DARK_STYLE)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 20, 24, 20)
