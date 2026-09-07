@@ -172,16 +172,21 @@ class BasePlatformAdapter(IPlatformAdapter):
         clean_msg = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", raw_msg)
         clean_msg = re.sub(r"ERROR:\s*", "", clean_msg).strip()
 
-        plat_name = url.detect_platform()
+        is_age_restricted = any(term in clean_msg.lower() for term in ("confirm your age", "age-restricted", "age restricted", "restricción de edad", "inappropriate for some users")) or ("age" in clean_msg.lower() and "sign in" in clean_msg.lower())
         if has_cookie_err and self.cookies_from_browser:
             clean_msg = (
                 f"No se pudieron leer las cookies de '{self.cookies_from_browser}' (el navegador está abierto o protegido por Windows). "
-                "Cierra el navegador por completo o utiliza un archivo cookies.txt en Configuración."
+                "Cierra el navegador por completo o utiliza un archivo cookies.txt en la pestaña Configuración."
             )
-        elif any(term in clean_msg.lower() for term in ("sign in", "bot", "too many requests", "429", "age")):
+        elif is_age_restricted:
+            clean_msg = (
+                f"Este video tiene restricción de edad (+18) en {plat_name}. "
+                "Para descargarlo, ve a la pestaña 'Configuración' -> 'Autenticación y Cookies' y carga tu archivo cookies.txt o selecciona tu navegador."
+            )
+        elif any(term in clean_msg.lower() for term in ("sign in", "bot", "too many requests", "429")):
             clean_msg = (
                 f"La plataforma ({plat_name}) ha restringido temporalmente las solicitudes "
-                "o requiere verificación de cuenta / edad para este contenido. "
+                "o requiere verificación de cuenta para este contenido. "
                 "Puedes configurar un archivo cookies.txt o tu navegador en Configuración."
             )
         elif all("auxiliares" in e for e in errors):
