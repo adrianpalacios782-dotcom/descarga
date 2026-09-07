@@ -90,7 +90,8 @@ class BasePlatformAdapter(IPlatformAdapter):
         direct_url_info: Optional[Dict[str, Any]] = None
         errors: List[str] = []
 
-        is_youtube = url.detect_platform() == "YouTube"
+        plat_name = url.detect_platform()
+        is_youtube = plat_name == "YouTube"
         strategies = self.CLIENT_STRATEGIES if is_youtube else [None]
 
         for clients in strategies:

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -36,19 +37,32 @@ class ConfiguracionView(QWidget):
         super().__init__(parent)
         self.settings_repo = settings_repo
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 32, 32, 32)
-        layout.setSpacing(16)
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(32, 28, 32, 24)
+        root_layout.setSpacing(16)
 
         title = QLabel("Configuración Global")
         title.setObjectName("ViewTitle")
-        layout.addWidget(title)
+        root_layout.addWidget(title)
+
+        # Scroll Area contenedora para evitar cualquier compresión vertical
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.scroll_area.setObjectName("ConfigScrollArea")
+
+        scroll_content = QWidget()
+        layout = QVBoxLayout(scroll_content)
+        layout.setContentsMargins(0, 0, 12, 16)
+        layout.setSpacing(16)
 
         # ------------------------------------------------------ DESCARGAS
         self.txt_default_dir = QLineEdit(os.path.join(os.path.expanduser("~"), "Downloads"))
+        self.txt_default_dir.setFixedHeight(36)
         self.btn_browse_dir = QPushButton("Examinar...")
         self.btn_browse_dir.setObjectName("SecondaryButton")
         self.btn_browse_dir.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_browse_dir.setFixedHeight(36)
         self.btn_browse_dir.clicked.connect(self._on_browse_dir_clicked)
 
         dir_widget = QWidget()
@@ -66,6 +80,8 @@ class ConfiguracionView(QWidget):
 
         # Limitador de Velocidad
         self.combo_speed_limit = QComboBox()
+        self.combo_speed_limit.setMinimumWidth(260)
+        self.combo_speed_limit.setFixedHeight(36)
         self.combo_speed_limit.addItem("Sin límite de velocidad", "0")
         self.combo_speed_limit.addItem("50 MB/s", "50M")
         self.combo_speed_limit.addItem("20 MB/s", "20M")
@@ -76,7 +92,7 @@ class ConfiguracionView(QWidget):
         self.combo_speed_limit.addItem("500 KB/s", "500K")
 
         layout.addWidget(self._build_section_card("DESCARGAS", [
-            self._row("Carpeta predeterminada:", dir_widget),
+            self._row("Carpeta predeterminada:", dir_widget, expand=True),
             self.chk_ask_destination,
             self.chk_tray_notifications,
             self._row("Límite de velocidad de descarga:", self.combo_speed_limit),
@@ -104,12 +120,17 @@ class ConfiguracionView(QWidget):
         self.lbl_engine_info.setObjectName("HintLabel")
 
         row_updates = QHBoxLayout()
+        row_updates.setSpacing(12)
         btn_update_engine = QPushButton("⚡ Actualizar Motor yt-dlp")
         btn_update_engine.setObjectName("SecondaryButton")
+        btn_update_engine.setFixedHeight(36)
+        btn_update_engine.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_update_engine.clicked.connect(self.engine_update_requested.emit)
 
         btn_check_updates = QPushButton("Buscar actualizaciones ahora")
         btn_check_updates.setObjectName("PrimaryButton")
+        btn_check_updates.setFixedHeight(36)
+        btn_check_updates.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_check_updates.clicked.connect(self.update_check_requested.emit)
 
         row_updates.addWidget(btn_update_engine)
@@ -138,11 +159,16 @@ class ConfiguracionView(QWidget):
 
         btn_save = QPushButton("Guardar Preferencias")
         btn_save.setObjectName("SecondaryButton")
+        btn_save.setFixedHeight(38)
+        btn_save.setMinimumWidth(180)
         btn_save.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_save.clicked.connect(self._on_save_clicked)
         layout.addWidget(btn_save, alignment=Qt.AlignmentFlag.AlignLeft)
 
         layout.addStretch()
+
+        self.scroll_area.setWidget(scroll_content)
+        root_layout.addWidget(self.scroll_area)
 
         if self.settings_repo is not None:
             self.load_settings()
@@ -168,13 +194,18 @@ class ConfiguracionView(QWidget):
         return card
 
     @staticmethod
-    def _row(label_text: str, widget: QWidget) -> QHBoxLayout:
+    def _row(label_text: str, widget: QWidget, expand: bool = False) -> QHBoxLayout:
         row = QHBoxLayout()
+        row.setSpacing(12)
         label = QLabel(label_text)
         label.setObjectName("FieldLabel")
+        label.setMinimumWidth(240)
         row.addWidget(label)
-        row.addWidget(widget)
-        row.addStretch()
+        if expand:
+            row.addWidget(widget, stretch=1)
+        else:
+            row.addWidget(widget)
+            row.addStretch()
         return row
 
     @staticmethod
@@ -189,15 +220,21 @@ class ConfiguracionView(QWidget):
         self.spin_concurrent = QSpinBox()
         self.spin_concurrent.setRange(1, 10)
         self.spin_concurrent.setValue(2)
+        self.spin_concurrent.setFixedWidth(100)
+        self.spin_concurrent.setFixedHeight(36)
         return self.spin_concurrent
 
     def _combo_theme(self) -> QComboBox:
         self.combo_theme = QComboBox()
+        self.combo_theme.setMinimumWidth(260)
+        self.combo_theme.setFixedHeight(36)
         self.combo_theme.addItems(["Oscuro Multimedia (Default)", "Oscuro OLED"])
         return self.combo_theme
 
     def _combo_browser(self) -> QComboBox:
         self.combo_browser = QComboBox()
+        self.combo_browser.setMinimumWidth(260)
+        self.combo_browser.setFixedHeight(36)
         self.combo_browser.addItem("Desactivado (Recomendado)", userData="")
         self.combo_browser.addItem("Chrome", userData="chrome")
         self.combo_browser.addItem("Edge", userData="edge")
@@ -207,28 +244,32 @@ class ConfiguracionView(QWidget):
 
     def _row_cookies_file(self) -> QHBoxLayout:
         row = QHBoxLayout()
+        row.setSpacing(12)
         label = QLabel("Archivo de cookies (cookies.txt):")
         label.setObjectName("FieldLabel")
+        label.setMinimumWidth(240)
         row.addWidget(label)
 
         self.txt_cookies_file = QLineEdit()
         self.txt_cookies_file.setPlaceholderText("Ruta a cookies.txt (opcional)...")
         self.txt_cookies_file.setReadOnly(True)
-        row.addWidget(self.txt_cookies_file)
+        self.txt_cookies_file.setFixedHeight(36)
+        row.addWidget(self.txt_cookies_file, stretch=1)
 
         btn_browse = QPushButton("Examinar...")
         btn_browse.setObjectName("SecondaryButton")
         btn_browse.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_browse.setFixedHeight(36)
         btn_browse.clicked.connect(self._on_browse_cookies_clicked)
         row.addWidget(btn_browse)
 
         btn_clear = QPushButton("Limpiar")
         btn_clear.setObjectName("SecondaryButton")
         btn_clear.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_clear.setFixedHeight(36)
         btn_clear.clicked.connect(self._on_clear_cookies_clicked)
         row.addWidget(btn_clear)
 
-        row.addStretch()
         return row
 
     # -------------------------------------------------------- Persistencia
