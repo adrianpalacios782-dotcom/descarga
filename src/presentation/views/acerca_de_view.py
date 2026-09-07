@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
 )
 
 import src as app_pkg
-from src.presentation.styles.styles import DARK_PALETTE
+from src.presentation.styles.theme import get_current_palette
 
 
 class AcercaDeView(QWidget):
@@ -42,23 +42,17 @@ class AcercaDeView(QWidget):
         brand_col = QVBoxLayout()
         brand_col.setSpacing(4)
         name_lbl = QLabel("osvaldoDownloaderPro")
-        name_lbl.setStyleSheet(
-            f"font-size: 20px; font-weight: 800; color: {DARK_PALETTE.text_primary};"
-        )
+        name_lbl.setObjectName("AboutAppName")
         tagline = QLabel("Gestor de descargas multimedia")
         tagline.setObjectName("ViewSubtitle")
         release_lbl = QLabel(
             f"osvaldoDownloaderPro v{app_pkg.__version__} (Release Principal)"
         )
-        release_lbl.setStyleSheet(
-            f"font-size: 12px; color: {DARK_PALETTE.text_tertiary};"
-        )
+        release_lbl.setObjectName("AboutAppRelease")
 
         # Línea explícita de versión requerida en "Acerca de".
         self.lbl_version_line = QLabel(f"Versión: {app_pkg.__version__}")
-        self.lbl_version_line.setStyleSheet(
-            f"font-size: 13px; font-weight: 600; color: {DARK_PALETTE.accent_text};"
-        )
+        self.lbl_version_line.setObjectName("AboutAppVersion")
 
         brand_col.addWidget(name_lbl)
         brand_col.addWidget(tagline)
@@ -69,22 +63,19 @@ class AcercaDeView(QWidget):
 
         desc_lbl = QLabel(
             "Aplicación de escritorio nativa e independiente para gestionar y descargar contenido "
-            "multimedia desde YouTube, TikTok, Instagram, Facebook, Twitch y Kick mediante Arquitectura Hexagonal y Monolito Modular."
+            "multimedia desde YouTube, TikTok, Instagram, Facebook, Twitch, Kick y cualquier sitio web "
+            "mediante Arquitectura Hexagonal y Monolito Modular."
         )
         desc_lbl.setWordWrap(True)
         desc_lbl.setObjectName("HintLabel")
 
         # Diagnóstico de FFmpeg
         self.lbl_ffmpeg_status = QLabel("Estado de FFmpeg: Verificando...")
-        self.lbl_ffmpeg_status.setStyleSheet(
-            f"font-size: 13px; color: {DARK_PALETTE.accent_text}; font-weight: 600;"
-        )
+        self.lbl_ffmpeg_status.setObjectName("AboutStatusSuccess")
 
         # Diagnóstico del Motor yt-dlp
         self.lbl_engine_status = QLabel("Motor yt-dlp: Verificando versión...")
-        self.lbl_engine_status.setStyleSheet(
-            f"font-size: 13px; color: {DARK_PALETTE.accent_text}; font-weight: 600;"
-        )
+        self.lbl_engine_status.setObjectName("AboutStatusSuccess")
 
         buttons_row = QHBoxLayout()
         buttons_row.setSpacing(10)
@@ -116,17 +107,18 @@ class AcercaDeView(QWidget):
     @staticmethod
     def _build_logo_pixmap(size: int = 64) -> QPixmap:
         """Logotipo vectorial: cuadrado redondeado verde con flecha de descarga."""
+        palette = get_current_palette()
         pixmap = QPixmap(size, size)
         pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(DARK_PALETTE.accent))
+        painter.setBrush(QColor(palette.accent))
         radius = int(size * 0.24)
         painter.drawRoundedRect(0, 0, size, size, radius, radius)
 
-        pen_color = QColor(DARK_PALETTE.text_on_accent)
+        pen_color = QColor(palette.text_on_accent)
         stroke = max(2.0, size * 0.055)
         pen = painter.pen()
         pen.setColor(pen_color)
@@ -154,25 +146,21 @@ class AcercaDeView(QWidget):
                 self.lbl_ffmpeg_status.setText(f"Estado de FFmpeg: Disponible — versión {version}")
             else:
                 self.lbl_ffmpeg_status.setText("Estado de FFmpeg: Disponible y funcional")
-            self.lbl_ffmpeg_status.setStyleSheet(
-                f"font-size: 13px; color: {DARK_PALETTE.accent_text}; font-weight: 700;"
-            )
+            self.lbl_ffmpeg_status.setObjectName("AboutStatusSuccess")
         else:
             self.lbl_ffmpeg_status.setText("Estado de FFmpeg: No detectado (Modo streaming directo)")
-            self.lbl_ffmpeg_status.setStyleSheet(
-                f"font-size: 13px; color: {DARK_PALETTE.warning}; font-weight: 700;"
-            )
+            self.lbl_ffmpeg_status.setObjectName("AboutStatusWarning")
+        self.lbl_ffmpeg_status.style().unpolish(self.lbl_ffmpeg_status)
+        self.lbl_ffmpeg_status.style().polish(self.lbl_ffmpeg_status)
 
     def set_engine_status(self, version: str, is_custom: bool = False) -> None:
         if version:
             tag = " (actualizado en AppData)" if is_custom else " (empaquetado)"
             self.lbl_engine_status.setText(f"Motor yt-dlp: v{version}{tag}")
-            self.lbl_engine_status.setStyleSheet(
-                f"font-size: 13px; color: {DARK_PALETTE.accent_text}; font-weight: 700;"
-            )
+            self.lbl_engine_status.setObjectName("AboutStatusSuccess")
         else:
             self.lbl_engine_status.setText("Motor yt-dlp: No detectado")
-            self.lbl_engine_status.setStyleSheet(
-                f"font-size: 13px; color: {DARK_PALETTE.warning}; font-weight: 700;"
-            )
+            self.lbl_engine_status.setObjectName("AboutStatusWarning")
+        self.lbl_engine_status.style().unpolish(self.lbl_engine_status)
+        self.lbl_engine_status.style().polish(self.lbl_engine_status)
 

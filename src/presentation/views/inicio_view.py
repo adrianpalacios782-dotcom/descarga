@@ -52,7 +52,7 @@ from src.presentation.components.format_table_widget import (
     FormatTableHeader,
     FormatTableRow,
 )
-from src.presentation.styles.styles import DARK_PALETTE
+from src.presentation.styles.theme import get_current_palette
 
 URL_VALIDATION_DELAY_MS = 350
 CLIPBOARD_POLL_INTERVAL_MS = 1200
@@ -176,7 +176,7 @@ class InicioView(QWidget):
         url_inner.setSpacing(8)
 
         search_badge = QLabel()
-        search_badge.setPixmap(search_icon(DARK_PALETTE.text_secondary).pixmap(18, 18))
+        search_badge.setPixmap(search_icon(get_current_palette().text_secondary).pixmap(18, 18))
         url_inner.addWidget(search_badge)
 
         self.url_input = QLineEdit()
@@ -379,7 +379,7 @@ class InicioView(QWidget):
 
         self.btn_download = QPushButton("Iniciar descarga")
         self.btn_download.setObjectName("DownloadButton")
-        self.btn_download.setIcon(download_icon(DARK_PALETTE.text_on_accent))
+        self.btn_download.setIcon(download_icon(get_current_palette().text_on_accent))
         self.btn_download.setIconSize(QSize(20, 20))
         self.btn_download.setMinimumHeight(50)
         self.btn_download.setMinimumWidth(210)

@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 
 from src.domain.entities.download_task import DownloadTask, DownloadState
 from src.presentation.components.status_labels import humanize_download_state
-from src.presentation.styles.styles import DARK_PALETTE
+from src.presentation.styles.theme import get_current_palette
 
 
 PLATFORM_ACCENT = {
@@ -158,7 +158,7 @@ class DownloadCardWidget(QFrame):
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(DARK_PALETTE.surface_active))
+        painter.setBrush(QColor(get_current_palette().surface_active))
         painter.drawRoundedRect(0, 0, pixmap_size, pixmap_size, 10, 10)
         font = QFont("Segoe UI", int(pixmap_size * 0.42))
         font.setBold(True)

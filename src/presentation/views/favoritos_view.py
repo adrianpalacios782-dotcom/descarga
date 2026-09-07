@@ -15,7 +15,7 @@ from src.domain.entities.favorite_item import FavoriteItem
 from src.domain.services.content_preview import format_duration_seconds
 from src.presentation.components.app_icons import heart_icon
 from src.presentation.components.thumbnail_loader import ThumbnailLabel
-from src.presentation.styles.styles import DARK_PALETTE
+from src.presentation.styles.theme import get_current_palette
 
 
 class FavoriteCard(QFrame):
@@ -131,7 +131,7 @@ class FavoritosView(QWidget):
         empty_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         lbl_icon = QLabel()
-        lbl_icon.setPixmap(heart_icon(DARK_PALETTE.text_tertiary).pixmap(QSize(44, 44)))
+        lbl_icon.setPixmap(heart_icon(get_current_palette().text_tertiary).pixmap(QSize(44, 44)))
         lbl_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         lbl_title = QLabel("Aún no tienes favoritos")
