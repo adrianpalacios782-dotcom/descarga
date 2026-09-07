@@ -23,7 +23,6 @@ from src.presentation.components.sidebar import SidebarWidget
 from src.presentation.components.system_tray import AppTrayIcon
 from src.presentation.components.title_bar import TitleBar
 from src.presentation.components.update_dialog import UpdateDialog
-from src.presentation.styles.styles import DARK_STYLE
 from src.presentation.view_models.main_view_model import MainViewModel
 from src.presentation.view_models.update_coordinator import UpdateCoordinator
 from src.presentation.views import (
@@ -73,7 +72,6 @@ class MainWindow(QMainWindow):
         # Mínimo pensado para que la previsualización completa quepa sin cortes
         # en el escenario más pequeño soportado (portátiles 1366x768).
         self.setMinimumSize(980, 700)
-        self.setStyleSheet(DARK_STYLE)
 
         # Barra de título personalizada: ventana frameless con controles
         # propios. El arrastre/snap lo gestiona Windows vía WM_NCHITTEST.

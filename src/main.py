@@ -109,7 +109,11 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     from src.presentation.styles.theme import get_theme_qss
-    saved_theme = settings_repository.get("theme", "appearance") if settings_repository else None
+    saved_theme = (
+        settings_repository.get("theme", default="Oscuro Multimedia (Default)")
+        if settings_repository
+        else None
+    )
     app.setStyleSheet(get_theme_qss(str(saved_theme) if saved_theme else "Oscuro Multimedia (Default)"))
 
     from PySide6.QtGui import QIcon

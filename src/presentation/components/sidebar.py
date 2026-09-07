@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 
 import src as app_pkg
 from src.presentation.components.app_icons import NAV_ICONS
-from src.presentation.styles.styles import DARK_PALETTE
+from src.presentation.styles.theme import get_current_palette
 
 # Grupos de navegación: PRINCIPAL / BIBLIOTECA / SISTEMA.
 # Los ids de botón (0..5) son el índice del stacked y NO deben cambiar.
@@ -119,7 +119,7 @@ class SidebarWidget(QFrame):
         btn = QPushButton(text)
         btn.setObjectName("NavButton")
         btn.setCheckable(True)
-        btn.setIcon(NAV_ICONS[index](DARK_PALETTE.text_secondary))
+        btn.setIcon(NAV_ICONS[index](get_current_palette().text_secondary))
         btn.setIconSize(QSize(19, 19))
         btn.setCursor(self.cursor())
         self.button_group.addButton(btn, index)
@@ -144,19 +144,29 @@ class SidebarWidget(QFrame):
         else:
             badge.hide()
 
+    def changeEvent(self, event: object) -> None:  # noqa: N802
+        super().changeEvent(event)  # type: ignore[arg-type]
+        from PySide6.QtCore import QEvent
+        if isinstance(event, QEvent) and event.type() in (QEvent.Type.StyleChange, QEvent.Type.PaletteChange):
+            active_id = self.button_group.checkedId()
+            if active_id >= 0:
+                self._refresh_icon_colors(active_id)
+
     def _on_toggled(self, index: int, checked: bool) -> None:
         if checked:
             self._refresh_icon_colors(index)
 
     def _refresh_icon_colors(self, active_index: int) -> None:
-        """El icono de la sección activa toma el acento; el resto, gris."""
+        """El icono de la sección activa toma el acento; el resto, el texto secundario de la paleta."""
+        from src.presentation.styles.theme import get_current_palette
+        p = get_current_palette()
         for index in range(6):
             button = self.button_group.button(index)
             if button is None:
                 continue
             color = (
-                DARK_PALETTE.accent_text
+                p.accent_text
                 if index == active_index
-                else DARK_PALETTE.text_secondary
+                else p.text_secondary
             )
             button.setIcon(NAV_ICONS[index](color))

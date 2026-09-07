@@ -831,6 +831,35 @@ QLabel#DownloadSummary {{
     color: {p.text_tertiary};
 }}
 
+QLabel#AboutAppName {{
+    font-size: 20px;
+    font-weight: 800;
+    color: {p.text_primary};
+}}
+
+QLabel#AboutAppRelease {{
+    font-size: 12px;
+    color: {p.text_tertiary};
+}}
+
+QLabel#AboutAppVersion {{
+    font-size: 13px;
+    font-weight: 700;
+    color: {p.accent_text};
+}}
+
+QLabel#AboutStatusSuccess {{
+    font-size: 13px;
+    font-weight: 700;
+    color: {p.accent_text};
+}}
+
+QLabel#AboutStatusWarning {{
+    font-size: 13px;
+    font-weight: 700;
+    color: {p.warning};
+}}
+
 /* ------------------------------------------------ Banner de estado */
 QLabel#StatusLabel {{
     border-radius: 9px;
@@ -918,7 +947,7 @@ QFrame#FormatRow:hover, QFrame#QualityCard:hover {{
 }}
 
 QFrame#FormatRow[selected="true"], QFrame#QualityCard[selected="true"] {{
-    background-color: #172033;
+    background-color: {p.accent_dim};
     border: 1px solid {p.accent};
 }}
 
@@ -936,7 +965,7 @@ QLabel#FormatRowIcon {{
 
 QLabel#QualityTitle {{
     background-color: transparent;
-    color: #FFFFFF;
+    color: {p.text_primary};
     font-size: 13px;
     font-weight: 700;
 }}
@@ -988,9 +1017,9 @@ QLabel#TechColText {{
 }}
 
 QLabel#BadgeRecommended {{
-    background-color: rgba(99, 102, 241, 0.2);
-    color: #818CF8;
-    border: 1px solid rgba(99, 102, 241, 0.45);
+    background-color: {p.accent_dim};
+    color: {p.accent_text};
+    border: 1px solid {p.accent};
     border-radius: 6px;
     font-size: 10px;
     font-weight: 700;
