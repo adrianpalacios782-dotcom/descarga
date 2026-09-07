@@ -2,6 +2,15 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [1.2.2] - 2026-09-07
+
+### Añadido & Optimizado
+- **Tema Claro (Claro Moderno):**
+  - Soporte completo y nativo para modo claro con paleta de alto contraste `#F8FAFC`, superficies `#FFFFFF` y tipografía nítida `#0F172A`.
+  - Conmutación instantánea y vista previa en tiempo real al seleccionar el tema en la sección Apariencia.
+- **Persistencia y Sincronización Global del Tema:**
+  - Carga transparente del tema configurado al iniciar la aplicación y propagación reactiva en todas las vistas y componentes.
+
 ## [1.2.1] - 2026-09-07
 
 ### Corregido & Optimizado
