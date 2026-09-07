@@ -168,7 +168,7 @@ class InicioView(QWidget):
         self.url_input = QLineEdit()
         self.url_input.setObjectName("UrlInput")
         self.url_input.setPlaceholderText(
-            "Pega aquí un enlace de YouTube, TikTok, Instagram o Facebook"
+            "Pega aquí un enlace de YouTube, TikTok, Twitch, Kick, Instagram, Facebook, X..."
         )
         self.url_input.setClearButtonEnabled(True)
         self.url_input.returnPressed.connect(self._on_analyze_clicked)

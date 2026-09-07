@@ -325,7 +325,8 @@ QLineEdit {{
     background-color: {p.surface_sunken};
     border: 1px solid {p.border};
     border-radius: 10px;
-    padding: 10px 14px;
+    padding: 6px 14px;
+    min-height: 24px;
     color: {p.text_primary};
     font-size: 13px;
     selection-background-color: {p.accent};
@@ -338,7 +339,8 @@ QLineEdit:focus {{
 
 QLineEdit#UrlInput {{
     font-size: 14px;
-    padding: 12px 16px;
+    padding: 10px 16px;
+    min-height: 24px;
 }}
 
 QLineEdit#UrlInput[property~="invalid"] {{
@@ -353,9 +355,11 @@ QComboBox {{
     background-color: {p.surface_sunken};
     border: 1px solid {p.border};
     border-radius: 10px;
-    padding: 9px 14px;
+    padding: 4px 34px 4px 14px;
+    min-height: 26px;
     color: {p.text_primary};
     font-size: 13px;
+    font-weight: 500;
 }}
 
 QComboBox:hover {{
@@ -368,7 +372,9 @@ QComboBox:focus {{
 
 QComboBox::drop-down {{
     border: none;
-    width: 24px;
+    width: 28px;
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
 }}
 
 QComboBox::down-arrow {{
@@ -376,7 +382,7 @@ QComboBox::down-arrow {{
     border-left: 4px solid transparent;
     border-right: 4px solid transparent;
     border-top: 5px solid {p.text_tertiary};
-    margin-right: 10px;
+    margin-right: 12px;
 }}
 
 QComboBox QAbstractItemView {{
@@ -390,18 +396,28 @@ QComboBox QAbstractItemView {{
     outline: none;
 }}
 
+QComboBox QAbstractItemView::item {{
+    min-height: 28px;
+    padding: 4px 10px;
+}}
+
 QCheckBox {{
-    spacing: 8px;
+    spacing: 10px;
     color: {p.text_secondary};
     font-size: 13px;
+    min-height: 24px;
 }}
 
 QCheckBox::indicator {{
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border-radius: 4px;
     border: 1px solid {p.border_strong};
     background-color: {p.surface_sunken};
+}}
+
+QCheckBox::indicator:hover {{
+    border-color: {p.accent};
 }}
 
 QCheckBox::indicator:checked {{
@@ -413,8 +429,14 @@ QSpinBox {{
     background-color: {p.surface_sunken};
     border: 1px solid {p.border};
     border-radius: 8px;
-    padding: 6px 10px;
+    padding: 4px 12px;
+    min-height: 26px;
     color: {p.text_primary};
+    font-size: 13px;
+}}
+
+QSpinBox:focus {{
+    border: 1px solid {p.border_focus};
 }}
 
 /* --------------------------------------------- Botones primarios */
