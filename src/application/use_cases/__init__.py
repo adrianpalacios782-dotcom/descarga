@@ -5,6 +5,7 @@ from src.application.use_cases.check_for_updates import (
     UpdateCheckStatus,
 )
 from src.application.use_cases.create_download import CreateDownloadUseCase
+from src.application.use_cases.download_media import DownloadMediaUseCase
 from src.application.use_cases.start_download import StartDownloadUseCase
 from src.application.use_cases.pause_download import PauseDownloadUseCase
 from src.application.use_cases.resume_download import ResumeDownloadUseCase
@@ -17,9 +18,11 @@ __all__ = [
     "UpdateCheckResult",
     "UpdateCheckStatus",
     "CreateDownloadUseCase",
+    "DownloadMediaUseCase",
     "StartDownloadUseCase",
     "PauseDownloadUseCase",
     "ResumeDownloadUseCase",
     "CancelDownloadUseCase",
     "RetryDownloadUseCase",
 ]
+

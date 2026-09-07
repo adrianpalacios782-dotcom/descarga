@@ -459,7 +459,7 @@ class MainWindow(QMainWindow):
 
     def _on_download_requested(self, media: MediaMetadata, format_id: str, dest_path: str) -> None:
         sub_cfg = self.inicio_view.preview_card.get_subtitle_config()
-        time_range = self.inicio_view.download_config.get_time_range()
+        time_range = self.inicio_view.get_time_range()
         audio_preset = self.inicio_view.download_config.get_audio_preset()
         embed_thumb = self.inicio_view.download_config.get_embed_thumbnail()
         self.view_model.create_and_start_download(
