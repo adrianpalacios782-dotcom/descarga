@@ -246,7 +246,7 @@ class ContentPreviewCard(QFrame):
             self.chip_platform.hide()
 
         # Tipo de contenido
-        is_audio_only = not metadata.video_quality_options and bool(metadata.audio_formats)
+        is_audio_only = not metadata.video_quality_options and not metadata.video_formats and bool(metadata.audio_formats)
         content_type_label = "Audio" if is_audio_only else "Vídeo"
         self.chip_content_type.setText(content_type_label)
         self.chip_content_type.show()

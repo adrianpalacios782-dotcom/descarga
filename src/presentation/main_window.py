@@ -6,6 +6,7 @@ from typing import Any
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QHBoxLayout,
     QMainWindow,
     QMessageBox,
@@ -321,7 +322,7 @@ class MainWindow(QMainWindow):
         if "theme" in settings:
             from src.presentation.styles.theme import get_theme_qss
             app = QApplication.instance()
-            if app:
+            if isinstance(app, QApplication):
                 app.setStyleSheet(get_theme_qss(str(settings["theme"])))
 
     def _connect_update_signals(self) -> None:

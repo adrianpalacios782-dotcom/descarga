@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 from src.domain.entities.media_metadata import MediaMetadata
+from src.domain.entities.playlist_metadata import PlaylistMetadata
 from src.domain.value_objects.url import Url
 
 
@@ -15,3 +17,7 @@ class IPlatformAdapter(ABC):
     def analyze(self, url: Url) -> MediaMetadata:
         """Analiza la URL y extrae la información normalizada del medio."""
         pass
+
+    def analyze_playlist(self, url: Url) -> Optional[PlaylistMetadata]:
+        """Analiza una lista de reproducción / álbum (opcionalmente implementado por adaptadores compatibles)."""
+        return None

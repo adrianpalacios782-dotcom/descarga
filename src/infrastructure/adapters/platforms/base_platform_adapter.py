@@ -43,6 +43,15 @@ class BasePlatformAdapter(IPlatformAdapter):
             cookiefile.strip() if cookiefile and cookiefile.strip() else None
         )
 
+    def detect(self, url: Url) -> bool:
+        """Determina si este adaptador puede procesar la URL (sobrescrito por adaptadores específicos)."""
+        return False
+
+    def analyze(self, url: Url) -> MediaMetadata:
+        """Analiza la URL y extrae los metadatos (sobrescrito por adaptadores específicos o usado por genérico)."""
+        info = self._extract_with_ytdlp(url)
+        return self._parse_ytdlp_info(url, info, platform_name=url.detect_platform())
+
     def set_cookie_file(self, cookiefile: Optional[str]) -> None:
         """Actualiza la ruta del archivo de cookies (cookies.txt)."""
         self.cookiefile = cookiefile.strip() if cookiefile and cookiefile.strip() else None
@@ -98,14 +107,21 @@ class BasePlatformAdapter(IPlatformAdapter):
             try:
                 opts = self._build_ydl_opts(clients)
                 with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(url.value, download=False)
-                if not info:
+                    raw_info = ydl.extract_info(url.value, download=False)
+                if not raw_info or not isinstance(raw_info, dict):
                     continue
+                info: Dict[str, Any] = dict(raw_info)
                 if "entries" in info or info.get("_type") == "playlist":
-                    entries = [e for e in info.get("entries", []) if e]
-                    if entries:
-                        info = entries[0]
-                formats = info.get("formats") or []
+                    raw_entries = info.get("entries")
+                    if isinstance(raw_entries, list):
+                        dict_entries = [e for e in raw_entries if isinstance(e, dict)]
+                        if dict_entries:
+                            info = dict_entries[0]
+                formats: List[Dict[str, Any]] = (
+                    [f for f in info.get("formats", []) if isinstance(f, dict)]
+                    if isinstance(info.get("formats"), list)
+                    else []
+                )
 
                 if not formats:
                     # Extracción de archivo directo (sin lista de formatos): válida.
@@ -121,8 +137,9 @@ class BasePlatformAdapter(IPlatformAdapter):
                     continue
 
                 video_opts = FormatNormalizer.normalize_video_quality_options(formats)
+                video_fmts = FormatNormalizer.normalize_video_formats(formats)
                 max_height = max([v.height for v in video_opts], default=0)
-                if max_height > 0 and video_info is None:
+                if (max_height > 0 or len(video_fmts) > 0) and video_info is None:
                     video_info = info
                     break
                 if audio_only_info is None:
@@ -151,21 +168,24 @@ class BasePlatformAdapter(IPlatformAdapter):
                 try:
                     opts = self._build_ydl_opts(clients, disable_browser_cookies=True)
                     with yt_dlp.YoutubeDL(opts) as ydl:
-                        info = ydl.extract_info(url.value, download=False)
-                    if not info:
+                        raw_retry = ydl.extract_info(url.value, download=False)
+                    if not raw_retry or not isinstance(raw_retry, dict):
                         continue
-                    if "entries" in info or info.get("_type") == "playlist":
-                        entries = [e for e in info.get("entries", []) if e]
-                        if entries:
-                            info = entries[0]
-                    formats = info.get("formats") or []
+                    retry_info: Dict[str, Any] = dict(raw_retry)
+                    if "entries" in retry_info or retry_info.get("_type") == "playlist":
+                        raw_entries = retry_info.get("entries")
+                        if isinstance(raw_entries, list):
+                            dict_entries = [e for e in raw_entries if isinstance(e, dict)]
+                            if dict_entries:
+                                retry_info = dict_entries[0]
+                    formats = retry_info.get("formats") or []
                     if not formats:
-                        if info.get("url"):
-                            return info
+                        if retry_info.get("url"):
+                            return retry_info
                         continue
                     real_formats = [f for f in formats if not FormatNormalizer.is_auxiliary_format(f)]
                     if real_formats:
-                        return info
+                        return retry_info
                 except Exception:
                     continue
 
@@ -251,13 +271,14 @@ class BasePlatformAdapter(IPlatformAdapter):
         except Exception as ex:
             raise MediaAnalysisError(f"No se pudo analizar la lista de reproducción: {ex}") from ex
 
-        if not info:
+        if not info or not isinstance(info, dict):
             raise MediaAnalysisError("La plataforma devolvió una lista vacía o no válida.")
 
-        entries_raw = info.get("entries") or []
+        entries_raw = info.get("entries")
+        entries_list = entries_raw if isinstance(entries_raw, list) else []
         entries: List[PlaylistEntry] = []
-        for e in entries_raw:
-            if not e:
+        for e in entries_list:
+            if not e or not isinstance(e, dict):
                 continue
             v_id = str(e.get("id") or "")
             v_title = str(e.get("title") or "Sin título")

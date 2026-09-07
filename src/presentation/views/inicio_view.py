@@ -733,20 +733,21 @@ class InicioView(QWidget):
     def _fallback_quality_options(metadata: MediaMetadata) -> List[VideoQualityOption]:
         options: List[VideoQualityOption] = []
         for vf in metadata.video_formats:
-            if not vf.height or vf.is_best_quality:
+            if vf.is_best_quality:
                 continue
             badge = ""
-            if vf.height >= 2160:
+            if vf.height and vf.height >= 2160:
                 badge = "4K"
-            elif vf.height >= 1440:
+            elif vf.height and vf.height >= 1440:
                 badge = "2K"
-            elif vf.height >= 720:
+            elif vf.height and vf.height >= 720:
                 badge = "HD"
-            elif vf.height >= 480:
+            elif vf.height and vf.height >= 480:
                 badge = "SD"
+            label = vf.resolution or (f"{vf.height}p" if vf.height else "Calidad original")
             options.append(VideoQualityOption(
-                height=vf.height,
-                label=f"{vf.height}p",
+                height=vf.height or 0,
+                label=label,
                 badge=badge,
                 video_format_id=vf.format_id,
                 audio_format_id=vf.audio_format_id,

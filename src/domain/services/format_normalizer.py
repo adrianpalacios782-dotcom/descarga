@@ -10,7 +10,7 @@ class FormatNormalizer:
     """Servicio de dominio para filtrar, normalizar y clasificar por separado formatos de VIDEO y AUDIO."""
 
     AUXILIARY_EXTENSIONS = ("mhtml", "sb0", "sb1", "sb2", "sb3", "jpg", "jpeg", "png", "webp", "json")
-    AUXILIARY_FORMAT_IDS = ("sb0", "sb1", "sb2", "sb3", "none", "none_none", "0", "storyboard", "thumbnails", "thumbnail")
+    AUXILIARY_FORMAT_IDS = ("sb0", "sb1", "sb2", "sb3", "none", "none_none", "storyboard", "thumbnails", "thumbnail")
 
     @staticmethod
     def get_standard_height(raw_height: int, raw_width: int = 0) -> int:
@@ -225,7 +225,7 @@ class FormatNormalizer:
     @classmethod
     def normalize_video_formats(cls, raw_formats: List[Dict[str, Any]]) -> List[VideoFormat]:
         """Normaliza y deduplica las opciones de VIDEO (VIDEO_ONLY y VIDEO_AUDIO). No descarta VIDEO_ONLY."""
-        seen: Dict[Tuple[int, int, str], VideoFormat] = {}
+        seen: Dict[Tuple[int, int, str, str], VideoFormat] = {}
         best_audio_id: Optional[str] = cls._find_best_audio_format_id(raw_formats)
 
         for f in raw_formats:
@@ -251,6 +251,8 @@ class FormatNormalizer:
             res = str(f.get("format_note") or f.get("resolution") or "")
             if not res and std_height:
                 res = f"{std_height}p"
+            elif not res:
+                res = "Calidad original"
 
             filesize = f.get("filesize") or f.get("filesize_approx")
 
@@ -269,7 +271,7 @@ class FormatNormalizer:
                 height_estimated=not raw_height_present and std_height > 0
             )
 
-            dedup_key = (std_height, int(fps), ext.lower())
+            dedup_key = (std_height, int(fps), ext.lower(), fmt_id if std_height == 0 else "")
             if dedup_key not in seen:
                 seen[dedup_key] = vf
             else:

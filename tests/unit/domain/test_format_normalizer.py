@@ -147,3 +147,21 @@ class TestFormatNormalizer:
         assert "sb0" not in ids and "sb1" not in ids and "sth" not in ids
         assert "best_quality" in ids
         assert all(o.label in ("Mejor calidad", "2160p", "1080p") for o in options)
+
+    def test_format_id_zero_kick_not_auxiliary(self) -> None:
+        kick_fmt = {
+            "format_id": "0",
+            "url": "https://clips.kick.com/clips/46/clip_123/playlist.m3u8",
+            "ext": "mp4",
+            "protocol": "m3u8_native",
+            "video_ext": "mp4",
+            "audio_ext": "none",
+        }
+        assert FormatNormalizer.is_auxiliary_format(kick_fmt) is False
+
+        video_formats = FormatNormalizer.normalize_video_formats([kick_fmt])
+        assert len(video_formats) == 1
+        assert video_formats[0].format_id == "0"
+        assert video_formats[0].resolution == "Calidad original"
+
+
