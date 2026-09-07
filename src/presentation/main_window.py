@@ -318,6 +318,11 @@ class MainWindow(QMainWindow):
             self._minimize_to_tray = bool(settings["minimize_to_tray"])
         if "tray_notifications" in settings:
             self._tray_notifications = bool(settings["tray_notifications"])
+        if "theme" in settings:
+            from src.presentation.styles.theme import get_theme_qss
+            app = QApplication.instance()
+            if app:
+                app.setStyleSheet(get_theme_qss(str(settings["theme"])))
 
     def _connect_update_signals(self) -> None:
         # Vistas manuales -> coordinador (con feedback visible)
