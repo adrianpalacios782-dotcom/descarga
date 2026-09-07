@@ -2,6 +2,19 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [1.2.1] - 2026-09-07
+
+### Corregido & Optimizado
+- **Escalado y Diseño Visual de la Interfaz:**
+  - Integración de `QScrollArea` elástico en `ConfiguracionView` eliminando la compresión vertical de tarjetas en cualquier resolución de pantalla.
+  - Estandarización de alturas (`36px`) y anchos mínimos en selectores (`QComboBox`, `QSpinBox`) para garantizar tipografía nítida y legible.
+  - Expansión horizontal al 100% de los campos de ruta de carpetas y archivos de cookies.
+- **Rendimiento de Descarga Acelerado:**
+  - Descarga concurrente de 4 fragmentos DASH/HLS (`concurrent_fragment_downloads: 4`) en `YtDlpDownloadEngine` para descargas ultrarrápidas en YouTube, Twitch, Kick y TikTok.
+  - Buffer de E/S de 64 KB y troceado HTTP de 10 MB optimizado.
+- **Manejo de Errores y Robustez:**
+  - Corrección de la variable `plat_name` en `BasePlatformAdapter` para avisos de contenido restringido (+18).
+
 ## [1.2.0] - 2026-09-07
 
 ### Añadido
