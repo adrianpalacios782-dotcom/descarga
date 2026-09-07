@@ -1,5 +1,4 @@
 import sqlite3
-import threading
 from datetime import datetime
 from typing import Any, List, Optional
 
@@ -18,7 +17,7 @@ class SQLiteDownloadRepository(IDownloadRepository):
 
     def __init__(self, db_manager: DatabaseManager) -> None:
         self.db_manager = db_manager
-        self._lock = threading.RLock()
+        self._lock = db_manager.lock
         self.db_manager.init_tables()
 
     def save(self, task: DownloadTask) -> None:
@@ -111,9 +110,10 @@ class SQLiteDownloadRepository(IDownloadRepository):
                     INSERT INTO download_tasks (
                         id, media_id, chosen_format_id, destination_path, current_state,
                         progress_percent, downloaded_bytes, total_bytes, speed_bps, eta_seconds,
-                        error_message, quality_warning, created_at, started_at, completed_at
+                        error_message, quality_warning, time_range_start, time_range_end,
+                        audio_preset, embed_thumbnail, created_at, started_at, completed_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET
                         current_state=excluded.current_state,
                         progress_percent=excluded.progress_percent,
@@ -123,6 +123,10 @@ class SQLiteDownloadRepository(IDownloadRepository):
                         eta_seconds=excluded.eta_seconds,
                         error_message=excluded.error_message,
                         quality_warning=excluded.quality_warning,
+                        time_range_start=excluded.time_range_start,
+                        time_range_end=excluded.time_range_end,
+                        audio_preset=excluded.audio_preset,
+                        embed_thumbnail=excluded.embed_thumbnail,
                         started_at=excluded.started_at,
                         completed_at=excluded.completed_at
                     """,
@@ -139,6 +143,10 @@ class SQLiteDownloadRepository(IDownloadRepository):
                         task.eta_seconds,
                         task.error_message,
                         task.quality_warning,
+                        task.time_range.start_seconds if task.time_range else None,
+                        task.time_range.end_seconds if task.time_range else None,
+                        task.audio_preset.value if task.audio_preset else None,
+                        1 if task.embed_thumbnail else 0,
                         task.created_at.isoformat(),
                         task.started_at.isoformat() if task.started_at else None,
                         task.completed_at.isoformat() if task.completed_at else None
@@ -240,6 +248,23 @@ class SQLiteDownloadRepository(IDownloadRepository):
             formats=[fmt]
         )
 
+        row_keys = set(row.keys())
+        time_range = None
+        if "time_range_start" in row_keys and row["time_range_start"] is not None:
+            from src.domain.value_objects.time_range import TimeRange
+            time_range = TimeRange(
+                start_seconds=float(row["time_range_start"]),
+                end_seconds=float(row["time_range_end"]) if ("time_range_end" in row_keys and row["time_range_end"] is not None) else None
+            )
+        audio_preset = None
+        if "audio_preset" in row_keys and row["audio_preset"]:
+            from src.domain.value_objects.audio_preset import AudioPreset
+            try:
+                audio_preset = AudioPreset(row["audio_preset"])
+            except ValueError:
+                audio_preset = None
+        embed_thumbnail = bool(row["embed_thumbnail"]) if ("embed_thumbnail" in row_keys and row["embed_thumbnail"]) else False
+
         task = DownloadTask(
             id=DownloadId(row["id"]),
             media=media,
@@ -255,7 +280,10 @@ class SQLiteDownloadRepository(IDownloadRepository):
             started_at=datetime.fromisoformat(row["started_at"]) if row["started_at"] else None,
             completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None,
             error_message=row["error_message"],
-            quality_warning=row["quality_warning"] if "quality_warning" in row.keys() else None
+            quality_warning=row["quality_warning"] if "quality_warning" in row_keys else None,
+            time_range=time_range,
+            audio_preset=audio_preset,
+            embed_thumbnail=embed_thumbnail,
         )
 
         return task

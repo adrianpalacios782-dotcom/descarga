@@ -54,7 +54,7 @@ class HistorialView(QWidget):
 
         self.combo_platform = QComboBox()
         self.combo_platform.addItems([
-            "Todas las plataformas", "YouTube", "TikTok", "Instagram", "Facebook"
+            "Todas las plataformas", "YouTube", "TikTok", "Instagram", "Facebook", "Twitch", "Kick"
         ])
 
         self.lbl_count = QLabel("")

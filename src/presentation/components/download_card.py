@@ -20,6 +20,8 @@ PLATFORM_ACCENT = {
     "tiktok": "#25f4ee",
     "instagram": "#e1306c",
     "facebook": "#1877f2",
+    "twitch": "#9146ff",
+    "kick": "#53fc18",
 }
 
 
@@ -192,13 +194,13 @@ class DownloadCardWidget(QFrame):
 
     def set_state(self, state: DownloadState) -> None:
         self.status_label.setText(self._status_text(state))
-        completed = state == DownloadState.COMPLETED and bool(self.destination_path)
+        completed = state in (DownloadState.COMPLETED, DownloadState.COMPLETED_WITH_DEGRADED_QUALITY) and bool(self.destination_path)
         if completed:
             self.btn_show_file.show()
             self.btn_open_folder.show()
 
-        if state in (DownloadState.COMPLETED, DownloadState.CANCELLED):
-            self.progress_bar.setValue(100 if state == DownloadState.COMPLETED else self.progress_bar.value())
+        if state in (DownloadState.COMPLETED, DownloadState.COMPLETED_WITH_DEGRADED_QUALITY, DownloadState.CANCELLED):
+            self.progress_bar.setValue(100 if state != DownloadState.CANCELLED else self.progress_bar.value())
             self.btn_pause.hide()
             self.btn_resume.hide()
             self.btn_cancel.hide()

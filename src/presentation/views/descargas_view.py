@@ -77,8 +77,8 @@ class DescargasView(QWidget):
             return
         from src.domain.entities.download_task import DownloadState
         self.cards[task_id].set_state(DownloadState(state))
-        if state == "COMPLETED":
-            # En COMPLETED el mensaje es una advertencia de calidad (no un error).
+        if state in ("COMPLETED", "COMPLETED_WITH_DEGRADED_QUALITY"):
+            # En COMPLETED o COMPLETED_WITH_DEGRADED_QUALITY el mensaje es una advertencia de calidad (no un error).
             self.cards[task_id].set_quality_warning(error_message or "")
             self.cards[task_id].set_error("")
         else:

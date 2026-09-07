@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import shutil
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
@@ -26,6 +27,7 @@ from src.domain.entities.subtitle import SubtitleConfig, SubtitleMode, SubtitleT
 from src.domain.ports.download_engine import IDownloadEngine
 from src.domain.ports.download_repository import IDownloadRepository
 from src.domain.services.format_normalizer import FormatNormalizer
+from src.domain.services.quality_validator import QualityValidator, QualityMatchStatus
 from src.infrastructure.adapters.media.ffmpeg_adapter import FFmpegProcessAdapter, CancelledOperationError
 from src.infrastructure.event_bus.in_process_event_bus import InProcessEventBus
 
@@ -141,6 +143,8 @@ class YtDlpDownloadEngine(IDownloadEngine):
         repository: Optional[IDownloadRepository] = None,
         ydl_factory: Optional[Callable[..., Any]] = None,
         cookies_from_browser: Optional[str] = None,
+        cookiefile: Optional[str] = None,
+        rate_limit_bytes: Optional[int] = None,
     ) -> None:
         self.event_bus = event_bus
         self.ffmpeg_adapter = ffmpeg_adapter or FFmpegProcessAdapter()
@@ -149,17 +153,33 @@ class YtDlpDownloadEngine(IDownloadEngine):
         self.cookies_from_browser: Optional[str] = (
             cookies_from_browser.strip() if cookies_from_browser and cookies_from_browser.strip() else None
         )
+        self.cookiefile: Optional[str] = (
+            cookiefile.strip() if cookiefile and cookiefile.strip() else None
+        )
+        self.rate_limit_bytes: Optional[int] = rate_limit_bytes
 
         self._cancel_tokens: Dict[str, threading.Event] = {}
         self._pause_tokens: Dict[str, threading.Event] = {}
         self._threads: Dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
 
+    def set_rate_limit(self, limit_bytes: Optional[int]) -> None:
+        """Actualiza el límite de velocidad en bytes por segundo (None o 0 para sin límite)."""
+        with self._lock:
+            self.rate_limit_bytes = limit_bytes if limit_bytes and limit_bytes > 0 else None
+
     def set_cookies_from_browser(self, browser: Optional[str]) -> None:
         """Actualiza dinámicamente el navegador configurado para extracción de cookies."""
         with self._lock:
             self.cookies_from_browser = (
                 browser.strip() if browser and browser.strip() else None
+            )
+
+    def set_cookie_file(self, cookiefile: Optional[str]) -> None:
+        """Actualiza dinámicamente la ruta del archivo de cookies (cookies.txt)."""
+        with self._lock:
+            self.cookiefile = (
+                cookiefile.strip() if cookiefile and cookiefile.strip() else None
             )
 
     # Estrategias de player_client para yt-dlp (extractores que las soportan, p. ej.
@@ -234,15 +254,43 @@ class YtDlpDownloadEngine(IDownloadEngine):
             self._save(task)
         except Exception as ex:
             logger.error(f"Error durante la descarga de la tarea {task_id}: {ex}", exc_info=True)
-            self._cleanup_task_files(task.destination_path)
-            try:
-                task.fail(str(ex))
-            except Exception:
-                task.status = DownloadState.FAILED
-                task.error_message = str(ex)
-            self._save(task)
-            if self.event_bus:
-                self.event_bus.publish(DownloadFailedEvent(task_id=task_id, error_message=str(ex)))
+            # Protección: Si el archivo final existe y tiene tamaño válido en disco,
+            # la transferencia se completó. Un fallo secundario menor (ej. postprocesado de
+            # subtítulos o metadatos) NO debe borrar el video ni convertir la tarea en FAILED.
+            final_exists = bool(
+                task.destination_path
+                and os.path.isfile(task.destination_path)
+                and os.path.getsize(task.destination_path) > 0
+            )
+            if final_exists:
+                logger.warning(
+                    f"Tarea {task_id}: Ocurrió una advertencia post-descarga ({ex}), pero el "
+                    f"archivo útil existe en disco ({task.destination_path}). Se conserva intacto."
+                )
+                warning_msg = f"Descarga completada con aviso: {ex}"
+                task.quality_warning = warning_msg
+                task.complete()
+                self._save(task)
+                if self.event_bus:
+                    self.event_bus.publish(
+                        DownloadCompletedEvent(
+                            task_id=task_id,
+                            destination_path=task.destination_path,
+                            total_bytes=os.path.getsize(task.destination_path),
+                            warning_message=warning_msg,
+                            is_degraded=True,
+                        )
+                    )
+            else:
+                self._cleanup_task_files(task.destination_path)
+                try:
+                    task.fail(str(ex))
+                except Exception:
+                    task.status = DownloadState.FAILED
+                    task.error_message = str(ex)
+                self._save(task)
+                if self.event_bus:
+                    self.event_bus.publish(DownloadFailedEvent(task_id=task_id, error_message=str(ex)))
         finally:
             with self._lock:
                 self._cancel_tokens.pop(task_id, None)
@@ -272,12 +320,24 @@ class YtDlpDownloadEngine(IDownloadEngine):
         pause_token: threading.Event,
     ) -> None:
         fmt = task.selected_format
-        target_fmt = (fmt.target_audio_format or "mp3").lower()
-        bitrate = fmt.target_audio_bitrate or 192
+        if task.audio_preset:
+            target_fmt = task.audio_preset.extension
+            bitrate = int(task.audio_preset.bitrate.replace("k", "")) if task.audio_preset.bitrate else 320
+        else:
+            target_fmt = (fmt.target_audio_format or "mp3").lower()
+            bitrate = fmt.target_audio_bitrate or 192
 
-        source_tmpl = os.path.join(dest_dir, base + ".audio_src.%(ext)s")
+        safe_base = base.replace("%", "%%")
+        source_tmpl = os.path.join(dest_dir, safe_base + ".audio_src.%(ext)s")
         opts = self._build_base_opts(source_tmpl, task.id.value, cancel_token, pause_token)
         opts["format"] = "bestaudio/best"
+        if task.time_range:
+            try:
+                opts["download_ranges"] = yt_dlp.utils.download_range_func(
+                    None, [(task.time_range.start_seconds, task.time_range.end_seconds or float("inf"))]
+                )
+            except Exception as e:
+                logger.debug(f"No se pudo asignar download_ranges en opts: {e}")
 
         info = None
         last_error = None
@@ -304,13 +364,43 @@ class YtDlpDownloadEngine(IDownloadEngine):
         if os.path.getsize(source_path) <= 0:
             raise RuntimeError("La pista de audio fuente se descargó vacía (0 bytes).")
 
-        self.ffmpeg_adapter.extract_audio_sync(
-            input_path=source_path,
-            output_path=task.destination_path,
-            audio_format=target_fmt,
-            bitrate_kbps=bitrate,
-            cancel_event=cancel_token,
-        )
+        title = task.media.title if task.media else None
+        artist = task.media.author if task.media else None
+        thumbnail_path = None
+        if task.embed_thumbnail and task.media and task.media.thumbnail_url:
+            try:
+                from src.infrastructure.adapters.media.thumbnail_fetcher import fetch_thumbnail
+                thumb_bytes = fetch_thumbnail(task.media.thumbnail_url)
+                if thumb_bytes:
+                    thumbnail_path = os.path.join(dest_dir, f"{safe_base}_thumb.jpg")
+                    with open(thumbnail_path, "wb") as fh:
+                        fh.write(thumb_bytes)
+            except Exception as ex:
+                logger.warning(f"No se pudo descargar la miniatura para incrustar: {ex}")
+
+        try:
+            if hasattr(self.ffmpeg_adapter, "convert_audio_with_metadata_sync"):
+                self.ffmpeg_adapter.convert_audio_with_metadata_sync(
+                    input_path=source_path,
+                    output_path=task.destination_path,
+                    audio_format=target_fmt,
+                    bitrate_kbps=bitrate,
+                    thumbnail_path=thumbnail_path,
+                    title=title,
+                    artist=artist,
+                    cancel_event=cancel_token,
+                )
+            else:
+                self.ffmpeg_adapter.extract_audio_sync(
+                    input_path=source_path,
+                    output_path=task.destination_path,
+                    audio_format=target_fmt,
+                    bitrate_kbps=bitrate,
+                    cancel_event=cancel_token,
+                )
+        finally:
+            if thumbnail_path and os.path.exists(thumbnail_path):
+                self._cleanup_file(thumbnail_path)
 
         self._cleanup_file(source_path)
         self._cleanup_file(source_path + ".part")
@@ -377,13 +467,21 @@ class YtDlpDownloadEngine(IDownloadEngine):
             logger.info(f"Solicitado={requested_label} | (sin sondeo previo)")
 
         # ── Fase 3: Descargar ──
+        safe_base = base.replace("%", "%%")
         opts = self._build_base_opts(
-            os.path.join(dest_dir, base + ".%(ext)s"),
+            os.path.join(dest_dir, safe_base + ".%(ext)s"),
             task.id.value, cancel_token, pause_token,
         )
         opts["format"] = self._build_video_format_spec(fmt)
         opts["merge_output_format"] = "mp4"
         opts["allow_multi_streams"] = True
+        if task.time_range:
+            try:
+                opts["download_ranges"] = yt_dlp.utils.download_range_func(
+                    None, [(task.time_range.start_seconds, task.time_range.end_seconds or float("inf"))]
+                )
+            except Exception as e:
+                logger.debug(f"No se pudo asignar download_ranges en opts: {e}")
 
         apply_subtitle_options(opts, task.subtitle_config)
 
@@ -443,30 +541,14 @@ class YtDlpDownloadEngine(IDownloadEngine):
         if actual_fps:
             actual_label += f"@{int(actual_fps)}fps"
 
-        if requested_height and actual_height and not fmt.is_best_quality:
-            if getattr(fmt, "height_estimated", False):
-                # Altura inferida por etiqueta (ej. Facebook 'sd'/'hd'): la plataforma
-                # no garantiza pixeles exactos, se informa sin invalidar la descarga.
-                logger.info(
-                    f"Calidad aproximada: se solicitó {requested_label} (estimada) y el "
-                    f"archivo resultante tiene {actual_label}."
-                )
-            else:
-                # La validación de calidad se mantiene: si hay degradación real se
-                # registra como advertencia visible en la tarea completada. La
-                # descarga NO se marca como Error: el archivo terminó correctamente,
-                # solo que con calidad inferior a la solicitada.
-                try:
-                    self._validate_downloaded_quality(actual_height, requested_height, requested_label, actual_label)
-                except QualityDegradationError as ex:
-                    task.quality_warning = str(ex)
-                    logger.warning(f"Descarga {task.id.value} completada con {task.quality_warning}")
-
-        if fmt.is_best_quality and actual_height and actual_height < (fmt.height or 0):
-            logger.warning(
-                f"DEGRADACIÓN DE CALIDAD: 'Mejor calidad' solicitó hasta {requested_label} "
-                f"pero la plataforma solo permitió {actual_label} ({video_codec})."
-            )
+        # ── Fase 5: Validación técnica de calidad y estado final ──
+        validation = QualityValidator.validate_video_quality(fmt, probe)
+        if validation.status == QualityMatchStatus.DEGRADED:
+            task.quality_warning = validation.message
+            logger.warning(f"Descarga {task.id.value} completada con {task.quality_warning}")
+        else:
+            task.quality_warning = None
+        task.complete()
 
         logger.info(
             f"VIDEO solicitado={requested_label} final={actual_label} "
@@ -477,7 +559,6 @@ class YtDlpDownloadEngine(IDownloadEngine):
         task.downloaded_bytes = size
         task.total_bytes = size
         task.progress_percent = 100.0
-        task.complete()
         self._save(task)
 
         if self.event_bus:
@@ -487,6 +568,7 @@ class YtDlpDownloadEngine(IDownloadEngine):
                     destination_path=task.destination_path,
                     total_bytes=size,
                     warning_message=task.quality_warning or "",
+                    is_degraded=bool(task.quality_warning),
                 )
             )
 
@@ -503,10 +585,15 @@ class YtDlpDownloadEngine(IDownloadEngine):
 
     @staticmethod
     def _validate_destination_path(destination_path: str) -> None:
-        """Valida que la ruta de destino no contenga traversal peligroso.
+        """Valida que la ruta de destino no contenga traversal peligroso ni rutas UNC.
 
-        Verifica que la ruta resuelta no escape de directorios del sistema.
+        Verifica que la ruta resuelta no escape de directorios del sistema ni intente
+        coerción de tráfico de red UNC.
         """
+        if destination_path.startswith(("\\\\", "//")):
+            raise RuntimeError(
+                f"Rutas de red UNC no permitidas por seguridad: '{destination_path}'"
+            )
         abs_path = os.path.abspath(destination_path)
         if os.name == "nt":
             lower = abs_path.lower().replace("\\", "/")
@@ -615,7 +702,14 @@ class YtDlpDownloadEngine(IDownloadEngine):
             "format": "all",
             "socket_timeout": 30,
         }
-        if self.cookies_from_browser:
+        if shutil.which("node"):
+            base_opts["js_runtimes"] = {"node": {}}
+        elif shutil.which("deno"):
+            base_opts["js_runtimes"] = {"deno": {}}
+
+        if self.cookiefile and os.path.isfile(self.cookiefile):
+            base_opts["cookiefile"] = self.cookiefile
+        elif self.cookies_from_browser:
             base_opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
         first_error: Optional[Exception] = None
         for clients in self.PROBE_CLIENT_STRATEGIES:
@@ -677,15 +771,17 @@ class YtDlpDownloadEngine(IDownloadEngine):
         requested_height: int,
         requested_label: str,
         actual_label: str,
+        actual_width: int = 0,
     ) -> None:
-        """Valida que la resolución descargada se acerca a la solicitada.
+        """Valida que la resolución descargada se acerque a la solicitada considerando aspect ratio.
 
-        Se tolera una degradación máxima del 15% (ej. 918p para 1080p solicitado)
-        para manejar variaciones menores de YouTube (ej. 1074p → 1080p).
-        Si la degradación supera el umbral, lanza QualityDegradationError.
+        Se tolera una degradación máxima del 15% calculada sobre la altura equivalente
+        para manejar variaciones como videos panorámicos (1920x806) o 1074p.
         """
-        threshold = 0.85
-        if actual_height < requested_height * threshold:
+        from src.domain.services.quality_validator import QualityValidator
+        effective_height = QualityValidator.calculate_effective_height(actual_height, actual_width)
+        threshold = QualityValidator.TOLERANCE_THRESHOLD
+        if effective_height < requested_height * threshold:
             raise QualityDegradationError(
                 f"Calidad degradada: se solicitó {requested_label} pero el archivo resultante "
                 f"tiene {actual_label}. La resolución solicitada no pudo ser entregada."
@@ -713,7 +809,17 @@ class YtDlpDownloadEngine(IDownloadEngine):
             "ffmpeg_location": self.ffmpeg_adapter.get_ffmpeg_executable(),
             "progress_hooks": [self._make_progress_hook(task_id, cancel_token, pause_token)],
         }
-        if self.cookies_from_browser:
+        if shutil.which("node"):
+            opts["js_runtimes"] = {"node": {}}
+        elif shutil.which("deno"):
+            opts["js_runtimes"] = {"deno": {}}
+
+        if self.rate_limit_bytes and self.rate_limit_bytes > 0:
+            opts["ratelimit"] = self.rate_limit_bytes
+
+        if self.cookiefile and os.path.isfile(self.cookiefile):
+            opts["cookiefile"] = self.cookiefile
+        elif self.cookies_from_browser:
             opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
         return opts
 
@@ -779,8 +885,8 @@ class YtDlpDownloadEngine(IDownloadEngine):
         Si el archivo está fuera del directorio, retorna None para que
         el caller busque en los candidatos del directorio.
         """
-        abs_file = os.path.abspath(filepath)
-        abs_dest = os.path.abspath(dest_dir)
+        abs_file = os.path.normcase(os.path.abspath(filepath))
+        abs_dest = os.path.normcase(os.path.abspath(dest_dir))
         if not abs_file.startswith(abs_dest + os.sep) and abs_file != abs_dest:
             logger.warning(
                 f"yt-dlp reportó archivo fuera del destino: {filepath} (destino={dest_dir})"
@@ -795,16 +901,28 @@ class YtDlpDownloadEngine(IDownloadEngine):
         if actual_ext.lower() != desired_ext.lower():
             dest = os.path.splitext(dest)[0] + actual_ext
 
-        if os.path.abspath(final_path) == os.path.abspath(dest):
+        if os.path.normcase(os.path.abspath(final_path)) == os.path.normcase(os.path.abspath(dest)):
             task.destination_path = dest
             return dest
 
         os.makedirs(os.path.dirname(os.path.abspath(dest)), exist_ok=True)
-        if os.path.exists(dest):
-            os.remove(dest)
-        os.replace(final_path, dest)
-        task.destination_path = dest
-        return dest
+        for attempt in range(3):
+            try:
+                if os.path.exists(dest):
+                    os.remove(dest)
+                os.replace(final_path, dest)
+                task.destination_path = dest
+                return dest
+            except OSError as ex:
+                if attempt < 2:
+                    time.sleep(0.2 * (attempt + 1))
+                else:
+                    logger.warning(
+                        f"No se pudo renombrar de '{final_path}' a '{dest}' ({ex}); se conserva '{final_path}'."
+                    )
+                    task.destination_path = final_path
+                    return final_path
+        return final_path
 
     @staticmethod
     def _split_destination(destination_path: str) -> tuple[str, str, str]:

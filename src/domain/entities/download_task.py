@@ -8,6 +8,7 @@ from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.entities.subtitle import SubtitleConfig
 from src.domain.exceptions.domain_exceptions import InvalidStateTransitionError
 from src.domain.value_objects.download_id import DownloadId
+from src.domain.value_objects.time_range import TimeRange
 
 
 class DownloadState(str, Enum):
@@ -19,6 +20,7 @@ class DownloadState(str, Enum):
     PAUSED = "PAUSED"
     PROCESSING = "PROCESSING"
     COMPLETED = "COMPLETED"
+    COMPLETED_WITH_DEGRADED_QUALITY = "COMPLETED_WITH_DEGRADED_QUALITY"
     FAILED = "FAILED"
     CANCELLED = "CANCELLED"
 
@@ -28,11 +30,24 @@ VALID_TRANSITIONS: Dict[DownloadState, Set[DownloadState]] = {
     DownloadState.QUEUED: {DownloadState.ANALYZING, DownloadState.DOWNLOADING, DownloadState.CANCELLED},
     DownloadState.ANALYZING: {DownloadState.READY, DownloadState.FAILED, DownloadState.CANCELLED},
     DownloadState.READY: {DownloadState.QUEUED, DownloadState.DOWNLOADING, DownloadState.CANCELLED},
-    DownloadState.DOWNLOADING: {DownloadState.PAUSED, DownloadState.PROCESSING, DownloadState.COMPLETED, DownloadState.FAILED, DownloadState.CANCELLED},
+    DownloadState.DOWNLOADING: {
+        DownloadState.PAUSED,
+        DownloadState.PROCESSING,
+        DownloadState.COMPLETED,
+        DownloadState.COMPLETED_WITH_DEGRADED_QUALITY,
+        DownloadState.FAILED,
+        DownloadState.CANCELLED,
+    },
     DownloadState.PAUSED: {DownloadState.DOWNLOADING, DownloadState.CANCELLED},
-    DownloadState.PROCESSING: {DownloadState.COMPLETED, DownloadState.FAILED, DownloadState.CANCELLED},
+    DownloadState.PROCESSING: {
+        DownloadState.COMPLETED,
+        DownloadState.COMPLETED_WITH_DEGRADED_QUALITY,
+        DownloadState.FAILED,
+        DownloadState.CANCELLED,
+    },
     DownloadState.FAILED: {DownloadState.QUEUED, DownloadState.CANCELLED},
     DownloadState.COMPLETED: set(),
+    DownloadState.COMPLETED_WITH_DEGRADED_QUALITY: set(),
     DownloadState.CANCELLED: set(),
 }
 
@@ -59,6 +74,9 @@ class DownloadTask:
     # una descarga técnicamente exitosa con calidad inferior NO es un Error.
     quality_warning: Optional[str] = None
     subtitle_config: Optional[SubtitleConfig] = None
+    time_range: Optional[TimeRange] = None
+    audio_preset: Optional[str] = None
+    embed_thumbnail: bool = True
 
     def __post_init__(self) -> None:
         if not self.destination_path or not self.destination_path.strip():
@@ -79,7 +97,7 @@ class DownloadTask:
 
         if new_state == DownloadState.DOWNLOADING and self.started_at is None:
             self.started_at = datetime.now()
-        elif new_state == DownloadState.COMPLETED:
+        elif new_state in (DownloadState.COMPLETED, DownloadState.COMPLETED_WITH_DEGRADED_QUALITY):
             self.completed_at = datetime.now()
             self.progress_percent = 100.0
             self.eta_seconds = 0.0
@@ -111,16 +129,25 @@ class DownloadTask:
 
     def cancel(self) -> None:
         """Cancela la descarga. No-op si ya está en un estado terminal."""
-        if self.status not in (DownloadState.COMPLETED, DownloadState.FAILED, DownloadState.CANCELLED):
+        if self.status not in (
+            DownloadState.COMPLETED,
+            DownloadState.COMPLETED_WITH_DEGRADED_QUALITY,
+            DownloadState.FAILED,
+            DownloadState.CANCELLED,
+        ):
             self.transition_to(DownloadState.CANCELLED)
 
     def complete(self) -> None:
-        """Marca la descarga como completada."""
-        if self.status == DownloadState.DOWNLOADING:
-            # Si requiriese processing, se transiciona a PROCESSING primero o directo si no requiere
+        """Marca la descarga como completada exitosamente."""
+        if self.status in (DownloadState.DOWNLOADING, DownloadState.PROCESSING):
             self.transition_to(DownloadState.COMPLETED)
-        elif self.status == DownloadState.PROCESSING:
-            self.transition_to(DownloadState.COMPLETED)
+
+    def complete_with_degraded_quality(self, warning_message: str = "") -> None:
+        """Marca la descarga como completada con calidad inferior o adaptada."""
+        if warning_message:
+            self.quality_warning = warning_message
+        if self.status in (DownloadState.DOWNLOADING, DownloadState.PROCESSING):
+            self.transition_to(DownloadState.COMPLETED_WITH_DEGRADED_QUALITY)
 
     def fail(self, error_message: str) -> None:
         """Marca la descarga como fallada almacenando el mensaje de error."""

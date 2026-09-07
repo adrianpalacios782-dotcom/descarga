@@ -9,9 +9,10 @@ from src.presentation.styles.styles import DARK_PALETTE
 
 
 class AcercaDeView(QWidget):
-    """Vista con información corporativa, diagnóstico del entorno e integración de FFmpeg."""
+    """Vista con información corporativa, diagnóstico del entorno e integración de FFmpeg y yt-dlp."""
 
     update_check_requested = Signal()
+    engine_update_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -68,7 +69,7 @@ class AcercaDeView(QWidget):
 
         desc_lbl = QLabel(
             "Aplicación de escritorio nativa e independiente para gestionar y descargar contenido "
-            "multimedia desde YouTube, TikTok, Instagram y Facebook mediante Arquitectura Hexagonal y Monolito Modular."
+            "multimedia desde YouTube, TikTok, Instagram, Facebook, Twitch y Kick mediante Arquitectura Hexagonal y Monolito Modular."
         )
         desc_lbl.setWordWrap(True)
         desc_lbl.setObjectName("HintLabel")
@@ -79,20 +80,33 @@ class AcercaDeView(QWidget):
             f"font-size: 13px; color: {DARK_PALETTE.accent_text}; font-weight: 600;"
         )
 
+        # Diagnóstico del Motor yt-dlp
+        self.lbl_engine_status = QLabel("Motor yt-dlp: Verificando versión...")
+        self.lbl_engine_status.setStyleSheet(
+            f"font-size: 13px; color: {DARK_PALETTE.accent_text}; font-weight: 600;"
+        )
+
         buttons_row = QHBoxLayout()
         buttons_row.setSpacing(10)
         btn_diagnostics = QPushButton("Exportar Paquete de Diagnóstico (.zip)")
         btn_diagnostics.setObjectName("SecondaryButton")
 
+        btn_update_engine = QPushButton("⚡ Actualizar Motor yt-dlp")
+        btn_update_engine.setObjectName("SecondaryButton")
+        btn_update_engine.clicked.connect(self.engine_update_requested.emit)
+
         btn_check_updates = QPushButton("Buscar actualizaciones")
         btn_check_updates.setObjectName("PrimaryButton")
         btn_check_updates.clicked.connect(self.update_check_requested.emit)
+
         buttons_row.addWidget(btn_diagnostics)
+        buttons_row.addWidget(btn_update_engine)
         buttons_row.addWidget(btn_check_updates)
         buttons_row.addStretch()
 
         card_layout.addWidget(desc_lbl)
         card_layout.addWidget(self.lbl_ffmpeg_status)
+        card_layout.addWidget(self.lbl_engine_status)
         card_layout.addSpacing(6)
         card_layout.addLayout(buttons_row)
 
@@ -148,3 +162,17 @@ class AcercaDeView(QWidget):
             self.lbl_ffmpeg_status.setStyleSheet(
                 f"font-size: 13px; color: {DARK_PALETTE.warning}; font-weight: 700;"
             )
+
+    def set_engine_status(self, version: str, is_custom: bool = False) -> None:
+        if version:
+            tag = " (actualizado en AppData)" if is_custom else " (empaquetado)"
+            self.lbl_engine_status.setText(f"Motor yt-dlp: v{version}{tag}")
+            self.lbl_engine_status.setStyleSheet(
+                f"font-size: 13px; color: {DARK_PALETTE.accent_text}; font-weight: 700;"
+            )
+        else:
+            self.lbl_engine_status.setText("Motor yt-dlp: No detectado")
+            self.lbl_engine_status.setStyleSheet(
+                f"font-size: 13px; color: {DARK_PALETTE.warning}; font-weight: 700;"
+            )
+

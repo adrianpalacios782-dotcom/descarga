@@ -58,7 +58,7 @@ CLIPBOARD_POLL_INTERVAL_MS = 1200
 
 _CLIPBOARD_URL_PATTERN = re.compile(
     r"https?://(?:www\.|m\.)?(youtube\.com|youtu\.be|tiktok\.com|"
-    r"instagram\.com|facebook\.com|fb\.watch)/\S+",
+    r"instagram\.com|facebook\.com|fb\.watch|twitch\.tv|clips\.twitch\.tv|kick\.com)/\S+",
     re.IGNORECASE,
 )
 
@@ -67,6 +67,8 @@ _PLATFORM_SPOTLIGHT = [
     ("TikTok", "#69e2f0"),
     ("Instagram", "#f070a8"),
     ("Facebook", "#6ea8ff"),
+    ("Twitch", "#9146ff"),
+    ("Kick", "#53fc18"),
 ]
 
 
@@ -623,6 +625,8 @@ class InicioView(QWidget):
         audio_visible = self._format_tab == TAB_AUDIO
         self.panel_audio.setVisible(audio_visible)
         self.lbl_audio_note.setVisible(audio_visible)
+        if hasattr(self, "download_config"):
+            self.download_config.set_audio_mode(audio_visible)
         if self._format_tab == TAB_RECOMMENDED:
             self.selected_type = DownloadType.VIDEO
         elif audio_visible:

@@ -60,3 +60,8 @@ class InvalidUpdateInfoError(UpdateError):
 class UpdateDownloadError(UpdateError):
     """Lanzada cuando la descarga del instalador falla, está incompleta o corrompida."""
     pass
+
+
+class InvalidParameterError(DomainError):
+    """Lanzada cuando un parámetro suministrado (ej. recorte de tiempo, formato) es inválido."""
+    pass

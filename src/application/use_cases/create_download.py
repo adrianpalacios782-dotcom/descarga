@@ -5,7 +5,9 @@ from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.entities.subtitle import SubtitleConfig
 from src.domain.exceptions.domain_exceptions import FormatNotFoundError
 from src.domain.ports.download_repository import IDownloadRepository
+from src.domain.value_objects.audio_preset import AudioPreset
 from src.domain.value_objects.download_id import DownloadId
+from src.domain.value_objects.time_range import TimeRange
 
 
 class CreateDownloadUseCase:
@@ -20,6 +22,9 @@ class CreateDownloadUseCase:
         format_id: str,
         destination_path: str,
         subtitle_config: Optional[SubtitleConfig] = None,
+        time_range: Optional[TimeRange] = None,
+        audio_preset: Optional[AudioPreset] = None,
+        embed_thumbnail: bool = False,
     ) -> DownloadTask:
         selected_format: FormatOption | None = None
 
@@ -47,6 +52,9 @@ class CreateDownloadUseCase:
             destination_path=destination_path,
             status=DownloadState.QUEUED,
             subtitle_config=subtitle_config,
+            time_range=time_range,
+            audio_preset=audio_preset,
+            embed_thumbnail=embed_thumbnail,
         )
 
         self.repository.save(task)

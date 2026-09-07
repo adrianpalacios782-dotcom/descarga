@@ -118,3 +118,8 @@ Desktop.ini
 $RECYCLE.BIN/
 *.bak
 *.orig
+
+# ---------- Proyectos externos ----------
+osvaldo-AI/
+sistema-informacion-tienda/
+

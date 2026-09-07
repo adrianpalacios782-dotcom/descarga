@@ -24,6 +24,7 @@ class ConfiguracionView(QWidget):
     """Vista de configuración global agrupada por paneles con persistencia real."""
 
     update_check_requested = Signal()
+    engine_update_requested = Signal()
     animations_enabled_changed = Signal(bool)
     settings_saved = Signal(dict)
 
@@ -63,12 +64,24 @@ class ConfiguracionView(QWidget):
         self.chk_tray_notifications = QCheckBox("Mostrar notificaciones de Windows al completar descargas")
         self.chk_tray_notifications.setChecked(True)
 
+        # Limitador de Velocidad
+        self.combo_speed_limit = QComboBox()
+        self.combo_speed_limit.addItem("Sin límite de velocidad", "0")
+        self.combo_speed_limit.addItem("50 MB/s", "50M")
+        self.combo_speed_limit.addItem("20 MB/s", "20M")
+        self.combo_speed_limit.addItem("10 MB/s", "10M")
+        self.combo_speed_limit.addItem("5 MB/s", "5M")
+        self.combo_speed_limit.addItem("2 MB/s", "2M")
+        self.combo_speed_limit.addItem("1 MB/s", "1M")
+        self.combo_speed_limit.addItem("500 KB/s", "500K")
+
         layout.addWidget(self._build_section_card("DESCARGAS", [
             self._row("Carpeta predeterminada:", dir_widget),
             self.chk_ask_destination,
             self.chk_tray_notifications,
+            self._row("Límite de velocidad de descarga:", self.combo_speed_limit),
             self._row("Descargas simultáneas máximas:", self._spin_concurrent()),
-            self._hint("Número máximo de descargas ejecutándose a la vez."),
+            self._hint("Número máximo de descargas ejecutándose a la vez y ancho de banda."),
         ]))
 
         # ----------------------------------------------------- APARIENCIA
@@ -87,27 +100,40 @@ class ConfiguracionView(QWidget):
         ]))
 
         # ------------------------------------------------- ACTUALIZACIONES
-        self.updates_card = self._build_section_card("ACTUALIZACIONES", [
-            self._hint(
-                "Comprueba si hay una nueva versión disponible en la fuente oficial. "
-                "La aplicación verifica cada instalador antes de ejecutarlo."
-            ),
-        ])
+        self.lbl_engine_info = QLabel("Motor de descarga (yt-dlp): Gestión y actualización dinámica.")
+        self.lbl_engine_info.setObjectName("HintLabel")
+
         row_updates = QHBoxLayout()
-        row_updates.addStretch()
+        btn_update_engine = QPushButton("⚡ Actualizar Motor yt-dlp")
+        btn_update_engine.setObjectName("SecondaryButton")
+        btn_update_engine.clicked.connect(self.engine_update_requested.emit)
+
         btn_check_updates = QPushButton("Buscar actualizaciones ahora")
         btn_check_updates.setObjectName("PrimaryButton")
         btn_check_updates.clicked.connect(self.update_check_requested.emit)
+
+        row_updates.addWidget(btn_update_engine)
+        row_updates.addStretch()
         row_updates.addWidget(btn_check_updates)
-        updates_layout = self.updates_card.layout()
-        if isinstance(updates_layout, QVBoxLayout):
-            updates_layout.addLayout(row_updates)
+
+        self.updates_card = self._build_section_card("ACTUALIZACIONES", [
+            self._hint(
+                "Comprueba si hay una nueva versión de la aplicación o del motor de descarga yt-dlp. "
+                "La aplicación verifica cada paquete con SHA-256 antes de instalarlo."
+            ),
+            self.lbl_engine_info,
+            row_updates,
+        ])
         layout.addWidget(self.updates_card)
 
         # ------------------------------------------------------- AVANZADO
-        layout.addWidget(self._build_section_card("AVANZADO", [
-            self._row("Navegador para cookies (Contenido restringido):", self._combo_browser()),
-            self._hint("Usa las cookies de tu navegador solo si el contenido requiere inicio de sesión."),
+        layout.addWidget(self._build_section_card("AVANZADO (SESIÓN Y CONTENIDO RESTRINGIDO)", [
+            self._row("Navegador para cookies:", self._combo_browser()),
+            self._row_cookies_file(),
+            self._hint(
+                "Para videos con restricción de edad o inicio de sesión: puedes usar las cookies de tu navegador "
+                "o seleccionar un archivo cookies.txt (exportado con extensiones como 'Get cookies.txt LOCALLY')."
+            ),
         ]))
 
         btn_save = QPushButton("Guardar Preferencias")
@@ -179,6 +205,32 @@ class ConfiguracionView(QWidget):
         self.combo_browser.addItem("Brave", userData="brave")
         return self.combo_browser
 
+    def _row_cookies_file(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        label = QLabel("Archivo de cookies (cookies.txt):")
+        label.setObjectName("FieldLabel")
+        row.addWidget(label)
+
+        self.txt_cookies_file = QLineEdit()
+        self.txt_cookies_file.setPlaceholderText("Ruta a cookies.txt (opcional)...")
+        self.txt_cookies_file.setReadOnly(True)
+        row.addWidget(self.txt_cookies_file)
+
+        btn_browse = QPushButton("Examinar...")
+        btn_browse.setObjectName("SecondaryButton")
+        btn_browse.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_browse.clicked.connect(self._on_browse_cookies_clicked)
+        row.addWidget(btn_browse)
+
+        btn_clear = QPushButton("Limpiar")
+        btn_clear.setObjectName("SecondaryButton")
+        btn_clear.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_clear.clicked.connect(self._on_clear_cookies_clicked)
+        row.addWidget(btn_clear)
+
+        row.addStretch()
+        return row
+
     # -------------------------------------------------------- Persistencia
     def set_settings_repository(self, repo: ISettingsRepository) -> None:
         """Asigna el repositorio de configuraciones y carga los valores actuales."""
@@ -215,6 +267,13 @@ class ConfiguracionView(QWidget):
             idx = self.combo_browser.findData(browser_key)
             if idx >= 0:
                 self.combo_browser.setCurrentIndex(idx)
+        if "cookies_file" in saved:
+            self.txt_cookies_file.setText(str(saved["cookies_file"]))
+        if "speed_limit" in saved:
+            sp_val = str(saved["speed_limit"])
+            idx = self.combo_speed_limit.findData(sp_val)
+            if idx >= 0:
+                self.combo_speed_limit.setCurrentIndex(idx)
 
     # ------------------------------------------------------------ Acciones
     def _on_browse_dir_clicked(self) -> None:
@@ -227,17 +286,33 @@ class ConfiguracionView(QWidget):
         if folder:
             self.txt_default_dir.setText(os.path.normpath(folder))
 
+    def _on_browse_cookies_clicked(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleccionar archivo de cookies",
+            os.path.expanduser("~"),
+            "Archivos de Cookies (*.txt *.cookie);;Todos los archivos (*.*)",
+        )
+        if file_path:
+            self.txt_cookies_file.setText(os.path.normpath(file_path))
+
+    def _on_clear_cookies_clicked(self) -> None:
+        self.txt_cookies_file.clear()
+
     def _on_save_clicked(self) -> None:
         browser_val = self.combo_browser.currentData()
+        speed_val = self.combo_speed_limit.currentData()
         settings = {
             "default_download_dir": self.txt_default_dir.text().strip(),
             "ask_destination": self.chk_ask_destination.isChecked(),
             "tray_notifications": self.chk_tray_notifications.isChecked(),
             "max_concurrent_downloads": self.spin_concurrent.value(),
+            "speed_limit": str(speed_val) if speed_val is not None else "0",
             "theme": self.combo_theme.currentText(),
             "animations_enabled": self.chk_animations.isChecked(),
             "minimize_to_tray": self.chk_minimize_to_tray.isChecked(),
             "cookies_browser": str(browser_val) if browser_val is not None else "",
+            "cookies_file": self.txt_cookies_file.text().strip(),
         }
 
         if self.settings_repo is not None:
@@ -254,6 +329,9 @@ class ConfiguracionView(QWidget):
                 "max_concurrent_downloads", settings["max_concurrent_downloads"], "int", "downloads"
             )
             self.settings_repo.set(
+                "speed_limit", settings["speed_limit"], "str", "downloads"
+            )
+            self.settings_repo.set(
                 "theme", settings["theme"], "str", "appearance"
             )
             self.settings_repo.set(
@@ -265,8 +343,13 @@ class ConfiguracionView(QWidget):
             self.settings_repo.set(
                 "cookies_browser", settings["cookies_browser"], "str", "advanced"
             )
+            self.settings_repo.set(
+                "cookies_file", settings["cookies_file"], "str", "advanced"
+            )
 
         self.settings_saved.emit(settings)
         QMessageBox.information(
-            self, "Configuración", "Las preferencias han sido guardadas correctamente."
+            self,
+            "Configuración Guardada",
+            "Las preferencias se han guardado y aplicado correctamente.",
         )

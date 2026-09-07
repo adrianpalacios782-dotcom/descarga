@@ -63,20 +63,30 @@ def main() -> None:
 
     # Cargar preferencias persistidas
     saved_browser = settings_repository.get("cookies_browser", default="")
+    saved_cookies_file = settings_repository.get("cookies_file", default="")
     saved_max_concurrent = settings_repository.get("max_concurrent_downloads", default=2)
+    saved_speed_limit = settings_repository.get("speed_limit", default="0")
     saved_default_dir = settings_repository.get(
         "default_download_dir",
         default=os.path.join(os.path.expanduser("~"), "Downloads"),
     )
 
-    platform_registry = PlatformRegistry(cookies_from_browser=saved_browser or None)
+    platform_registry = PlatformRegistry(
+        cookies_from_browser=saved_browser or None,
+        cookiefile=saved_cookies_file or None,
+    )
     ffmpeg_adapter = FFmpegProcessAdapter()
     download_engine = YtDlpDownloadEngine(
         event_bus=event_bus,
         ffmpeg_adapter=ffmpeg_adapter,
         repository=repository,
         cookies_from_browser=saved_browser or None,
+        cookiefile=saved_cookies_file or None,
     )
+    if saved_speed_limit:
+        parsed_limit = MainViewModel._parse_speed_limit(str(saved_speed_limit))
+        if parsed_limit:
+            download_engine.set_rate_limit(parsed_limit)
 
     # Cola de descargas: concurrencia según preferencia guardada, resto "En cola".
     download_queue = DownloadQueueManager(

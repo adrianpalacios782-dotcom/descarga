@@ -1,4 +1,5 @@
 import sqlite3
+import threading
 from typing import List, Optional, Tuple
 
 
@@ -8,6 +9,12 @@ class DatabaseManager:
     def __init__(self, db_path: str = ":memory:") -> None:
         self.db_path = db_path
         self._connection: Optional[sqlite3.Connection] = None
+        self._lock = threading.RLock()
+
+    @property
+    def lock(self) -> threading.RLock:
+        """Lock reentrante centralizado para sincronización multihilo de todas las operaciones sobre SQLite."""
+        return self._lock
 
     def get_connection(self) -> sqlite3.Connection:
         """Obtiene o crea una conexión configurada a la base de datos SQLite."""
@@ -65,6 +72,11 @@ class DatabaseManager:
                     speed_bps REAL DEFAULT 0.0,
                     eta_seconds REAL DEFAULT 0.0,
                     error_message TEXT,
+                    quality_warning TEXT,
+                    time_range_start REAL,
+                    time_range_end REAL,
+                    audio_preset TEXT,
+                    embed_thumbnail INTEGER DEFAULT 0,
                     created_at TEXT NOT NULL,
                     started_at TEXT,
                     completed_at TEXT,
@@ -132,8 +144,16 @@ class DatabaseManager:
             row[1]
             for row in conn.execute("PRAGMA table_info(download_tasks)").fetchall()
         ]
-        if "quality_warning" not in existing:
-            conn.execute("ALTER TABLE download_tasks ADD COLUMN quality_warning TEXT")
+        columns: List[Tuple[str, str]] = [
+            ("quality_warning", "TEXT"),
+            ("time_range_start", "REAL"),
+            ("time_range_end", "REAL"),
+            ("audio_preset", "TEXT"),
+            ("embed_thumbnail", "INTEGER DEFAULT 0"),
+        ]
+        for column, ddl in columns:
+            if column not in existing:
+                conn.execute(f"ALTER TABLE download_tasks ADD COLUMN {column} {ddl}")
 
     def close(self) -> None:
         """Cierra la conexión activa."""

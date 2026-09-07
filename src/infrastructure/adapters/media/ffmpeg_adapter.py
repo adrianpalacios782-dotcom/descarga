@@ -347,3 +347,135 @@ class FFmpegProcessAdapter:
             reencode_cmd = [exe, "-y", "-hide_banner", "-loglevel", "error", "-i", video_path, "-i", audio_path,
                             "-c:v", "libx264", "-preset", "fast", "-c:a", "aac", output_path]
             _run(reencode_cmd)
+
+    def trim_media_sync(
+        self,
+        input_path: str,
+        output_path: str,
+        start_seconds: float = 0.0,
+        end_seconds: Optional[float] = None,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> None:
+        """Recorta un archivo multimedia entre start_seconds y end_seconds."""
+        exe = self.get_ffmpeg_executable()
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+        cmd = [exe, "-y", "-hide_banner", "-loglevel", "error"]
+        if start_seconds > 0:
+            cmd.extend(["-ss", str(start_seconds)])
+        if end_seconds is not None and end_seconds > start_seconds:
+            duration = end_seconds - start_seconds
+            cmd.extend(["-t", str(duration)])
+
+        cmd.extend(["-i", input_path])
+        copy_cmd = cmd + ["-c", "copy", output_path]
+
+        def _run(run_cmd: List[str]) -> None:
+            proc = subprocess.Popen(run_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=flags)
+            if cancel_event is not None:
+                while proc.poll() is None:
+                    if cancel_event.is_set():
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+                        raise CancelledOperationError("Recorte cancelado por el usuario.")
+                    cancel_event.wait(0.2)
+            _, stderr = proc.communicate()
+            if proc.returncode != 0:
+                err = stderr.decode("utf-8", errors="replace")[-1500:]
+                raise RuntimeError(f"Error al recortar con FFmpeg: {err}")
+
+        try:
+            _run(copy_cmd)
+        except RuntimeError:
+            logger.info("El recorte rápido con -c copy falló; reintentando con recodificación precisa.")
+            reencode_cmd = cmd + [output_path]
+            _run(reencode_cmd)
+
+        if not os.path.exists(output_path) or os.path.getsize(output_path) <= 0:
+            raise RuntimeError(f"El recorte multimedia no produjo un archivo válido: {output_path}")
+
+    def convert_audio_with_metadata_sync(
+        self,
+        input_path: str,
+        output_path: str,
+        audio_format: str = "mp3",
+        bitrate_kbps: Optional[int] = 320,
+        thumbnail_path: Optional[str] = None,
+        title: Optional[str] = None,
+        artist: Optional[str] = None,
+        album: Optional[str] = None,
+        cancel_event: Optional[threading.Event] = None,
+    ) -> None:
+        """Transcodifica audio profesionalmente incrustando metadatos ID3 y carátula de álbum."""
+        exe = self.get_ffmpeg_executable()
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        fmt = audio_format.lower()
+
+        cmd = [exe, "-y", "-hide_banner", "-loglevel", "error", "-i", input_path]
+        has_thumbnail = bool(thumbnail_path and os.path.exists(thumbnail_path) and os.path.getsize(thumbnail_path) > 0)
+
+        if has_thumbnail:
+            cmd.extend(["-i", thumbnail_path])
+
+        if has_thumbnail and fmt in ("mp3", "m4a", "flac"):
+            cmd.extend(["-map", "0:a", "-map", "1:v"])
+            if fmt == "mp3":
+                cmd.extend(["-c:v", "mjpeg", "-id3v2_version", "3", "-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)"])
+            elif fmt == "m4a":
+                cmd.extend(["-c:v", "mjpeg", "-disposition:v", "attached_pic"])
+            elif fmt == "flac":
+                cmd.extend(["-c:v", "mjpeg", "-disposition:v", "attached_pic"])
+        else:
+            cmd.extend(["-map", "0:a?", "-vn"])
+
+        if fmt == "mp3":
+            cmd.extend(["-c:a", "libmp3lame"])
+            if bitrate_kbps:
+                cmd.extend(["-b:a", f"{bitrate_kbps}k"])
+        elif fmt == "m4a":
+            cmd.extend(["-c:a", "aac"])
+            if bitrate_kbps:
+                cmd.extend(["-b:a", f"{bitrate_kbps}k"])
+        elif fmt == "flac":
+            cmd.extend(["-c:a", "flac"])
+        elif fmt == "wav":
+            cmd.extend(["-c:a", "pcm_s16le"])
+        elif fmt == "opus":
+            cmd.extend(["-c:a", "libopus"])
+            if bitrate_kbps:
+                cmd.extend(["-b:a", f"{bitrate_kbps}k"])
+        else:
+            cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k"])
+
+        if title:
+            cmd.extend(["-metadata", f"title={title}"])
+        if artist:
+            cmd.extend(["-metadata", f"artist={artist}"])
+        if album:
+            cmd.extend(["-metadata", f"album={album}"])
+
+        cmd.append(output_path)
+
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=flags)
+        if cancel_event is not None:
+            while proc.poll() is None:
+                if cancel_event.is_set():
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                    raise CancelledOperationError("Conversión de audio cancelada por el usuario.")
+                cancel_event.wait(0.2)
+
+        _, stderr = proc.communicate()
+        if proc.returncode != 0:
+            err_msg = stderr.decode("utf-8", errors="replace")[-1500:]
+            if has_thumbnail:
+                logger.warning(f"Incrustación de carátula falló ({err_msg}). Reintentando extracción básica...")
+                return self.extract_audio_sync(input_path, output_path, audio_format=fmt, bitrate_kbps=bitrate_kbps or 320, cancel_event=cancel_event)
+            raise RuntimeError(f"Error al procesar audio {fmt} con FFmpeg: {err_msg}")
+
+        if not os.path.exists(output_path) or os.path.getsize(output_path) <= 0:
+            raise RuntimeError(f"La conversión de audio no produjo un archivo válido: {output_path}")

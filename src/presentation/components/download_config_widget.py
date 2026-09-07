@@ -1,8 +1,10 @@
-"""Componente de configuración de descarga (carpeta de destino y nombre de archivo).
+"""Componente de configuración de descarga (carpeta de destino, nombre de archivo, recorte y preset).
 
 Permite al usuario:
 - Ver y seleccionar la carpeta de destino mediante el explorador nativo.
 - Ver y editar el nombre del archivo final antes de descargar.
+- Opcionalmente recortar un fragmento (desde / hasta).
+- Seleccionar presets avanzados de conversión de audio con metadatos ID3.
 - Valida y sanitiza las rutas según las políticas de nombres de Windows.
 """
 
@@ -12,6 +14,8 @@ from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -22,9 +26,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from src.domain.value_objects.audio_preset import AudioPreset
+from src.domain.value_objects.time_range import TimeRange
+
 
 class DownloadConfigWidget(QFrame):
-    """Contenedor de configuración: ruta de descarga y nombre de archivo editable."""
+    """Contenedor de configuración: ruta, nombre de archivo, recorte de tiempo y opciones de audio."""
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -76,6 +83,69 @@ class DownloadConfigWidget(QFrame):
         file_box.addWidget(self.txt_filename)
         layout.addLayout(file_box)
 
+        # -------------------------------- 3. Recorte de fragmento (Tiempo)
+        trim_box = QVBoxLayout()
+        trim_box.setSpacing(5)
+
+        self.chk_trim = QCheckBox("Recortar fragmento (Opcional)")
+        self.chk_trim.setChecked(False)
+        self.chk_trim.toggled.connect(self._on_trim_toggled)
+
+        self.trim_controls = QWidget()
+        trim_layout = QHBoxLayout(self.trim_controls)
+        trim_layout.setContentsMargins(0, 0, 0, 0)
+        trim_layout.setSpacing(10)
+
+        lbl_start = QLabel("Desde:")
+        self.txt_start = QLineEdit("")
+        self.txt_start.setPlaceholderText("00:00")
+        self.txt_start.setMaximumWidth(90)
+
+        lbl_end = QLabel("Hasta:")
+        self.txt_end = QLineEdit("")
+        self.txt_end.setPlaceholderText("02:30")
+        self.txt_end.setMaximumWidth(90)
+
+        trim_layout.addWidget(lbl_start)
+        trim_layout.addWidget(self.txt_start)
+        trim_layout.addWidget(lbl_end)
+        trim_layout.addWidget(self.txt_end)
+        trim_layout.addStretch()
+
+        self.trim_controls.hide()
+        trim_box.addWidget(self.chk_trim)
+        trim_box.addWidget(self.trim_controls)
+        layout.addLayout(trim_box)
+
+        # -------------------------------- 4. Opciones de Audio Profesional
+        self.audio_options_box = QWidget()
+        audio_layout = QVBoxLayout(self.audio_options_box)
+        audio_layout.setContentsMargins(0, 0, 0, 0)
+        audio_layout.setSpacing(6)
+
+        lbl_preset = QLabel("Preset de audio profesional:")
+        lbl_preset.setObjectName("FieldLabel")
+        self.combo_audio_preset = QComboBox()
+        for preset in AudioPreset:
+            self.combo_audio_preset.addItem(preset.display_name, preset.value)
+
+        self.chk_embed_thumbnail = QCheckBox("Incrustar carátula y metadatos ID3")
+        self.chk_embed_thumbnail.setChecked(True)
+
+        audio_layout.addWidget(lbl_preset)
+        audio_layout.addWidget(self.combo_audio_preset)
+        audio_layout.addWidget(self.chk_embed_thumbnail)
+
+        self.audio_options_box.hide()
+        layout.addWidget(self.audio_options_box)
+
+    def _on_trim_toggled(self, checked: bool) -> None:
+        self.trim_controls.setVisible(checked)
+
+    def set_audio_mode(self, is_audio: bool) -> None:
+        """Muestra u oculta los controles específicos para descarga de audio."""
+        self.audio_options_box.setVisible(is_audio)
+
     def _on_browse_clicked(self) -> None:
         selected_dir = QFileDialog.getExistingDirectory(
             self,
@@ -104,6 +174,31 @@ class DownloadConfigWidget(QFrame):
             custom_name = fallback
         return self.sanitize_filename(custom_name)
 
+    def get_time_range(self) -> Optional[TimeRange]:
+        """Retorna el TimeRange si el recorte está activo y tiene valores válidos."""
+        if not self.chk_trim.isChecked():
+            return None
+        start_raw = self.txt_start.text().strip()
+        end_raw = self.txt_end.text().strip()
+        if not start_raw and not end_raw:
+            return None
+        try:
+            return TimeRange.from_strings(start_raw, end_raw if end_raw else None)
+        except Exception:
+            return None
+
+    def get_audio_preset(self) -> Optional[AudioPreset]:
+        """Retorna el preset de audio seleccionado si la sección está visible."""
+        if self.audio_options_box.isHidden():
+            return None
+        val = self.combo_audio_preset.currentData()
+        if val:
+            return AudioPreset.from_string(str(val))
+        return AudioPreset.MP3_320K
+
+    def get_embed_thumbnail(self) -> bool:
+        return self.chk_embed_thumbnail.isChecked()
+
     @staticmethod
     def sanitize_filename(name: str) -> str:
         """Sanitiza el nombre de archivo eliminando caracteres prohibidos en Windows."""
@@ -114,3 +209,4 @@ class DownloadConfigWidget(QFrame):
         if not cleaned:
             return "descarga"
         return cleaned[:180]
+

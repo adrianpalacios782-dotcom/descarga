@@ -100,3 +100,76 @@ class TestSQLiteDownloadRepository:
         assert retrieved.error_message is None
         assert "806p@24fps" in (retrieved.quality_warning or "")
         assert "1080p" in (retrieved.quality_warning or "")
+
+    def test_v120_metadata_roundtrip(self, db_repo: SQLiteDownloadRepository, sample_task: DownloadTask) -> None:
+        """Verifica que time_range, audio_preset y embed_thumbnail persistan y se recuperen fielmente."""
+        from src.domain.value_objects.time_range import TimeRange
+        from src.domain.value_objects.audio_preset import AudioPreset
+
+        sample_task.time_range = TimeRange(start_seconds=15.0, end_seconds=75.0)
+        sample_task.audio_preset = AudioPreset.MP3_320K
+        sample_task.embed_thumbnail = True
+        db_repo.save(sample_task)
+
+        retrieved = db_repo.get_by_id(sample_task.id)
+        assert retrieved is not None
+        assert retrieved.time_range is not None
+        assert retrieved.time_range.start_seconds == 15.0
+        assert retrieved.time_range.end_seconds == 75.0
+        assert retrieved.audio_preset == AudioPreset.MP3_320K
+        assert retrieved.embed_thumbnail is True
+
+    def test_migration_from_legacy_schema(self) -> None:
+        """Simula una base de datos antigua (sin columnas de v1.2.0) y valida la migración transparente."""
+        db_mgr = DatabaseManager(":memory:")
+        conn = db_mgr.get_connection()
+        # Crear schema base como en v1.0.0
+        conn.executescript("""
+            CREATE TABLE media_items (
+                id TEXT PRIMARY KEY,
+                original_url TEXT NOT NULL,
+                platform_name TEXT NOT NULL,
+                title TEXT NOT NULL,
+                author TEXT,
+                duration_seconds REAL DEFAULT 0,
+                thumbnail_url TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE format_options (
+                id TEXT PRIMARY KEY,
+                media_id TEXT NOT NULL,
+                format_id TEXT NOT NULL,
+                extension TEXT NOT NULL,
+                resolution TEXT,
+                width INTEGER,
+                height INTEGER,
+                fps REAL,
+                filesize_bytes INTEGER,
+                is_audio_only INTEGER DEFAULT 0,
+                is_video_only INTEGER DEFAULT 0
+            );
+            CREATE TABLE download_tasks (
+                id TEXT PRIMARY KEY,
+                media_id TEXT NOT NULL,
+                chosen_format_id TEXT NOT NULL,
+                destination_path TEXT NOT NULL,
+                current_state TEXT NOT NULL,
+                progress_percent REAL DEFAULT 0.0,
+                downloaded_bytes INTEGER DEFAULT 0,
+                total_bytes INTEGER DEFAULT 0,
+                speed_bps REAL DEFAULT 0.0,
+                eta_seconds REAL DEFAULT 0.0,
+                error_message TEXT,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                completed_at TEXT
+            );
+        """)
+        # Inicializar repositorio, disparando la migración
+        repo = SQLiteDownloadRepository(db_mgr)
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(download_tasks)").fetchall()]
+        assert "time_range_start" in cols
+        assert "time_range_end" in cols
+        assert "audio_preset" in cols
+        assert "embed_thumbnail" in cols
+        db_mgr.close()
