@@ -7,12 +7,17 @@ import re
 from src.domain.entities.format_option import FormatOption
 from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.entities.playlist_metadata import PlaylistEntry, PlaylistMetadata
+from src.domain.services.error_classifier import ErrorClassifier
 from src.domain.services.format_normalizer import FormatNormalizer
 from src.domain.exceptions.domain_exceptions import MediaAnalysisError
 from src.domain.ports.platform_adapter import IPlatformAdapter
 from src.domain.value_objects.media_id import MediaId
 from src.domain.value_objects.url import Url
-from src.infrastructure.adapters.download.ytdlp_download_engine import extract_subtitle_tracks
+from src.infrastructure.adapters.media.subtitle_extractor import extract_subtitle_tracks
+from src.infrastructure.adapters.platforms.browser_detector import get_first_available_browser
+
+
+
 
 
 class BasePlatformAdapter(IPlatformAdapter):
@@ -308,3 +313,4 @@ class BasePlatformAdapter(IPlatformAdapter):
             description=str(info.get("description") or ""),
             entries=entries,
         )
+

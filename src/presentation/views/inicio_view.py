@@ -35,11 +35,13 @@ from PySide6.QtWidgets import (
 from src.domain.entities.format_option import DownloadType, VideoQualityOption
 from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.exceptions.domain_exceptions import InvalidUrlError
-from src.domain.services.content_preview import (
-    format_size_bytes,
-)
+from src.domain.services.content_preview import format_size_bytes
+from src.domain.services.error_classifier import ErrorClassifier
 from src.domain.services.filename_sanitizer import sanitize_filename
-from src.domain.services.url_sanitizer import sanitize_single_video_url
+from src.domain.services.url_sanitizer import extract_clean_url, sanitize_single_video_url
+
+
+
 from src.domain.value_objects.time_range import TimeRange
 from src.domain.value_objects.url import Url
 from src.presentation.components.animations import fade_in
@@ -521,6 +523,12 @@ class InicioView(QWidget):
     def _sanitize_error_message(message: str) -> str:
         if not message:
             return ""
+        classified = ErrorClassifier.classify(str(message))
+        if classified.category.value != "unknown":
+            res = classified.user_message
+            if classified.suggestion:
+                res += f" ({classified.suggestion})"
+            return res
         cleaned = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", str(message))
         for raw_line in cleaned.splitlines():
             line = raw_line.strip()
@@ -545,6 +553,9 @@ class InicioView(QWidget):
     # -------------------------------------------------- URL: pegar y validar
     @staticmethod
     def _sanitize_input_url(raw: str) -> str:
+        clean = extract_clean_url(raw)
+        if clean:
+            return clean
         return sanitize_single_video_url((raw or "").strip())
 
     def _on_paste_clicked(self) -> None:
@@ -593,11 +604,13 @@ class InicioView(QWidget):
             not text
             or text == self._clipboard_last_seen
             or text == self.url_input.text().strip()
-            or not _CLIPBOARD_URL_PATTERN.match(text)
         ):
             return
+        clean_url = extract_clean_url(text)
+        if not clean_url or clean_url == self.url_input.text().strip():
+            return
         self._clipboard_last_seen = text
-        display = text if len(text) <= 64 else text[:61] + "..."
+        display = clean_url if len(clean_url) <= 64 else clean_url[:61] + "..."
         self.lbl_clipboard_url.setText(f"Enlace detectado · {display}")
         self.clipboard_banner.show()
 
@@ -606,6 +619,7 @@ class InicioView(QWidget):
         if candidate:
             self.url_input.setText(candidate)
             self._on_analyze_clicked()
+
 
     # ------------------------------------------------------- Previsualización
     def set_metadata(self, metadata: MediaMetadata) -> None:
@@ -1002,11 +1016,11 @@ class InicioView(QWidget):
                     fn = u.toLocalFile().lower()
                     if fn.endswith((".txt", ".text")):
                         return True
-                elif u.toString().startswith(("http://", "https://")):
+                elif extract_clean_url(u.toString()):
                     return True
         if md.hasText():
             t = md.text().strip()
-            if "http://" in t or "https://" in t:
+            if extract_clean_url(t) or "http" in t.lower():
                 return True
         return False
 
@@ -1020,21 +1034,22 @@ class InicioView(QWidget):
                         try:
                             with open(fn, "r", encoding="utf-8", errors="ignore") as f:
                                 for line in f:
-                                    s = line.strip()
-                                    if s.startswith(("http://", "https://")):
-                                        found.append(s)
+                                    clean = extract_clean_url(line.strip())
+                                    if clean:
+                                        found.append(clean)
                         except Exception:
                             pass
                 else:
-                    s = u.toString().strip()
-                    if s.startswith(("http://", "https://")):
-                        found.append(s)
+                    clean = extract_clean_url(u.toString().strip())
+                    if clean:
+                        found.append(clean)
         if not found and md.hasText():
             for line in md.text().strip().splitlines():
-                s = line.strip()
-                if s.startswith(("http://", "https://")):
-                    found.append(s)
+                clean = extract_clean_url(line.strip())
+                if clean:
+                    found.append(clean)
         return found
+
 
     def _set_drag_feedback(self, active: bool) -> None:
         self.url_bar.setProperty("drag_active", "true" if active else "false")
