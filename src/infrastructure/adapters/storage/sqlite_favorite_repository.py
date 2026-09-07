@@ -1,6 +1,5 @@
 from datetime import datetime
 import logging
-import threading
 from typing import List
 
 from src.domain.entities.favorite_item import FavoriteItem
@@ -15,7 +14,7 @@ class SQLiteFavoriteRepository(IFavoriteRepository):
 
     def __init__(self, db_manager: DatabaseManager) -> None:
         self._db = db_manager
-        self._lock = threading.RLock()
+        self._lock = db_manager.lock
         self._ensure_table()
 
     def _ensure_table(self) -> None:

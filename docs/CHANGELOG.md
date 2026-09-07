@@ -2,6 +2,28 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [1.2.0] - 2026-09-07
+
+### Añadido
+- **Nuevas Plataformas Soportadas:**
+  - **Twitch** (`twitch.tv`, `clips.twitch.tv`): Soporte nativo para clips, directos (VODs) y videos bajo demanda.
+  - **Kick** (`kick.com`): Soporte nativo para clips, transmisiones y grabaciones de canales.
+  - Insignias de plataforma (Spotlight badges), colores de acento y filtros dedicados en `HistorialView`.
+- **Descarga de Playlists y Álbumes:**
+  - Detección automática de enlaces de listas de reproducción con `PlaylistMetadata` y `PlaylistEntry`.
+  - Diálogo modal interactivo `PlaylistDownloadDialog` con selección masiva/individual de videos, selector de calidad unificado y encolamiento por lotes.
+- **Conversor de Audio Profesional con Metadatos ID3 y Carátula:**
+  - Nuevos presets avanzados de audio (`MP3 320k`, `MP3 192k`, `FLAC Lossless`, `WAV PCM`, `M4A/AAC`, `OPUS`).
+  - Incrustación automática de etiquetas ID3v2 (Título, Artista, Álbum) y carátula oficial en el contenedor de audio final vía FFmpeg.
+- **Recortador de Fragmentos por Intervalo de Tiempo:**
+  - Objeto de valor `TimeRange` con parseo flexible de marcas de tiempo (`MM:SS`, `HH:MM:SS`).
+  - Recorte rápido sin pérdida con fallback a re-codificación precisa para descargar fragmentos específicos (`Desde` / `Hasta`).
+- **Limitador de Velocidad de Descarga (Throttling):**
+  - Configuración global de ancho de banda en `ConfiguracionView` (`Sin límite`, `50 MB/s`, `20 MB/s`, `10 MB/s`, `5 MB/s`, `2 MB/s`, `1 MB/s`, `500 KB/s`) con persistencia en SQLite.
+- **Actualizador del Motor yt-dlp en 1 Clic:**
+  - Botón de actualización directa del motor en `AcercaDeView` y `ConfiguracionView`.
+  - Descarga e instalación atómica de wheel oficial con validación criptográfica SHA-256 e importación dinámica sin reiniciar la aplicación.
+
 ---
 
 ## [1.1.0] - 2026-08-29

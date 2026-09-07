@@ -252,6 +252,7 @@ class MainWindow(QMainWindow):
         self.view_model.analysis_started.connect(lambda: self.inicio_view.set_analyzing_state(True))
         self.view_model.media_analyzed.connect(self.inicio_view.set_metadata)
         self.view_model.media_analyzed.connect(self._on_media_analyzed)
+        self.view_model.playlist_analyzed.connect(self._open_playlist_dialog)
         self.view_model.analysis_failed.connect(self.inicio_view.show_error)
 
         # ViewModel -> DescargasView
@@ -299,6 +300,13 @@ class MainWindow(QMainWindow):
         self.view_model.download_completed.connect(self._on_tray_download_completed)
         self.view_model.download_failed.connect(self._on_tray_download_failed)
         self.view_model.batch_completed.connect(self._on_batch_completed)
+
+        # Motor yt-dlp -> Notificaciones y feedback
+        self.configuracion_view.engine_update_requested.connect(self.view_model.check_and_update_engine)
+        self.acerca_de_view.engine_update_requested.connect(self.view_model.check_and_update_engine)
+        self.view_model.engine_update_started.connect(self._on_engine_update_started)
+        self.view_model.engine_update_completed.connect(self._on_engine_update_completed)
+        self.view_model.engine_update_failed.connect(self._on_engine_update_failed)
 
     def _on_settings_saved(self, settings: dict[str, Any]) -> None:
         """Aplica las preferencias guardadas a la lógica de negocio y vistas dependientes."""
@@ -412,9 +420,29 @@ class MainWindow(QMainWindow):
 
     def _on_download_requested(self, media: MediaMetadata, format_id: str, dest_path: str) -> None:
         sub_cfg = self.inicio_view.preview_card.get_subtitle_config()
-        self.view_model.create_and_start_download(media, format_id, dest_path, subtitle_config=sub_cfg)
+        time_range = self.inicio_view.download_config.get_time_range()
+        audio_preset = self.inicio_view.download_config.get_audio_preset()
+        embed_thumb = self.inicio_view.download_config.get_embed_thumbnail()
+        self.view_model.create_and_start_download(
+            media,
+            format_id,
+            dest_path,
+            subtitle_config=sub_cfg,
+            time_range=time_range,
+            audio_preset=audio_preset,
+            embed_thumbnail=embed_thumb,
+        )
         self.sidebar.button_group.button(1).setChecked(True)
         self.stacked.setCurrentIndex(1)
+
+    def _open_playlist_dialog(self, playlist: Any) -> None:
+        """Abre el diálogo modal de descarga de lista de reproducción / álbum."""
+        from src.presentation.components.playlist_download_dialog import PlaylistDownloadDialog
+        self.inicio_view.set_analyzing_state(False)
+        default_dir = self.inicio_view.download_config.get_destination_directory() or ""
+        dlg = PlaylistDownloadDialog(playlist=playlist, default_dir=default_dir, parent=self)
+        dlg.playlist_download_requested.connect(self._on_start_batch_download)
+        dlg.exec()
 
     def _open_batch_download_dialog(self) -> None:
         """Abre el diálogo modal de descarga masiva por lotes."""
@@ -442,6 +470,27 @@ class MainWindow(QMainWindow):
                 QSystemTrayIcon.MessageIcon.Information,
                 5000,
             )
+
+    def _on_engine_update_started(self) -> None:
+        if self.tray_icon.isVisible() and self._tray_notifications:
+            self.tray_icon.showMessage(
+                "Motor yt-dlp",
+                "Comprobando y descargando actualización del motor...",
+                QSystemTrayIcon.MessageIcon.Information,
+                3000,
+            )
+
+    def _on_engine_update_completed(self, message: str) -> None:
+        try:
+            from src.infrastructure.adapters.engine.engine_manager import get_engine_manager
+            _mgr = get_engine_manager()
+            self.acerca_de_view.set_engine_status(_mgr.get_active_version(), _mgr.is_using_updated_engine())
+        except Exception:
+            pass
+        QMessageBox.information(self, "Motor de descarga (yt-dlp)", message)
+
+    def _on_engine_update_failed(self, message: str) -> None:
+        QMessageBox.warning(self, "Motor de descarga (yt-dlp)", message)
 
     @staticmethod
     def _open_file(file_path: str) -> None:

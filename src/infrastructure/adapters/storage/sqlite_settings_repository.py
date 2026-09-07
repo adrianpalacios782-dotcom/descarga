@@ -1,4 +1,3 @@
-import threading
 from typing import Any, Dict, Optional
 
 from src.domain.ports.settings_repository import ISettingsRepository
@@ -10,7 +9,7 @@ class SQLiteSettingsRepository(ISettingsRepository):
 
     def __init__(self, db_manager: DatabaseManager) -> None:
         self.db_manager = db_manager
-        self._lock = threading.RLock()
+        self._lock = db_manager.lock
 
     def get(self, key: str, default: Any = None) -> Any:
         """Obtiene una configuración deserializada según su data_type."""

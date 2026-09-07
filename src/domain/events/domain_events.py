@@ -64,6 +64,7 @@ class DownloadCompletedEvent(DomainEvent):
     destination_path: str
     total_bytes: int
     warning_message: str = ""
+    is_degraded: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)

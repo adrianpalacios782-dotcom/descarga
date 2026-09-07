@@ -1,4 +1,5 @@
 import logging
+import re
 import threading
 from typing import Any, List, Optional
 from PySide6.QtCore import QObject, Signal, Slot
@@ -15,6 +16,8 @@ from src.application.use_cases import (
 from src.domain.entities.download_task import DownloadTask
 from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.entities.subtitle import SubtitleConfig
+from src.domain.value_objects.audio_preset import AudioPreset
+from src.domain.value_objects.time_range import TimeRange
 from src.domain.events.domain_events import (
     DownloadProgressChangedEvent,
     DownloadPausedEvent,
@@ -43,6 +46,7 @@ class MainViewModel(QObject):
     # Señales de Qt para actualizar la interfaz gráfica en el hilo principal sin congelar el Event Loop
     analysis_started = Signal()
     media_analyzed = Signal(object)
+    playlist_analyzed = Signal(object)
     analysis_failed = Signal(str)
     download_created = Signal(object)
     download_queued = Signal(str)          # id -> tarjeta "En cola"
@@ -54,6 +58,12 @@ class MainViewModel(QObject):
     download_quality_warning = Signal(str, str)  # id, advertencia de calidad
     batch_item_processed = Signal(int, int, str)  # idx, total, title
     batch_completed = Signal(int, int)  # success_count, fail_count
+
+    # Señales para actualización del motor yt-dlp
+    engine_update_started = Signal()
+    engine_update_progress = Signal(int, int)  # (bytes_dl, bytes_total)
+    engine_update_completed = Signal(str)      # mensaje de éxito
+    engine_update_failed = Signal(str)         # mensaje de error
 
     def __init__(
         self,
@@ -104,12 +114,36 @@ class MainViewModel(QObject):
         if hasattr(self.platform_adapter, "set_cookies_from_browser"):
             self.platform_adapter.set_cookies_from_browser(browser)
 
+        cookies_file = settings.get("cookies_file")
+        if hasattr(self.download_engine, "set_cookie_file"):
+            self.download_engine.set_cookie_file(cookies_file)
+        if hasattr(self.platform_adapter, "set_cookie_file"):
+            self.platform_adapter.set_cookie_file(cookies_file)
+
+        speed_limit = settings.get("speed_limit")
+        if speed_limit is not None and hasattr(self.download_engine, "set_rate_limit"):
+            limit_bytes = self._parse_speed_limit(str(speed_limit))
+            self.download_engine.set_rate_limit(limit_bytes)
+
         max_concurrent = settings.get("max_concurrent_downloads")
         if max_concurrent is not None and self.download_queue is not None:
             try:
                 self.download_queue.set_max_concurrent(int(max_concurrent))
             except (ValueError, TypeError):
                 pass
+
+    @staticmethod
+    def _parse_speed_limit(val: str) -> Optional[int]:
+        if not val or val == "0" or "sin límite" in val.lower():
+            return None
+        cleaned = val.upper().strip()
+        if "M" in cleaned:
+            num = re.sub(r"[^\d.]", "", cleaned)
+            return int(float(num) * 1024 * 1024) if num else None
+        if "K" in cleaned:
+            num = re.sub(r"[^\d.]", "", cleaned)
+            return int(float(num) * 1024) if num else None
+        return None
 
     @Slot(str)
     def analyze_url(self, url_str: str) -> None:
@@ -118,13 +152,72 @@ class MainViewModel(QObject):
 
         def _worker() -> None:
             try:
-                metadata = self.analyze_uc.execute(url_str)
-                self.media_analyzed.emit(metadata)
+                from src.domain.value_objects.url import is_playlist
+                if is_playlist(url_str):
+                    playlist = self.platform_adapter.analyze_playlist(url_str)
+                    self.playlist_analyzed.emit(playlist)
+                else:
+                    metadata = self.analyze_uc.execute(url_str)
+                    self.media_analyzed.emit(metadata)
             except Exception as ex:
                 self.analysis_failed.emit(str(ex))
 
         thread = threading.Thread(target=_worker, daemon=True)
         thread.start()
+
+    def analyze_playlist(self, url_str: str) -> None:
+        """Analiza una lista de reproducción / álbum en segundo plano."""
+        self.analysis_started.emit()
+
+        def _worker() -> None:
+            try:
+                playlist = self.platform_adapter.analyze_playlist(url_str)
+                self.playlist_analyzed.emit(playlist)
+            except Exception as ex:
+                self.analysis_failed.emit(str(ex))
+
+        thread = threading.Thread(target=_worker, daemon=True)
+        thread.start()
+
+    def check_and_update_engine(self) -> None:
+        """Chequea y descarga la última wheel oficial de yt-dlp en segundo plano."""
+        from src.infrastructure.adapters.engine.engine_manager import get_engine_manager
+        mgr = get_engine_manager()
+        self.engine_update_started.emit()
+
+        def on_check_done(info: Any) -> None:
+            if not info.update_available or not info.asset:
+                self.engine_update_completed.emit(
+                    f"El motor yt-dlp ya está en su versión más reciente ({info.current_version or 'actual'})."
+                )
+                return
+
+            def on_install_done(wheel_path: Any) -> None:
+                mgr.activate()
+                self.engine_update_completed.emit(
+                    f"¡Motor yt-dlp actualizado con éxito a la versión {info.latest_version}!"
+                )
+
+            def on_install_error(err: BaseException) -> None:
+                self.engine_update_failed.emit(f"Error al instalar la actualización del motor: {err}")
+
+            def on_progress(dl: int, total: int) -> None:
+                self.engine_update_progress.emit(dl, total)
+
+            mgr.download_update_async(
+                asset=info.asset,
+                on_finished=on_install_done,
+                on_error=on_install_error,
+                progress_callback=on_progress,
+            )
+
+        def on_check_error(err: BaseException) -> None:
+            self.engine_update_failed.emit(f"Error al verificar actualizaciones del motor: {err}")
+
+        mgr.check_for_updates_async(
+            on_finished=on_check_done,
+            on_error=on_check_error,
+        )
 
     def create_and_start_download(
         self,
@@ -132,6 +225,9 @@ class MainViewModel(QObject):
         format_id: str,
         destination_path: str,
         subtitle_config: Optional[SubtitleConfig] = None,
+        time_range: Optional[TimeRange] = None,
+        audio_preset: Optional[AudioPreset] = None,
+        embed_thumbnail: bool = False,
     ) -> DownloadTask:
         """Crea y encola una nueva descarga (o la inicia directo si no hay cola)."""
         task = self.create_uc.execute(
@@ -139,11 +235,12 @@ class MainViewModel(QObject):
             format_id=format_id,
             destination_path=destination_path,
             subtitle_config=subtitle_config,
+            time_range=time_range,
+            audio_preset=audio_preset,
+            embed_thumbnail=embed_thumbnail,
         )
         self.download_created.emit(task)
         if self.download_queue is not None:
-            # La cola respeta el límite de concurrencia: queda "En cola" hasta
-            # que haya slot y transiciona sola a DOWNLOADING.
             self.download_queue.enqueue(task)
         else:
             self.start_uc.execute(task.id)
@@ -270,9 +367,10 @@ class MainViewModel(QObject):
         )
 
     def _on_download_completed_event(self, event: DownloadCompletedEvent) -> None:
-        # Una descarga completada con calidad degradada sigue siendo COMPLETED;
+        # Una descarga completada con calidad adaptada sigue siendo un éxito;
         # la advertencia viaja como mensaje para mostrarse inline en la tarjeta.
-        self.download_state_changed.emit(event.task_id, "COMPLETED", event.warning_message or None)
+        state_str = "COMPLETED_WITH_DEGRADED_QUALITY" if getattr(event, "is_degraded", False) else "COMPLETED"
+        self.download_state_changed.emit(event.task_id, state_str, event.warning_message or None)
         self.download_completed.emit(event.task_id, event.destination_path)
 
     def _on_download_failed_event(self, event: DownloadFailedEvent) -> None:

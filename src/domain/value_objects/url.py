@@ -10,6 +10,8 @@ ALLOWED_DOMAINS = (
     "tiktok.com", "vm.tiktok.com", "www.tiktok.com",
     "instagram.com", "www.instagram.com",
     "facebook.com", "fb.watch", "www.facebook.com", "m.facebook.com",
+    "twitch.tv", "clips.twitch.tv", "www.twitch.tv", "m.twitch.tv",
+    "kick.com", "www.kick.com",
 )
 
 
@@ -121,7 +123,30 @@ class Url:
             return "Instagram"
         elif host in ("facebook.com", "fb.watch", "m.facebook.com") or host.endswith(".facebook.com"):
             return "Facebook"
+        elif host in ("twitch.tv", "clips.twitch.tv", "m.twitch.tv") or host.endswith(".twitch.tv"):
+            return "Twitch"
+        elif host in ("kick.com",) or host.endswith(".kick.com"):
+            return "Kick"
         return "Generic"
+
+    def is_playlist(self) -> bool:
+        """Determina si la URL corresponde a una lista de reproducción."""
+        return is_playlist(self.value)
 
     def __str__(self) -> str:
         return self.value
+
+
+def is_playlist(url_str: str) -> bool:
+    """Función de utilidad para detectar URLs de playlists o álbumes."""
+    if not url_str:
+        return False
+    parsed = urlparse(url_str.strip())
+    path = parsed.path.lower()
+    query = parsed.query.lower()
+    if "list=" in query:
+        return True
+    if any(path.startswith(p) for p in ("/playlist", "/sets/", "/album/")):
+        return True
+    return False
+

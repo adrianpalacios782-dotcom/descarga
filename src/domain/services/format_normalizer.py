@@ -13,23 +13,27 @@ class FormatNormalizer:
     AUXILIARY_FORMAT_IDS = ("sb0", "sb1", "sb2", "sb3", "none", "none_none", "0", "storyboard", "thumbnails", "thumbnail")
 
     @staticmethod
-    def get_standard_height(raw_height: int) -> int:
-        """Mapea alturas reales de pixeles recortadas (ej. 1074, 806, 538, 358) a categorías de resolución estándar (1080, 720, 480, 360, 240, 144)."""
-        if not raw_height or raw_height <= 0:
+    def get_standard_height(raw_height: int, raw_width: int = 0) -> int:
+        """Mapea alturas y anchos reales (considerando aspect ratio) a categorías estándar (2160, 1440, 1080, 720, 480, 360, 240, 144)."""
+        if (not raw_height or raw_height <= 0) and (not raw_width or raw_width <= 0):
             return 0
-        if raw_height >= 1800:
+
+        from src.domain.services.quality_validator import QualityValidator
+        effective_h = QualityValidator.calculate_effective_height(raw_height or 0, raw_width or 0)
+
+        if effective_h >= 1800:
             return 2160
-        elif raw_height >= 1300:
+        elif effective_h >= 1300:
             return 1440
-        elif raw_height >= 900:
+        elif effective_h >= 900:
             return 1080
-        elif raw_height >= 650:
+        elif effective_h >= 650:
             return 720
-        elif raw_height >= 420:
+        elif effective_h >= 420:
             return 480
-        elif raw_height >= 300:
+        elif effective_h >= 300:
             return 360
-        elif raw_height >= 200:
+        elif effective_h >= 200:
             return 240
         else:
             return 144
@@ -105,19 +109,21 @@ class FormatNormalizer:
     def infer_standard_height(cls, f: Dict[str, Any]) -> int:
         """Deduce la altura estándar de un formato incluso sin `height` numérico.
 
-        Orden de evidencia: height real > resolución "WxH" > etiquetas en
+        Orden de evidencia: height/width real > resolución "WxH" > etiquetas en
         format_id/format_note/resolution. Retorna 0 si no hay evidencia suficiente.
         """
         raw_height = f.get("height") or 0
-        if raw_height > 0:
-            return cls.get_standard_height(raw_height)
+        raw_width = f.get("width") or 0
+        if raw_height > 0 or raw_width > 0:
+            return cls.get_standard_height(raw_height, raw_width)
 
         resolution_raw = str(f.get("resolution") or "").strip().lower()
         match = re.match(r"^(\d{2,5})x(\d{2,5})$", resolution_raw)
         if match:
+            parsed_width = int(match.group(1))
             parsed_height = int(match.group(2))
-            if parsed_height > 0:
-                return cls.get_standard_height(parsed_height)
+            if parsed_height > 0 or parsed_width > 0:
+                return cls.get_standard_height(parsed_height, parsed_width)
 
         haystacks = (
             str(f.get("format_id") or ""),

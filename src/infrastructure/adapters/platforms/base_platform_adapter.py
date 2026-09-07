@@ -1,9 +1,12 @@
+import os
+import shutil
 from typing import Any, Dict, List, Optional
 import yt_dlp
 import re
 
 from src.domain.entities.format_option import FormatOption
 from src.domain.entities.media_metadata import MediaMetadata
+from src.domain.entities.playlist_metadata import PlaylistEntry, PlaylistMetadata
 from src.domain.services.format_normalizer import FormatNormalizer
 from src.domain.exceptions.domain_exceptions import MediaAnalysisError
 from src.domain.ports.platform_adapter import IPlatformAdapter
@@ -13,16 +16,11 @@ from src.infrastructure.adapters.download.ytdlp_download_engine import extract_s
 
 
 class BasePlatformAdapter(IPlatformAdapter):
-    """Adaptador base de infraestructura que aísla yt-dlp detrás del contrato IPlatformAdapter sin cookies de navegador.
+    """Adaptador base de infraestructura que aísla yt-dlp detrás del contrato IPlatformAdapter.
 
     Usa estrategias de player_client ordenadas por confiabilidad para obtener la lista completa de formatos
     (DASH video-only, audio-only, progresivos) sin provocar 403 ni limitar resoluciones.
-
-    IMPORTANTE: cuando YouTube aplica su verificación anti-bot a un cliente, NO siempre
-    falla la extracción: puede responder "exitosamente" con metadata completa (título,
-    miniatura, canal...) pero SOLO formatos storyboard (mhtml sb0-sb3). Ese resultado es
-    degenerado y NO debe aceptarse como análisis válido si otra estrategia entrega
-    formatos reales.
+    Soporta cookies de navegador y archivos cookies.txt personalizados para contenido con restricción de edad.
     """
 
     CLIENT_STRATEGIES: List[Optional[List[str]]] = [
@@ -33,12 +31,27 @@ class BasePlatformAdapter(IPlatformAdapter):
         ["mweb"],    # cliente web móvil
     ]
 
-    def __init__(self, cookies_from_browser: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        cookies_from_browser: Optional[str] = None,
+        cookiefile: Optional[str] = None,
+    ) -> None:
         self.cookies_from_browser: Optional[str] = (
             cookies_from_browser.strip() if cookies_from_browser and cookies_from_browser.strip() else None
         )
+        self.cookiefile: Optional[str] = (
+            cookiefile.strip() if cookiefile and cookiefile.strip() else None
+        )
 
-    def _build_ydl_opts(self, player_clients: Optional[List[str]] = None) -> Dict[str, Any]:
+    def set_cookie_file(self, cookiefile: Optional[str]) -> None:
+        """Actualiza la ruta del archivo de cookies (cookies.txt)."""
+        self.cookiefile = cookiefile.strip() if cookiefile and cookiefile.strip() else None
+
+    def _build_ydl_opts(
+        self,
+        player_clients: Optional[List[str]] = None,
+        disable_browser_cookies: bool = False,
+    ) -> Dict[str, Any]:
         ydl_opts: Dict[str, Any] = {
             "quiet": True,
             "no_warnings": True,
@@ -49,8 +62,16 @@ class BasePlatformAdapter(IPlatformAdapter):
             "extract_flat": False,
             "format": "all",
         }
-        if self.cookies_from_browser:
+        if shutil.which("node"):
+            ydl_opts["js_runtimes"] = {"node": {}}
+        elif shutil.which("deno"):
+            ydl_opts["js_runtimes"] = {"deno": {}}
+
+        if self.cookiefile and os.path.isfile(self.cookiefile):
+            ydl_opts["cookiefile"] = self.cookiefile
+        elif self.cookies_from_browser and not disable_browser_cookies:
             ydl_opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
+
         if player_clients:
             ydl_opts["extractor_args"] = {"youtube": {"player_client": player_clients}}
         return ydl_opts
@@ -115,15 +136,53 @@ class BasePlatformAdapter(IPlatformAdapter):
         if chosen is not None:
             return chosen
 
+        has_cookie_err = any(
+            ("could not copy" in e.lower() and "cookie" in e.lower())
+            or "dpapi" in e.lower()
+            or ("could not find" in e.lower() and "cookie" in e.lower())
+            for e in errors
+        )
+
+        # Si falló por bloqueo/encriptación del navegador de cookies, reintentar sin cookies del navegador
+        # para no romper videos públicos si el usuario dejó Chrome/Edge seleccionado con el navegador abierto.
+        if has_cookie_err and self.cookies_from_browser:
+            for clients in strategies:
+                try:
+                    opts = self._build_ydl_opts(clients, disable_browser_cookies=True)
+                    with yt_dlp.YoutubeDL(opts) as ydl:
+                        info = ydl.extract_info(url.value, download=False)
+                    if not info:
+                        continue
+                    if "entries" in info or info.get("_type") == "playlist":
+                        entries = [e for e in info.get("entries", []) if e]
+                        if entries:
+                            info = entries[0]
+                    formats = info.get("formats") or []
+                    if not formats:
+                        if info.get("url"):
+                            return info
+                        continue
+                    real_formats = [f for f in formats if not FormatNormalizer.is_auxiliary_format(f)]
+                    if real_formats:
+                        return info
+                except Exception:
+                    continue
+
         raw_msg = errors[0] if errors else "Respuesta vacía"
         clean_msg = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", raw_msg)
         clean_msg = re.sub(r"ERROR:\s*", "", clean_msg).strip()
 
-        if any(term in clean_msg.lower() for term in ("sign in", "bot", "too many requests", "429")):
-            plat_name = url.detect_platform()
+        plat_name = url.detect_platform()
+        if has_cookie_err and self.cookies_from_browser:
+            clean_msg = (
+                f"No se pudieron leer las cookies de '{self.cookies_from_browser}' (el navegador está abierto o protegido por Windows). "
+                "Cierra el navegador por completo o utiliza un archivo cookies.txt en Configuración."
+            )
+        elif any(term in clean_msg.lower() for term in ("sign in", "bot", "too many requests", "429", "age")):
             clean_msg = (
                 f"La plataforma ({plat_name}) ha restringido temporalmente las solicitudes "
-                "o requiere verificación para este contenido."
+                "o requiere verificación de cuenta / edad para este contenido. "
+                "Puedes configurar un archivo cookies.txt o tu navegador en Configuración."
             )
         elif all("auxiliares" in e for e in errors):
             clean_msg = (
@@ -172,4 +231,53 @@ class BasePlatformAdapter(IPlatformAdapter):
             audio_formats=audio_formats,
             formats=formats_list,
             subtitles=subtitles_list,
+        )
+
+    def analyze_playlist(self, url: Url) -> PlaylistMetadata:
+        """Extrae la lista de reproducción de forma plana y rápida (extract_flat)."""
+        opts = self._build_ydl_opts()
+        opts["extract_flat"] = "in_playlist"
+        opts["noplaylist"] = False
+
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url.value, download=False)
+        except Exception as ex:
+            raise MediaAnalysisError(f"No se pudo analizar la lista de reproducción: {ex}") from ex
+
+        if not info:
+            raise MediaAnalysisError("La plataforma devolvió una lista vacía o no válida.")
+
+        entries_raw = info.get("entries") or []
+        entries: List[PlaylistEntry] = []
+        for e in entries_raw:
+            if not e:
+                continue
+            v_id = str(e.get("id") or "")
+            v_title = str(e.get("title") or "Sin título")
+            v_url = str(e.get("url") or e.get("webpage_url") or "")
+            if not v_url and v_id:
+                v_url = f"https://www.youtube.com/watch?v={v_id}"
+            v_dur = float(e.get("duration") or 0.0)
+            v_thumb = str(e.get("thumbnail") or "")
+            v_uploader = str(e.get("uploader") or e.get("channel") or "")
+            entries.append(
+                PlaylistEntry(
+                    video_id=v_id,
+                    title=v_title,
+                    url=v_url,
+                    duration_seconds=v_dur,
+                    thumbnail_url=v_thumb,
+                    uploader=v_uploader,
+                )
+            )
+
+        return PlaylistMetadata(
+            playlist_id=str(info.get("id") or "playlist"),
+            title=str(info.get("title") or "Lista de reproducción"),
+            url=url,
+            platform=url.detect_platform(),
+            uploader=str(info.get("uploader") or info.get("channel") or ""),
+            description=str(info.get("description") or ""),
+            entries=entries,
         )

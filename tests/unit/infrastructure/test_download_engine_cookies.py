@@ -52,3 +52,29 @@ def test_platform_registry_propagates_cookies():
     for adapter in registry._adapters:
         if isinstance(adapter, BasePlatformAdapter):
             assert adapter.cookies_from_browser is None
+
+
+def test_cookie_file_injection(tmp_path):
+    cookie_file = tmp_path / "test_cookies.txt"
+    cookie_file.write_text("# Netscape HTTP Cookie File\n")
+
+    # Engine
+    engine = YtDlpDownloadEngine(cookiefile=str(cookie_file))
+    assert engine.cookiefile == str(cookie_file)
+    opts = engine._build_base_opts("out.mp4", "task-1", threading.Event(), threading.Event())
+    assert opts.get("cookiefile") == str(cookie_file)
+
+    # Dinámico
+    engine.set_cookie_file(None)
+    assert engine.cookiefile is None
+
+    # Adapter
+    adapter = GenericAdapter(cookiefile=str(cookie_file))
+    opts2 = adapter._build_ydl_opts()
+    assert opts2.get("cookiefile") == str(cookie_file)
+
+    # Registry
+    registry = PlatformRegistry(cookiefile=str(cookie_file))
+    for a in registry._adapters:
+        if isinstance(a, BasePlatformAdapter):
+            assert a.cookiefile == str(cookie_file)
