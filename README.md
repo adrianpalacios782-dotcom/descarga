@@ -15,20 +15,19 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
 
 *Aplicación de escritorio nativa, moderna e independiente diseñada para el análisis, descarga acelerada, recorte de segmentos, conversión y organización de contenido multimedia desde más de 15 plataformas web y cualquier sitio público con vídeo o audio.*
-
-[📥 Descargar v1.5.0](#-descargar-para-windows) • [✨ Novedades v1.5.0](#-novedades-en-la-versión-150) • [🌐 Plataformas](#-plataformas-soportadas) • [🚀 Características](#-características-principales) • [🛡️ Seguridad](#-seguridad-y-resiliencia) • [💻 Desarrollo](#-desarrollo-y-pruebas)
+[ Descargar v1.5.0](#-descargar-para-windows) • [ Novedades v1.5.0](#-novedades-en-la-versión-150) • [ Plataformas](#-plataformas-soportadas) • [ Características](#-características-principales) • [ Seguridad](#-seguridad-y-resiliencia) • [ Desarrollo](#-desarrollo-y-pruebas)
 
 </div>
 
 ---
 
-## 📥 Descargar para Windows
+##  Descargar para Windows
 
-### 🚀 [Descargar osvaldoDownloaderPro v1.5.0 (Instalador Oficial)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.0)
+###  [Descargar osvaldoDownloaderPro v1.5.0 (Instalador Oficial)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.0)
 
 En la sección **Assets** del lanzamiento oficial de GitHub encontrarás el instalador listo para usar:
 
-> **📦 `osvaldoDownloaderPro-1.5.0-Setup.exe`** (~114 MB)  
+> ** `osvaldoDownloaderPro-1.5.0-Setup.exe`** (~114 MB)  
 > *Incluye el ejecutable completo, nuevo icono vectorial HD, motor yt-dlp integrado, FFmpeg nativo y todas las dependencias.*
 
 ```
@@ -36,12 +35,12 @@ Sumas de verificación criptográficas (SHA-256):
 Consulte SHA256SUMS.txt en la página de releases para verificar la integridad del paquete.
 ```
 
-### ⚡ Instalación Rápida
+###  Instalación Rápida
 1. Descarga **`osvaldoDownloaderPro-1.5.0-Setup.exe`** desde [GitHub Releases](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.0).
 2. Ejecuta el archivo instalador (no requiere privilegios de administrador para la instalación por usuario).
 3. Sigue el asistente de instalación y abre **osvaldoDownloaderPro** desde el Menú Inicio o acceso directo de escritorio.
 
-### 🖥️ Requisitos del Sistema
+###  Requisitos del Sistema
 - **Sistema Operativo:** Windows 10 x64 (versión 1809+) o Windows 11 x64.
 - **Arquitectura:** x86_64 (64 bits).
 - **Sin requisitos adicionales:**
@@ -54,30 +53,30 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 
 ---
 
-## ✨ Novedades en la Versión 1.5.0
+##  Novedades en la Versión 1.5.0
 
-- 🛡️ **Detección Automática de Navegadores & Fallback de Sesión:** Detección en caliente de navegadores del sistema (**Google Chrome, Microsoft Edge, Mozilla Firefox y Brave**) para rescatar descargas bloqueadas por detección de bots (*"Sign in to confirm you're not a bot"*) o restricciones de edad sin necesidad de configurar archivos manuales.
-- 🧠 **Clasificador Inteligente de Errores (`ErrorClassifierService`):** Diagnóstico automático y traducción de fallos técnicos de `yt-dlp`/red/FFmpeg a explicaciones claras en español con sugerencias prácticas directas en la interfaz.
-- 🧹 **Extractor Inteligente de URLs (`extract_clean_url`):** Extracción precisa de URLs desde textos sucios, enlaces pegados desde chats con paréntesis `(...)`, corchetes `[...]` o comillas, además de limpieza automática de parámetros sobrantes de playlists.
-- 🔄 **Hook de Estado de Postprocesamiento en Tiempo Real:** Indicador visual de estado continuo durante la multiplexación de video/audio, conversión a MP3 y extracción de subtítulos.
+- **Detección Automática de Navegadores & Fallback de Sesión:** Detección en caliente de navegadores del sistema (**Google Chrome, Microsoft Edge, Mozilla Firefox y Brave**) para rescatar descargas bloqueadas por detección de bots (*"Sign in to confirm you're not a bot"*) o restricciones de edad sin necesidad de configurar archivos manuales.
+-  **Clasificador Inteligente de Errores (`ErrorClassifierService`):** Diagnóstico automático y traducción de fallos técnicos de `yt-dlp`/red/FFmpeg a explicaciones claras en español con sugerencias prácticas directas en la interfaz.
+-  **Extractor Inteligente de URLs (`extract_clean_url`):** Extracción precisa de URLs desde textos sucios, enlaces pegados desde chats con paréntesis `(...)`, corchetes `[...]` o comillas, además de limpieza automática de parámetros sobrantes de playlists.
+-  **Hook de Estado de Postprocesamiento en Tiempo Real:** Indicador visual de estado continuo durante la multiplexación de video/audio, conversión a MP3 y extracción de subtítulos.
 
 <details>
-<summary><b>📜 Ver Novedades Anteriores (v1.4.0)</b></summary>
+<summary><b> Ver Novedades Anteriores (v1.4.0)</b></summary>
 
-- ✂️ **Recorte de Tiempo en Vivo y Descarga por Segmentos (Lossless Time-Clipper):** Descarga únicamente el intervalo deseado (ej. 01:25 - 03:40) sin transferir archivos completos de horas o gigabytes. Incorpora entradas numéricas sincronizadas, control deslizante dual interactivo (`DualRangeSlider`), presets rápidos (`Primer minuto`, `Últimos 30s`, `Clip de 1 min`, `Restablecer todo`), duración calculada en tiempo real y validación visual instantánea.
-- ⚡ **Aceleración yt-dlp `--download-sections` y Precisión de Keyframes FFmpeg:** Cortes limpios sin desincronización de audio y video con `force_keyframes_at_cuts`.
-- 🌐 **Soporte Universal de Plataformas (15+ Plataformas y Modo Genérico Seguro):** Analiza y descarga desde YouTube, TikTok, Instagram, Facebook, Twitch, Kick, Twitter/X, Reddit, Vimeo, SoundCloud, Pinterest, Dailymotion, Bilibili, Bluesky, Threads y cualquier sitio web público con protección Anti-SSRF.
-- 🎨 **Sincronización Total de Temas Visuales:** Compatibilidad reactiva con los temas *Oscuro Multimedia*, *Oscuro OLED* y *Claro Moderno* mediante `get_current_palette()`.
-- ⚡ **Aceleración Concurrente DASH/HLS:** Configuración de 1 a 8 fragmentos simultáneos (`concurrent_fragments`) para descargas a máxima velocidad.
-- 🎯 **Arrastrar y Soltar Global (Drag & Drop):** Arrastra enlaces o texto con URLs directamente sobre cualquier parte de la ventana para iniciar el análisis automático.
-- 🔄 **Actualizador Dinámico del Motor yt-dlp:** Actualiza el motor de extracción en caliente desde la vista de Configuración o Acerca de, con verificación de integridad criptográfica SHA-256.
-- 📊 **Monitor de Actividad Lateral (Studio Desktop):** Panel lateral con métricas de ancho de banda, descargas activas, cola pendiente y velocidad en tiempo real.
+-  **Recorte de Tiempo en Vivo y Descarga por Segmentos (Lossless Time-Clipper):** Descarga únicamente el intervalo deseado (ej. 01:25 - 03:40) sin transferir archivos completos de horas o gigabytes. Incorpora entradas numéricas sincronizadas, control deslizante dual interactivo (`DualRangeSlider`), presets rápidos (`Primer minuto`, `Últimos 30s`, `Clip de 1 min`, `Restablecer todo`), duración calculada en tiempo real y validación visual instantánea.
+-  **Aceleración yt-dlp `--download-sections` y Precisión de Keyframes FFmpeg:** Cortes limpios sin desincronización de audio y video con `force_keyframes_at_cuts`.
+- **Soporte Universal de Plataformas (15+ Plataformas y Modo Genérico Seguro):** Analiza y descarga desde YouTube, TikTok, Instagram, Facebook, Twitch, Kick, Twitter/X, Reddit, Vimeo, SoundCloud, Pinterest, Dailymotion, Bilibili, Bluesky, Threads y cualquier sitio web público con protección Anti-SSRF.
+-  **Sincronización Total de Temas Visuales:** Compatibilidad reactiva con los temas *Oscuro Multimedia*, *Oscuro OLED* y *Claro Moderno* mediante `get_current_palette()`.
+-  **Aceleración Concurrente DASH/HLS:** Configuración de 1 a 8 fragmentos simultáneos (`concurrent_fragments`) para descargas a máxima velocidad.
+-  **Arrastrar y Soltar Global (Drag & Drop):** Arrastra enlaces o texto con URLs directamente sobre cualquier parte de la ventana para iniciar el análisis automático.
+-  **Actualizador Dinámico del Motor yt-dlp:** Actualiza el motor de extracción en caliente desde la vista de Configuración o Acerca de, con verificación de integridad criptográfica SHA-256.
+-  **Monitor de Actividad Lateral (Studio Desktop):** Panel lateral con métricas de ancho de banda, descargas activas, cola pendiente y velocidad en tiempo real.
 
 </details>
 
 ---
 
-## 🌐 Plataformas Soportadas
+##  Plataformas Soportadas
 
 | Plataforma | Soporte de Video | Audio / MP3 | Subtítulos | Resoluciones Máximas |
 |:---|:---:|:---:|:---:|:---:|
@@ -99,34 +98,34 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 
 ---
 
-## 🚀 Características Principales
+##  Características Principales
 
-### 🎬 1. Pantalla de Inicio y Análisis Inteligente
+###  1. Pantalla de Inicio y Análisis Inteligente
 - **Caja de URL Multifunción:** Pega URLs, detecta automáticamente enlaces válidos del portapapeles o arrastra enlaces directamente (`Drag & Drop`).
 - **Tarjeta de Previsualización (`ContentPreviewCard`):** Miniatura 16:9 de alta resolución, badge de duración, etiquetas de plataforma, selector de pistas de audio y sinopsis expandible.
 - **Tabla Estructurada de Formatos:** Lista interactiva con resolución, códec (H.264, VP9, AV1), tasa de cuadros (FPS), estimación de peso en MB/GB y badge de calidad recomendada.
 - **Configuración de Salida Inmediata:** Modifica el nombre del archivo y la carpeta de destino en un clic antes de iniciar la descarga.
 
-### 🎧 2. Extracción y Conversión de Audio de Alta Fidelidad
+###  2. Extracción y Conversión de Audio de Alta Fidelidad
 - Conversión automática a **MP3**, **M4A** o **WAV**.
 - Tasa de bits personalizable (128 kbps, 192 kbps, 256 kbps, 320 kbps).
 - Preservación de metadatos ID3 y carátula incrustada vía FFmpeg.
 
-### 📜 3. Subtítulos y Accesibilidad (CC)
+###  3. Subtítulos y Accesibilidad (CC)
 - Detección en tiempo real de subtítulos manuales y pistas generadas automáticamente.
 - Opciones de descarga: incrustación directa en el contenedor `.mp4`/`.mkv` o descarga en archivos independientes `.srt` y `.vtt`.
 
-### 📦 4. Descargas Masivas por Lotes (Batch Downloads)
+###  4. Descargas Masivas por Lotes (Batch Downloads)
 - Modal multilínea para ingresar decenas de enlaces simultáneos o importar archivos `.txt`.
 - Configuración global de calidad y carpeta unificada para descargas en serie o concurrentes.
 
-### 📚 5. Biblioteca Local: Historial y Favoritos
+###  5. Biblioteca Local: Historial y Favoritos
 - **Historial Completo:** Registro detallado con estado, velocidad media, fecha y peso final.
 - **Menú Contextual Integrado:** Clic derecho para reproducir el archivo con el reproductor predeterminado, abrir la carpeta en el Explorador de Windows, copiar URL o eliminar.
 - **Colección de Favoritos (`FavoritosView`):** Guarda enlaces con un clic (`♡ Guardar`) para redescargarlos en cualquier momento.
 - **Base de Datos Robusta:** SQLite con modo WAL (Write-Ahead Logging) para máxima concurrencia y cero corrupción.
 
-### ⚙️ 6. Configuración Avanzada y Gestión de Sesiones
+###  6. Configuración Avanzada y Gestión de Sesiones
 - **Límite de Velocidad:** Control de ancho de banda (500 KB/s hasta 50 MB/s o sin límite).
 - **Concurrencia Configurable:** Ajuste de descargas simultáneas (1 a 10) y fragmentos DASH (1 a 8).
 - **Soporte de Cookies de Navegador:** Conexión segura con Chrome, Edge, Firefox o Brave para descargar contenido privado o con restricción de edad.
@@ -134,25 +133,25 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 
 ---
 
-## 🛡️ Seguridad y Resiliencia
+##  Seguridad y Resiliencia
 
 osvaldoDownloaderPro implementa estándares estrictos de seguridad comprobados por pruebas unitarias automatizadas:
 
-- **🛡️ Protección Anti-SSRF (Server-Side Request Forgery):** Bloqueo total de `localhost`, IPs privadas (RFC 1918: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), direcciones link-local (`169.254.0.0/16`), multicast, loopback IPv6 (`::1`), y dominios internos reservados RFC 6761/8375 (`.local`, `.lan`, `.internal`, `.corp`).
-- **📁 Anti-Path Traversal:** Sanitización estricta de nombres de archivo y confinamiento en el directorio de destino para evitar escrituras fuera de ruta (`../`).
-- **🪟 Nombres Reservados de Windows:** Neutralización de nombres de dispositivo inválidos en NTFS/FAT32 (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) y caracteres prohibidos (`<>:"/\|?*`).
-- **🔒 Redacción de Credenciales en Logs:** Los tokens de autenticación, cookies y claves en URLs se ofuscan automáticamente en los archivos de registro.
-- **🧵 Concurrencia Thread-Safe:** Operaciones de red y decodificación aisladas en hilos secundarios Qt que evitan cualquier bloqueo de la interfaz de usuario.
+- ** Protección Anti-SSRF (Server-Side Request Forgery):** Bloqueo total de `localhost`, IPs privadas (RFC 1918: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), direcciones link-local (`169.254.0.0/16`), multicast, loopback IPv6 (`::1`), y dominios internos reservados RFC 6761/8375 (`.local`, `.lan`, `.internal`, `.corp`).
+- ** Anti-Path Traversal:** Sanitización estricta de nombres de archivo y confinamiento en el directorio de destino para evitar escrituras fuera de ruta (`../`).
+- ** Nombres Reservados de Windows:** Neutralización de nombres de dispositivo inválidos en NTFS/FAT32 (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) y caracteres prohibidos (`<>:"/\|?*`).
+- ** Redacción de Credenciales en Logs:** Los tokens de autenticación, cookies y claves en URLs se ofuscan automáticamente en los archivos de registro.
+- ** Concurrencia Thread-Safe:** Operaciones de red y decodificación aisladas en hilos secundarios Qt que evitan cualquier bloqueo de la interfaz de usuario.
 
 ---
 
-## 💻 Desarrollo y Pruebas
+##  Desarrollo y Pruebas
 
-### 🔧 Requisitos Previos
+###  Requisitos Previos
 - **Python 3.11, 3.12 o 3.13** (64-bit)
 - **Git**
 
-### 📦 Configuración del Entorno de Desarrollo
+###  Configuración del Entorno de Desarrollo
 
 ```powershell
 # 1. Clonar el repositorio
@@ -170,7 +169,7 @@ pip install -e ".[dev]"
 python src/main.py
 ```
 
-### 🧪 Ejecución de Pruebas Automatizadas
+###  Ejecución de Pruebas Automatizadas
 
 El proyecto cuenta con **623 pruebas automatizadas** que cubren el 100% de los casos de uso, entidades de dominio, adaptadores de infraestructura y componentes visuales:
 
@@ -185,7 +184,7 @@ pytest --cov=src --cov-report=term-missing
 mypy src
 ```
 
-### 🔨 Compilación del Instalador (.exe)
+###  Compilación del Instalador (.exe)
 
 Para compilar el binario con PyInstaller y generar el instalador final con Inno Setup:
 
@@ -199,7 +198,7 @@ El artefacto resultante se genera en:
 
 ---
 
-## 🏛️ Arquitectura del Software
+##  Arquitectura del Software
 
 El proyecto sigue rigurosamente los principios de **Clean Architecture (Arquitectura Limpia)**, **Arquitectura Hexagonal (Puertos y Adaptadores)** y **Domain-Driven Design (DDD)**:
 
@@ -224,7 +223,7 @@ src/
 
 ---
 
-## 📄 Licencia
+##  Licencia
 
 Este proyecto está distribuido bajo la licencia **MIT**. Consulte el archivo [LICENSE](LICENSE) para más información.
 
