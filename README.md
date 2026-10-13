@@ -27,7 +27,7 @@
 
 En la sección **Assets** del lanzamiento oficial de GitHub encontrarás el instalador listo para usar:
 
-> ** `osvaldoDownloaderPro-1.5.0-Setup.exe`** (~114 MB)  
+> **`osvaldoDownloaderPro-1.5.0-Setup.exe`** (~114 MB)  
 > *Incluye el ejecutable completo, nuevo icono vectorial HD, motor yt-dlp integrado, FFmpeg nativo y todas las dependencias.*
 
 ```
@@ -137,11 +137,11 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 
 osvaldoDownloaderPro implementa estándares estrictos de seguridad comprobados por pruebas unitarias automatizadas:
 
-- ** Protección Anti-SSRF (Server-Side Request Forgery):** Bloqueo total de `localhost`, IPs privadas (RFC 1918: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), direcciones link-local (`169.254.0.0/16`), multicast, loopback IPv6 (`::1`), y dominios internos reservados RFC 6761/8375 (`.local`, `.lan`, `.internal`, `.corp`).
-- ** Anti-Path Traversal:** Sanitización estricta de nombres de archivo y confinamiento en el directorio de destino para evitar escrituras fuera de ruta (`../`).
-- ** Nombres Reservados de Windows:** Neutralización de nombres de dispositivo inválidos en NTFS/FAT32 (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) y caracteres prohibidos (`<>:"/\|?*`).
-- ** Redacción de Credenciales en Logs:** Los tokens de autenticación, cookies y claves en URLs se ofuscan automáticamente en los archivos de registro.
-- ** Concurrencia Thread-Safe:** Operaciones de red y decodificación aisladas en hilos secundarios Qt que evitan cualquier bloqueo de la interfaz de usuario.
+- **Protección Anti-SSRF (Server-Side Request Forgery):** Bloqueo total de `localhost`, IPs privadas (RFC 1918: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), direcciones link-local (`169.254.0.0/16`), multicast, loopback IPv6 (`::1`), y dominios internos reservados RFC 6761/8375 (`.local`, `.lan`, `.internal`, `.corp`).
+- **Anti-Path Traversal:** Sanitización estricta de nombres de archivo y confinamiento en el directorio de destino para evitar escrituras fuera de ruta (`../`).
+- **Nombres Reservados de Windows:** Neutralización de nombres de dispositivo inválidos en NTFS/FAT32 (`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`) y caracteres prohibidos (`<>:"/\|?*`).
+- **Redacción de Credenciales en Logs:** Los tokens de autenticación, cookies y claves en URLs se ofuscan automáticamente en los archivos de registro.
+- **Concurrencia Thread-Safe:** Operaciones de red y decodificación aisladas en hilos secundarios Qt que evitan cualquier bloqueo de la interfaz de usuario.
 
 ---
 
@@ -193,7 +193,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1 -SkipSigning
 ```
 
 El artefacto resultante se genera en:
-- `installer/osvaldoDownloaderPro-1.3.0-Setup.exe`
+- `installer/osvaldoDownloaderPro-1.5.0-Setup.exe`
 - `dist/SHA256SUMS.txt`
 
 ---
