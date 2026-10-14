@@ -2,16 +2,16 @@
 
 **Proyecto:** osvaldoDownloaderPro  
 **Framework de Pruebas:** Pytest 8.0+ / Pytest 9.0+  
-**Total de Pruebas:** 560 pruebas (100% pasando, 0 advertencias)  
+**Total de Pruebas:** 675 pruebas (100% pasando, 0 advertencias)  
 **Cobertura de Código:** 83% global (29 módulos clave al 100%)  
-**Análisis Estático:** MyPy (`strict = true`, 0 errores en 98 archivos fuente)  
+**Análisis Estático:** MyPy (`strict = true`, 0 errores en 110 archivos fuente)  
 **Linter & Calidad:** Ruff (`All checks passed!`, 0 errores)  
 
 ---
 
 ## 1. EJECUCIÓN DE PRUEBAS
 
-Para ejecutar la suite completa de pruebas (560 pruebas unitarias, de integración y E2E):
+Para ejecutar la suite completa de pruebas (675 pruebas unitarias, de integración y E2E):
 
 ```powershell
 python -m pytest

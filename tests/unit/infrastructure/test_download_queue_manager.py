@@ -89,9 +89,14 @@ class FakePool:
         self.mode = mode
         self.max_threads = 0
         self.captured: list[object] = []
+        self.waited: list[int] = []
 
     def setMaxThreadCount(self, threads: int) -> None:  # noqa: N802
         self.max_threads = threads
+
+    def waitForDone(self, timeout_ms: int = -1) -> bool:  # noqa: N802
+        self.waited.append(timeout_ms)
+        return True
 
     def start(self, runnable: object) -> None:
         if self.mode == "manual":
@@ -529,6 +534,84 @@ class TestCancelacion:
         assert manager.resume(activa.id.value) is True
         assert engine.resumed == [activa.id.value]
         assert manager.pause("desconocida") is False
+
+
+# ---------------------------------------------------------------------------
+# CIERRE ORDENADO (shutdown)
+# ---------------------------------------------------------------------------
+class TestShutdown:
+
+    def _make_manager(self, engine, bus, repo, max_concurrent=1, pool=None):
+        pool = pool if pool is not None else FakePool()
+        manager = DownloadQueueManager(
+            engine=engine,
+            event_bus=bus,
+            repository=repo,
+            max_concurrent=max_concurrent,
+            pool=pool,
+        )
+        return manager, pool
+
+    def test_shutdown_cancela_activas_y_pendientes(self, tmp_path, repo):
+        engine = BlockingFakeEngine()
+        bus = InProcessEventBus()
+        manager, pool = self._make_manager(engine, bus, repo, max_concurrent=1)
+
+        activa = _make_task(str(tmp_path / "act.mp4"))
+        engine.add_gate(activa.id.value)
+        manager.enqueue(activa)
+
+        en_cola = _make_task(str(tmp_path / "cola.mp4"))
+        manager.enqueue(en_cola)
+        assert manager.pending_ids() == [en_cola.id.value]
+
+        manager.shutdown()
+
+        assert manager.active_ids() == []
+        assert manager.pending_ids() == []
+        assert activa.id.value in engine.cancelled
+        assert repo.get_by_id(en_cola.id).status == DownloadState.CANCELLED
+        assert pool.waited == [5000]
+
+    def test_shutdown_es_idempotente(self, tmp_path, repo):
+        engine = BlockingFakeEngine()
+        manager, pool = self._make_manager(engine, InProcessEventBus(), repo)
+
+        manager.shutdown()
+        manager.shutdown()  # segunda llamada: sin efectos
+
+        assert pool.waited == [5000]
+
+    def test_shutdown_ignora_enqueue_posterior(self, tmp_path, repo):
+        engine = BlockingFakeEngine()
+        manager, _pool = self._make_manager(engine, InProcessEventBus(), repo)
+        manager.shutdown()
+
+        tarea = _make_task(str(tmp_path / "tarde.mp4"))
+        manager.enqueue(tarea)
+
+        assert manager.pending_ids() == []
+        assert engine.downloaded == []
+
+    def test_shutdown_sin_wait_for_done_no_explota(self, tmp_path, repo):
+        class _MinimalPool:
+            """Pool que solo cumple el contrato minimo (sin waitForDone)."""
+
+            def setMaxThreadCount(self, threads: int) -> None:  # noqa: N802
+                self.max_threads = threads
+
+            def start(self, runnable: object) -> None:
+                pass
+
+        engine = BlockingFakeEngine()
+        manager = DownloadQueueManager(
+            engine=engine,
+            event_bus=InProcessEventBus(),
+            repository=repo,
+            max_concurrent=1,
+            pool=_MinimalPool(),
+        )
+        manager.shutdown()  # no debe lanzar
 
 
 # ---------------------------------------------------------------------------

@@ -171,7 +171,7 @@ python src/main.py
 
 ###  Ejecución de Pruebas Automatizadas
 
-El proyecto cuenta con **623 pruebas automatizadas** que cubren el 100% de los casos de uso, entidades de dominio, adaptadores de infraestructura y componentes visuales:
+El proyecto cuenta con **675 pruebas automatizadas** que cubren el 100% de los casos de uso, entidades de dominio, adaptadores de infraestructura y componentes visuales:
 
 ```powershell
 # Ejecutar la suite completa de pruebas

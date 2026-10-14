@@ -2,7 +2,6 @@ import os
 import threading
 import time
 from typing import Any, Dict, List, Optional
-import pytest
 
 from src.application.use_cases.download_media import DownloadMediaUseCase
 from src.domain.entities.download_task import DownloadRequest, DownloadTask, DownloadState
@@ -113,15 +112,6 @@ def _make_task(time_range: Optional[TimeRange] = None, is_audio: bool = False, t
         time_range=time_range,
     )
 
-
-def test_ytdlp_engine_configures_time_range_video(tmp_path):
-    CapturingFakeYoutubeDL.captured_opts.clear()
-    repo = MemoryDownloadRepository()
-    engine = YtDlpDownloadEngine(
-        repository=repo,
-        ffmpeg_adapter=FakeFFmpegAdapter(),
-        ydl_factory=CapturingFakeYoutubeDL,
-    )
 
 def _wait_for(predicate, timeout: float = 8.0) -> bool:
     deadline = time.time() + timeout

@@ -24,14 +24,15 @@ from src.domain.events.domain_events import (
     DownloadResumedEvent,
     DownloadCancelledEvent,
 )
-from src.domain.entities.subtitle import SubtitleConfig, SubtitleMode, SubtitleTrack
+from src.domain.entities.subtitle import SubtitleConfig, SubtitleMode
 from src.domain.ports.download_engine import IDownloadEngine
 from src.domain.ports.download_repository import IDownloadRepository
 from src.domain.services.error_classifier import ErrorClassifier
 from src.domain.services.format_normalizer import FormatNormalizer
 from src.domain.services.quality_validator import QualityValidator, QualityMatchStatus
 from src.infrastructure.adapters.media.ffmpeg_adapter import FFmpegProcessAdapter, CancelledOperationError
-from src.infrastructure.adapters.media.subtitle_extractor import extract_subtitle_tracks
+# Re-exportado como parte de la API pública del motor (lo usan las pruebas de subtítulos).
+from src.infrastructure.adapters.media.subtitle_extractor import extract_subtitle_tracks  # noqa: F401
 from src.infrastructure.adapters.platforms.browser_detector import get_first_available_browser
 from src.infrastructure.event_bus.in_process_event_bus import InProcessEventBus
 

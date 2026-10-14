@@ -6,6 +6,7 @@
   recortada con esquinas redondeadas, con placeholder mientras carga o si falla.
 """
 
+import atexit
 import re
 import threading
 from collections import OrderedDict
@@ -33,6 +34,12 @@ _CACHE_MAX_ENTRIES = 64
 _CACHE_LOCK = threading.Lock()
 _CACHE: "OrderedDict[str, Optional[QImage]]" = OrderedDict()
 
+# Hilos de descarga activos. Se rastrean para poder esperarlos ordenadamente al
+# cerrar la aplicación y evitar que el intérprete los aborte a mitad de una
+# operación de red/SSL (lo que provoca un fallo nativo de Windows al salir).
+_WORKER_THREADS: "set[threading.Thread]" = set()
+_WORKER_THREADS_LOCK = threading.Lock()
+
 
 def _cache_get(url: str) -> Optional[QImage]:
     with _CACHE_LOCK:
@@ -54,6 +61,24 @@ def clear_thumbnail_cache() -> None:
     """Vacía la caché de miniaturas (útil en pruebas y al recargar contenido)."""
     with _CACHE_LOCK:
         _CACHE.clear()
+
+
+def wait_for_thumbnail_threads(timeout: Optional[float] = None) -> None:
+    """Espera a que finalicen los hilos de descarga de miniaturas en curso.
+
+    Se invoca automáticamente al cerrar el intérprete. Los hilos son daemon, así
+    que sin esta espera explícita el proceso podría terminarlos abruptamente a
+    mitad de una lectura de socket/SSL.
+    """
+    with _WORKER_THREADS_LOCK:
+        pending = list(_WORKER_THREADS)
+    for thread in pending:
+        thread.join(timeout)
+
+
+# Al cerrar la aplicación esperamos a los hilos de miniaturas en curso para que
+# el intérprete no los mate a mitad de una operación de red/SSL (evita crashes).
+atexit.register(wait_for_thumbnail_threads)
 
 
 class ThumbnailLoader(QObject):
@@ -93,6 +118,9 @@ class ThumbnailLoader(QObject):
                     _cache_put(url_str, image)
             except Exception:
                 image = None
+            finally:
+                with _WORKER_THREADS_LOCK:
+                    _WORKER_THREADS.discard(thread)
             if generation == self._generation:
                 try:
                     self.loaded.emit(url_str, image)
@@ -100,6 +128,8 @@ class ThumbnailLoader(QObject):
                     pass
 
         thread = threading.Thread(target=_worker, daemon=True, name="thumbnail-loader")
+        with _WORKER_THREADS_LOCK:
+            _WORKER_THREADS.add(thread)
         thread.start()
 
 

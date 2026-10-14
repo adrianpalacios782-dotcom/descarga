@@ -149,6 +149,10 @@ def main() -> None:
 
     exit_code = app.exec()
     try:
+        download_queue.shutdown()
+    except Exception:  # noqa: BLE001 - el cierre nunca debe romper la salida
+        pass
+    try:
         db_manager.close()
     except Exception:
         pass

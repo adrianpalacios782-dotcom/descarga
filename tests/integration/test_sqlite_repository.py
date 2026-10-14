@@ -166,7 +166,7 @@ class TestSQLiteDownloadRepository:
             );
         """)
         # Inicializar repositorio, disparando la migración
-        repo = SQLiteDownloadRepository(db_mgr)
+        SQLiteDownloadRepository(db_mgr)
         cols = [r[1] for r in conn.execute("PRAGMA table_info(download_tasks)").fetchall()]
         assert "time_range_start" in cols
         assert "time_range_end" in cols

@@ -1,7 +1,6 @@
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from src.domain.value_objects.time_range import TimeRange
 from src.presentation.components.time_range_selector import (
     DualRangeSlider,
     TimeRangeSelectorWidget,

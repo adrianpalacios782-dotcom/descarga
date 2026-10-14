@@ -1,7 +1,6 @@
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from src.domain.value_objects.audio_preset import AudioPreset
 from src.presentation.components.download_config_widget import DownloadConfigWidget
 from src.presentation.view_models.main_view_model import MainViewModel
 

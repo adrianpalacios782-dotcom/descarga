@@ -182,6 +182,7 @@ class DownloadQueueManager(QObject):
         self._pending: OrderedDict[str, DownloadTask] = OrderedDict()
         self._active: dict[str, _ActiveEntry] = {}
         self._lock = threading.RLock()
+        self._shutting_down = False
 
         if self._bus is not None:
             self._bus.subscribe(DownloadProgressChangedEvent, self._on_progress_event)
@@ -223,6 +224,9 @@ class DownloadQueueManager(QObject):
         """Encola una tarea QUEUED; la despacha si hay slot libre."""
         task_id = task.id.value
         with self._lock:
+            if self._shutting_down:
+                logger.warning("Cola en cierre: enqueue de %s ignorado.", task_id)
+                return
             if task_id in self._active or task_id in self._pending:
                 logger.debug("Tarea %s ya esta gestionada; enqueue ignorado.", task_id)
                 return
@@ -284,6 +288,62 @@ class DownloadQueueManager(QObject):
             return False
         return True
 
+    def shutdown(self, wait: bool = True, timeout_ms: int = 5000) -> None:
+        """Detiene la cola de forma ordenada para el cierre de la aplicacion.
+
+        Idempotente y best-effort:
+
+        - Cancela definitivamente las tareas EN COLA (nunca llegaron al motor).
+        - Pide al motor detener las tareas ACTIVAS y libera sus slots para que
+          los workers del pool terminen en vez de quedar bloqueados.
+        - Se desuscribe del bus para ignorar eventos tardios.
+        - Si `wait`, espera a que el pool termine sus runnables (si lo soporta).
+
+        Sin esto, el destructor de `QThreadPool` espera a los workers vivos y
+        cerrar la aplicacion durante una descarga puede bloquearse.
+        """
+        with self._lock:
+            if self._shutting_down:
+                return
+            self._shutting_down = True
+            pending = list(self._pending.values())
+            self._pending.clear()
+            active_ids = list(self._active.keys())
+
+        for task in pending:
+            self._finalize_cancellation(task)
+
+        for task_id in active_ids:
+            entry = self._entry_if_active(task_id)
+            if entry is None:
+                continue
+            entry.pre_cancelled = True
+            try:
+                self._engine.cancel(entry.task)
+            except Exception as ex:  # noqa: BLE001 - el cierre nunca debe romper
+                logger.warning("Cancelacion en cierre fallida para %s: %s", task_id, ex)
+            self._release_slot(task_id)
+
+        if self._bus is not None:
+            for event_type, handler in (
+                (DownloadProgressChangedEvent, self._on_progress_event),
+                (DownloadCompletedEvent, self._on_completed_event),
+                (DownloadFailedEvent, self._on_failed_event),
+                (DownloadCancelledEvent, self._on_cancelled_event),
+            ):
+                try:
+                    self._bus.unsubscribe(event_type, handler)  # type: ignore[arg-type]
+                except Exception:  # noqa: BLE001
+                    pass
+
+        if wait:
+            wait_for_done = getattr(self._pool, "waitForDone", None)
+            if callable(wait_for_done):
+                try:
+                    wait_for_done(timeout_ms)
+                except Exception as ex:  # noqa: BLE001
+                    logger.warning("Espera de cierre del pool fallida: %s", ex)
+
     # ---------------------------------------------------- Punto de entrada worker
     def run_worker(self, task: DownloadTask) -> None:
         """Ejecutado por el hilo del pool: lanza el motor y retiene el slot.
@@ -309,6 +369,8 @@ class DownloadQueueManager(QObject):
         """Promueve pendientes a activos mientras haya slots libres."""
         launched: list[DownloadTask] = []
         with self._lock:
+            if self._shutting_down:
+                return
             while len(self._active) < self._max_concurrent and self._pending:
                 _task_id, task = self._pending.popitem(last=False)
                 self._active[task.id.value] = _ActiveEntry(task=task, done=threading.Event())
