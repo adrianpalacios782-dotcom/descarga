@@ -2,6 +2,19 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [1.5.1] - 2026-10-13
+
+### Corregido
+- **Cierre ordenado de la cola de descargas:** nuevo `DownloadQueueManager.shutdown()` que cancela las tareas activas y en cola, se desuscribe del bus de eventos y espera al `QThreadPool`, invocado desde `main.py` antes de cerrar la base de datos. Evita que la aplicación quede bloqueada al salir durante una descarga.
+- **Carga de miniaturas sin hilos residuales:** el cargador de miniaturas rastrea sus hilos de trabajo (con liberación vía `atexit`), eliminando hilos de red vivos al terminar el proceso que podían causar un fallo nativo en Windows.
+
+### Añadido
+- **Configuración global de pruebas (`tests/conftest.py`):** crea el directorio temporal requerido por `--basetemp`, comparte una única `QApplication` de sesión con limpieza ordenada de widgets y neutraliza la red, permitiendo ejecutar la suite en un clon limpio sin errores ni fallos al finalizar el intérprete.
+
+### Calidad
+- `ruff` y `mypy --strict` sin errores (110 archivos fuente). 675 pruebas automatizadas en verde.
+- Limpieza de imports no usados y de un test duplicado.
+
 ## [1.4.0] - 2026-09-07
 
 ### Añadido & Optimizado (Recorte de Tiempo en Vivo y Descarga por Segmentos - Lossless Time-Clipper)

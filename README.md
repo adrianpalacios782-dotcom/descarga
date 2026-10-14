@@ -6,7 +6,7 @@
 
 ### Gestor Profesional y Universal de Descargas Multimedia para Windows
 
-[![Version](https://img.shields.io/badge/version-1.5.0-blue.svg?style=flat-square)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.0)
+[![Version](https://img.shields.io/badge/version-1.5.1-blue.svg?style=flat-square)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.1)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg?style=flat-square)](https://www.python.org/)
 [![GUI](https://img.shields.io/badge/Qt6-PySide6-41CD52.svg?style=flat-square)](https://pyside.org/)
 [![Architecture](https://img.shields.io/badge/Clean%20Architecture-Hexagonal%20%2B%20DDD-orange.svg?style=flat-square)]()
@@ -15,7 +15,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
 
 *Aplicación de escritorio nativa, moderna e independiente diseñada para el análisis, descarga acelerada, recorte de segmentos, conversión y organización de contenido multimedia desde más de 15 plataformas web y cualquier sitio público con vídeo o audio.*
-[ Descargar v1.5.0](#-descargar-para-windows) • [ Novedades v1.5.0](#-novedades-en-la-versión-150) • [ Plataformas](#-plataformas-soportadas) • [ Características](#-características-principales) • [ Seguridad](#-seguridad-y-resiliencia) • [ Desarrollo](#-desarrollo-y-pruebas)
+[ Descargar v1.5.1](#-descargar-para-windows) • [ Novedades v1.5.1](#-novedades-en-la-versión-151) • [ Plataformas](#-plataformas-soportadas) • [ Características](#-características-principales) • [ Seguridad](#-seguridad-y-resiliencia) • [ Desarrollo](#-desarrollo-y-pruebas)
 
 </div>
 
@@ -23,11 +23,11 @@
 
 ##  Descargar para Windows
 
-###  [Descargar osvaldoDownloaderPro v1.5.0 (Instalador Oficial)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.0)
+###  [Descargar osvaldoDownloaderPro v1.5.1 (Instalador Oficial)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.1)
 
 En la sección **Assets** del lanzamiento oficial de GitHub encontrarás el instalador listo para usar:
 
-> **`osvaldoDownloaderPro-1.5.0-Setup.exe`** (~114 MB)  
+> **`osvaldoDownloaderPro-1.5.1-Setup.exe`** (~114 MB)  
 > *Incluye el ejecutable completo, nuevo icono vectorial HD, motor yt-dlp integrado, FFmpeg nativo y todas las dependencias.*
 
 ```
@@ -36,7 +36,7 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 ```
 
 ###  Instalación Rápida
-1. Descarga **`osvaldoDownloaderPro-1.5.0-Setup.exe`** desde [GitHub Releases](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.0).
+1. Descarga **`osvaldoDownloaderPro-1.5.1-Setup.exe`** desde [GitHub Releases](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.1).
 2. Ejecuta el archivo instalador (no requiere privilegios de administrador para la instalación por usuario).
 3. Sigue el asistente de instalación y abre **osvaldoDownloaderPro** desde el Menú Inicio o acceso directo de escritorio.
 
@@ -53,7 +53,14 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 
 ---
 
-##  Novedades en la Versión 1.5.0
+##  Novedades en la Versión 1.5.1
+
+- **Cierre Ordenado de la Cola de Descargas:** El cierre de la aplicación ahora detiene y libera de forma limpia las descargas activas y en cola (`DownloadQueueManager.shutdown`), evitando que el proceso quede bloqueado esperando a los hilos del `QThreadPool` al salir.
+- **Carga de Miniaturas Más Robusta:** El cargador de miniaturas rastrea sus hilos de trabajo y los libera en el cierre, eliminando hilos de red residuales que podían provocar un fallo nativo al terminar el proceso.
+- **Suite de Pruebas Hermética:** Configuración global de pruebas (`tests/conftest.py`) que garantiza una ejecución reproducible en un clon limpio: crea el directorio temporal requerido, comparte una única `QApplication` de sesión y neutraliza la red, eliminando los errores de arranque y los fallos al finalizar el intérprete.
+- **Calidad:** `ruff` y `mypy --strict` sin errores sobre 110 módulos fuente; 675 pruebas automatizadas en verde.
+
+##  Novedades en la Versión 1.5.0 (anterior)
 
 - **Detección Automática de Navegadores & Fallback de Sesión:** Detección en caliente de navegadores del sistema (**Google Chrome, Microsoft Edge, Mozilla Firefox y Brave**) para rescatar descargas bloqueadas por detección de bots (*"Sign in to confirm you're not a bot"*) o restricciones de edad sin necesidad de configurar archivos manuales.
 -  **Clasificador Inteligente de Errores (`ErrorClassifierService`):** Diagnóstico automático y traducción de fallos técnicos de `yt-dlp`/red/FFmpeg a explicaciones claras en español con sugerencias prácticas directas en la interfaz.
@@ -193,7 +200,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1 -SkipSigning
 ```
 
 El artefacto resultante se genera en:
-- `installer/osvaldoDownloaderPro-1.5.0-Setup.exe`
+- `installer/osvaldoDownloaderPro-1.5.1-Setup.exe`
 - `dist/SHA256SUMS.txt`
 
 ---
