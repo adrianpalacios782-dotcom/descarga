@@ -123,3 +123,7 @@ $RECYCLE.BIN/
 osvaldo-AI/
 sistema-informacion-tienda/
 
+
+# yt-dlp EJS solver
+yt.solver.lib.min.js
+*.solver.lib.min.js

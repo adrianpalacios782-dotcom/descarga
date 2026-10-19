@@ -740,6 +740,18 @@ class InicioView(QWidget):
             first_row = next((r for r in rows if r.kind == "video"), rows[0])
             if first_row is not None:
                 first_row.radio.setChecked(True)
+            if (
+                self._format_tab != TAB_AUDIO
+                and metadata.platform == "YouTube"
+                and len(self._quality_rows) == 1
+                and any(r.vqo and r.vqo.height <= 360 for r in self._quality_rows)
+            ):
+                self.lbl_format_hint.setText(
+                    "💡 ¿Esperabas calidades superiores (720p, 1080p, 4K)? YouTube limita ciertos contenidos "
+                    "a 360p para visitas anónimas. Para desbloquear todas las calidades y 60 FPS, ve a "
+                    "Configuración y selecciona tu archivo cookies.txt o tu navegador."
+                )
+                self.lbl_format_hint.show()
         else:
             self.table_header.hide()
             self.quality_container.hide()

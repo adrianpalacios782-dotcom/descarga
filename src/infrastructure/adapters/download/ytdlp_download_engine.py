@@ -712,9 +712,21 @@ class YtDlpDownloadEngine(IDownloadEngine):
             "noplaylist": True,
             "format": "all",
             "socket_timeout": 30,
+            "remote_components": ["ejs:github"],
+            "ffmpeg_location": self.ffmpeg_adapter.get_ffmpeg_executable(),
         }
-        if shutil.which("node"):
-            base_opts["js_runtimes"] = {"node": {}}
+        node_path = shutil.which("node")
+        if not node_path:
+            for candidate in [
+                r"C:\Program Files\nodejs\node.exe",
+                r"C:\Program Files (x86)\nodejs\node.exe",
+                os.path.expandvars(r"%LOCALAPPDATA%\Programs\node\node.exe"),
+            ]:
+                if os.path.exists(candidate):
+                    node_path = candidate
+                    break
+        if node_path:
+            base_opts["js_runtimes"] = {"node": {"path": node_path}}
         elif shutil.which("deno"):
             base_opts["js_runtimes"] = {"deno": {}}
 
@@ -822,9 +834,20 @@ class YtDlpDownloadEngine(IDownloadEngine):
             "ffmpeg_location": self.ffmpeg_adapter.get_ffmpeg_executable(),
             "progress_hooks": [self._make_progress_hook(task_id, cancel_token, pause_token)],
             "postprocessor_hooks": [self._make_postprocessor_hook(task_id, cancel_token)],
+            "remote_components": ["ejs:github"],
         }
-        if shutil.which("node"):
-            opts["js_runtimes"] = {"node": {}}
+        node_path = shutil.which("node")
+        if not node_path:
+            for candidate in [
+                r"C:\Program Files\nodejs\node.exe",
+                r"C:\Program Files (x86)\nodejs\node.exe",
+                os.path.expandvars(r"%LOCALAPPDATA%\Programs\node\node.exe"),
+            ]:
+                if os.path.exists(candidate):
+                    node_path = candidate
+                    break
+        if node_path:
+            opts["js_runtimes"] = {"node": {"path": node_path}}
         elif shutil.which("deno"):
             opts["js_runtimes"] = {"deno": {}}
 

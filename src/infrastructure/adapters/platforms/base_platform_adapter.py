@@ -73,9 +73,28 @@ class BasePlatformAdapter(IPlatformAdapter):
             "socket_timeout": 30,
             "extract_flat": False,
             "format": "all",
+            "remote_components": ["ejs:github"],
         }
-        if shutil.which("node"):
-            ydl_opts["js_runtimes"] = {"node": {}}
+        try:
+            from src.infrastructure.adapters.media.ffmpeg_adapter import FFmpegProcessAdapter
+            ffmpeg_path = FFmpegProcessAdapter().get_ffmpeg_executable()
+            if ffmpeg_path and os.path.exists(ffmpeg_path):
+                ydl_opts["ffmpeg_location"] = ffmpeg_path
+        except Exception:
+            pass
+
+        node_path = shutil.which("node")
+        if not node_path:
+            for candidate in [
+                r"C:\Program Files\nodejs\node.exe",
+                r"C:\Program Files (x86)\nodejs\node.exe",
+                os.path.expandvars(r"%LOCALAPPDATA%\Programs\node\node.exe"),
+            ]:
+                if os.path.exists(candidate):
+                    node_path = candidate
+                    break
+        if node_path:
+            ydl_opts["js_runtimes"] = {"node": {"path": node_path}}
         elif shutil.which("deno"):
             ydl_opts["js_runtimes"] = {"deno": {}}
 
@@ -141,7 +160,7 @@ class BasePlatformAdapter(IPlatformAdapter):
 
                 video_opts = FormatNormalizer.normalize_video_quality_options(formats)
                 video_fmts = FormatNormalizer.normalize_video_formats(formats)
-                max_height = max([v.height for v in video_opts], default=0)
+                max_height = max([v.height for v in video_opts if v.height], default=0)
                 if (max_height > 0 or len(video_fmts) > 0) and video_info is None:
                     video_info = info
                     break
