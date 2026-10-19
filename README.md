@@ -15,7 +15,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
 
 *Aplicación de escritorio nativa, moderna e independiente diseñada para el análisis, descarga acelerada, recorte de segmentos, conversión y organización de contenido multimedia desde más de 15 plataformas web y cualquier sitio público con vídeo o audio.*
-[ Descargar v1.5.1](#-descargar-para-windows) • [ Novedades v1.5.1](#-novedades-en-la-versión-151) • [ Plataformas](#-plataformas-soportadas) • [ Características](#-características-principales) • [ Seguridad](#-seguridad-y-resiliencia) • [ Desarrollo](#-desarrollo-y-pruebas)
+[ Descargar v1.5.1](#-descargar-para-windows) • [ Novedades v1.5.1](#-novedades-en-la-versión-151) • [ Plataformas](#-plataformas-soportadas) • [ Características](#-características-principales) • [ Calidades](#-desbloquear-todas-las-calidades-720p-1080p-4k-60-fps) • [ Seguridad](#-seguridad-y-resiliencia) • [ Desarrollo](#-desarrollo-y-pruebas)
 
 </div>
 
@@ -135,8 +135,27 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 ###  6. Configuración Avanzada y Gestión de Sesiones
 - **Límite de Velocidad:** Control de ancho de banda (500 KB/s hasta 50 MB/s o sin límite).
 - **Concurrencia Configurable:** Ajuste de descargas simultáneas (1 a 10) y fragmentos DASH (1 a 8).
-- **Soporte de Cookies de Navegador:** Conexión segura con Chrome, Edge, Firefox o Brave para descargar contenido privado o con restricción de edad.
+- **Soporte de Cookies (Navegador o cookies.txt):** Conexión segura con Chrome, Edge, Firefox o Brave, o mediante un archivo `cookies.txt`, para descargar contenido privado o con restricción de edad y desbloquear todas las calidades (ver [guía de desbloqueo de calidades](docs/COOKIES.md)).
 - **Integración con System Tray:** Minimizar a la bandeja del sistema con notificaciones nativas de Windows al completar descargas.
+
+---
+
+##  Desbloquear Todas las Calidades (720p, 1080p, 4K, 60 FPS)
+
+Para los videos donde YouTube exige verificar que eres un usuario real (o aplican restricción de edad), indícale tus cookies de sesión y YouTube entregará de inmediato todas las resoluciones: 1080p, 1440p, 4K, 8K y 60 FPS.
+
+**Método recomendado: archivo cookies.txt (más rápido y sin conflictos)**
+
+1. Instala en tu navegador habitual (Chrome, Firefox, Edge o Brave) una extensión para exportar cookies en formato Netscape, por ejemplo: **Get cookies.txt LOCALLY** (código abierto y segura).
+2. Entra a [YouTube](https://www.youtube.com) con tu cuenta y haz clic en el icono de la extensión para descargar tu archivo `cookies.txt`.
+3. Abre **osvaldoDownloaderPro**, ve a la pestaña **Configuración** y, en la sección **AVANZADO (SESIÓN Y CONTENIDO RESTRINGIDO)**, haz clic en **Examinar...** junto a *"Archivo de cookies (cookies.txt)"* y selecciona tu archivo.
+4. Haz clic en **Guardar Preferencias**.
+5. Regresa a la pestaña **Inicio** y vuelve a pegar el enlace del video: YouTube entregará de inmediato todas las resoluciones (1080p, 1440p, 4K, 60 FPS).
+
+> [!NOTE]
+> Si en lugar de un archivo `cookies.txt` prefieres seleccionar directamente Google Chrome (u otro navegador) en el desplegable *"Navegador para cookies"*, asegúrate de cerrarlo por completo antes de analizar o descargar, ya que Windows bloquea la base de datos de cookies de Chrome mientras el navegador está abierto en segundo plano.
+
+ Guía completa paso a paso, método alternativo, privacidad y solución de problemas: **[docs/COOKIES.md](docs/COOKIES.md)**.
 
 ---
 
