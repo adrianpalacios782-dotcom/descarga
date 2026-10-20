@@ -6,7 +6,7 @@
 
 ### Gestor Profesional y Universal de Descargas Multimedia para Windows
 
-[![Version](https://img.shields.io/badge/version-1.5.1-blue.svg?style=flat-square)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.1)
+[![Version](https://img.shields.io/badge/version-1.5.2-blue.svg?style=flat-square)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.2)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg?style=flat-square)](https://www.python.org/)
 [![GUI](https://img.shields.io/badge/Qt6-PySide6-41CD52.svg?style=flat-square)](https://pyside.org/)
 [![Architecture](https://img.shields.io/badge/Clean%20Architecture-Hexagonal%20%2B%20DDD-orange.svg?style=flat-square)]()
@@ -15,7 +15,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
 
 *Aplicación de escritorio nativa, moderna e independiente diseñada para el análisis, descarga acelerada, recorte de segmentos, conversión y organización de contenido multimedia desde más de 15 plataformas web y cualquier sitio público con vídeo o audio.*
-[ Descargar v1.5.1](#-descargar-para-windows) • [ Novedades v1.5.1](#-novedades-en-la-versión-151) • [ Plataformas](#-plataformas-soportadas) • [ Características](#-características-principales) • [ Calidades](#-desbloquear-todas-las-calidades-720p-1080p-4k-60-fps) • [ Seguridad](#-seguridad-y-resiliencia) • [ Desarrollo](#-desarrollo-y-pruebas)
+[ Descargar v1.5.2](#-descargar-para-windows) • [ Novedades v1.5.2](#-novedades-en-la-versión-151) • [ Plataformas](#-plataformas-soportadas) • [ Características](#-características-principales) • [ Calidades](#-desbloquear-todas-las-calidades-720p-1080p-4k-60-fps) • [ Seguridad](#-seguridad-y-resiliencia) • [ Desarrollo](#-desarrollo-y-pruebas)
 
 </div>
 
@@ -23,11 +23,11 @@
 
 ##  Descargar para Windows
 
-###  [Descargar osvaldoDownloaderPro v1.5.1 (Instalador Oficial)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.1)
+###  [Descargar osvaldoDownloaderPro v1.5.2 (Instalador Oficial)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.2)
 
 En la sección **Assets** del lanzamiento oficial de GitHub encontrarás el instalador listo para usar:
 
-> **`osvaldoDownloaderPro-1.5.1-Setup.exe`** (~114 MB)  
+> **`osvaldoDownloaderPro-1.5.2-Setup.exe`** (~114 MB)  
 > *Incluye el ejecutable completo, nuevo icono vectorial HD, motor yt-dlp integrado, FFmpeg nativo y todas las dependencias.*
 
 ```
@@ -36,7 +36,7 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 ```
 
 ###  Instalación Rápida
-1. Descarga **`osvaldoDownloaderPro-1.5.1-Setup.exe`** desde [GitHub Releases](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.1).
+1. Descarga **`osvaldoDownloaderPro-1.5.2-Setup.exe`** desde [GitHub Releases](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.2).
 2. Ejecuta el archivo instalador (no requiere privilegios de administrador para la instalación por usuario).
 3. Sigue el asistente de instalación y abre **osvaldoDownloaderPro** desde el Menú Inicio o acceso directo de escritorio.
 
@@ -219,7 +219,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1 -SkipSigning
 ```
 
 El artefacto resultante se genera en:
-- `installer/osvaldoDownloaderPro-1.5.1-Setup.exe`
+- `installer/osvaldoDownloaderPro-1.5.2-Setup.exe`
 - `dist/SHA256SUMS.txt`
 
 ---

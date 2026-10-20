@@ -224,13 +224,13 @@ class BasePlatformAdapter(IPlatformAdapter):
         elif is_age_restricted:
             clean_msg = (
                 f"Este video tiene restricción de edad (+18) en {plat_name}. "
-                "Para descargarlo, ve a la pestaña 'Configuración' -> 'Autenticación y Cookies' y carga tu archivo cookies.txt o selecciona tu navegador."
+                "Para descargarlo, ve a la pestaña 'Configuración' -> 'Avanzado (Sesión y Cookies)' y carga tu archivo cookies.txt o selecciona tu navegador."
             )
         elif any(term in clean_msg.lower() for term in ("sign in", "bot", "too many requests", "429")):
             clean_msg = (
                 f"La plataforma ({plat_name}) ha restringido temporalmente las solicitudes "
                 "o requiere verificación de cuenta para este contenido. "
-                "Puedes configurar un archivo cookies.txt o tu navegador en Configuración."
+                "Puedes configurar un archivo cookies.txt o tu navegador en Configuración (sección 'Avanzado (Sesión y Cookies)')."
             )
         elif all("auxiliares" in e for e in errors):
             clean_msg = (

@@ -149,7 +149,7 @@ class ConfiguracionView(QWidget):
         layout.addWidget(self.updates_card)
 
         # ------------------------------------------------------- AVANZADO
-        layout.addWidget(self._build_section_card("AVANZADO (SESIÓN Y CONTENIDO RESTRINGIDO)", [
+        layout.addWidget(self._build_section_card("AVANZADO (SESIÓN Y COOKIES)", [
             self._row("Navegador para cookies:", self._combo_browser()),
             self._row_cookies_file(),
             self._hint(

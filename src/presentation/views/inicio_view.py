@@ -749,7 +749,7 @@ class InicioView(QWidget):
                 self.lbl_format_hint.setText(
                     "💡 ¿Esperabas calidades superiores (720p, 1080p, 4K)? YouTube limita ciertos contenidos "
                     "a 360p para visitas anónimas. Para desbloquear todas las calidades y 60 FPS, ve a "
-                    "Configuración y selecciona tu archivo cookies.txt o tu navegador."
+                    "Configuración (sección Avanzado / Cookies) y selecciona tu archivo cookies.txt o tu navegador."
                 )
                 self.lbl_format_hint.show()
         else:

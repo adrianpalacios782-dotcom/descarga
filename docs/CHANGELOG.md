@@ -2,6 +2,18 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [1.5.2] - 2026-10-19
+
+### Optimizado y Mejorado
+- **Optimización de formatos YouTube (Anti-Bot / SABR / EJS):**
+  - Integración nativa de Node.js y ejecutor JavaScript EJS (`yt-dlp-ejs>=0.8.0`) con `remote_components = ["ejs:github"]` para solventar los retos antibot y de firma `n-challenge` de YouTube a velocidad nativa.
+  - Inyección automática y robusta de la ubicación de FFmpeg (`ffmpeg_location`) en `BasePlatformAdapter` y `YtDlpDownloadEngine`, asegurando la disponibilidad del procesador para combinar pistas DASH (1080p, 1440p, 4K) y audio.
+  - Blindaje en la normalización de formatos de video para soportar flujos con atributos de altura nulos sin degradación.
+  - Detección preventiva de restricciones anónimas de YouTube (videos limitados a 360p) con banner informativo contextual en `InicioView`.
+- **Armonización de interfaz y documentación:**
+  - Consistencia en el nombre de la sección de ajustes de sesión: `Avanzado (Sesión y Cookies)` tanto en la interfaz gráfica como en los mensajes descriptivos.
+  - Nueva documentación completa en `docs/COOKIES.md` explicando cómo exportar cookies de sesión con la extensión segura `Get cookies.txt LOCALLY` para desbloquear 1080p, 4K y 60 FPS en videos protegidos.
+
 ## [1.5.1] - 2026-10-13
 
 ### Corregido
