@@ -388,19 +388,23 @@ QScrollArea > QWidget > QWidget {{
 }}
 
 /* -------------------------------------------------------- Inputs */
-QLineEdit {{
+QLineEdit, QPlainTextEdit, QTextEdit {{
     background-color: {p.surface_sunken};
     border: 1px solid {p.border};
     border-radius: 10px;
-    padding: 6px 14px;
-    min-height: 24px;
+    padding: 8px 14px;
     color: {p.text_primary};
     font-size: 13px;
     selection-background-color: {p.accent};
     selection-color: {p.text_on_accent};
 }}
 
-QLineEdit:focus {{
+QLineEdit {{
+    padding: 6px 14px;
+    min-height: 24px;
+}}
+
+QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus {{
     border: 1px solid {p.border_focus};
 }}
 
