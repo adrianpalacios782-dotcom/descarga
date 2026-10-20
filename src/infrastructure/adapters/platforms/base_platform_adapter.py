@@ -38,6 +38,8 @@ class BasePlatformAdapter(IPlatformAdapter):
         self,
         cookies_from_browser: Optional[str] = None,
         cookiefile: Optional[str] = None,
+        po_token: Optional[str] = None,
+        visitor_data: Optional[str] = None,
     ) -> None:
         self.cookies_from_browser: Optional[str] = (
             cookies_from_browser.strip() if cookies_from_browser and cookies_from_browser.strip() else None
@@ -45,6 +47,8 @@ class BasePlatformAdapter(IPlatformAdapter):
         self.cookiefile: Optional[str] = (
             cookiefile.strip() if cookiefile and cookiefile.strip() else None
         )
+        self.po_token: Optional[str] = po_token.strip() if po_token and po_token.strip() else None
+        self.visitor_data: Optional[str] = visitor_data.strip() if visitor_data and visitor_data.strip() else None
 
     def detect(self, url: Url) -> bool:
         """Determina si este adaptador puede procesar la URL (sobrescrito por adaptadores específicos)."""

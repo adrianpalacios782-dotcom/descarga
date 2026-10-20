@@ -1,3 +1,4 @@
+import os
 import logging
 import re
 import time
@@ -89,8 +90,8 @@ class TikTokAdapter(BasePlatformAdapter):
         player_clients: Optional[List[str]] = None,
         disable_browser_cookies: bool = False,
     ) -> Dict[str, Any]:
-        """Opciones mínimas para TikTok — sin extractor_args, sin player_client."""
-        return {
+        """Opciones para TikTok — incluye cookies y headers para reducir bloqueos."""
+        ydl_opts = {
             "quiet": True,
             "no_warnings": True,
             "no_color": True,
@@ -98,4 +99,11 @@ class TikTokAdapter(BasePlatformAdapter):
             "noplaylist": True,
             "socket_timeout": 30,
             "format": "all",
+            "referer": "https://www.tiktok.com/",
+            "origin": "https://www.tiktok.com/",
         }
+        if self.cookiefile and os.path.isfile(self.cookiefile):
+            ydl_opts["cookiefile"] = self.cookiefile
+        elif self.cookies_from_browser and not disable_browser_cookies:
+            ydl_opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
+        return ydl_opts
