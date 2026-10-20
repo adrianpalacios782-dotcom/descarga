@@ -154,7 +154,9 @@ class ConfiguracionView(QWidget):
             self._row_cookies_file(),
             self._hint(
                 "Para videos con restricción de edad o inicio de sesión: puedes usar las cookies de tu navegador "
-                "o seleccionar un archivo cookies.txt (exportado con extensiones como 'Get cookies.txt LOCALLY')."
+                "o seleccionar un archivo cookies.txt (exportado con extensiones como 'Get cookies.txt LOCALLY').\n"
+                "💡 En Windows: Chrome y Edge bloquean sus cookies si el navegador está abierto. "
+                "Carga un archivo cookies.txt para desbloquear 1080p, 4K y 60 FPS sin necesidad de cerrar tu navegador."
             ),
         ]))
 

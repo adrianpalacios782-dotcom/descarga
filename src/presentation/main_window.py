@@ -279,6 +279,7 @@ class MainWindow(QMainWindow):
         self.inicio_view.analyze_requested.connect(self.view_model.analyze_url)
         self.inicio_view.download_requested.connect(self._on_download_requested)
         self.inicio_view.batch_requested.connect(self._open_batch_download_dialog)
+        self.inicio_view.cookies_file_selected.connect(self._on_quick_cookies_selected)
 
         # ViewModel -> InicioView
         self.view_model.analysis_started.connect(lambda: self.inicio_view.set_analyzing_state(True))
@@ -357,6 +358,18 @@ class MainWindow(QMainWindow):
             app = QApplication.instance()
             if isinstance(app, QApplication):
                 app.setStyleSheet(get_theme_qss(str(settings["theme"])))
+
+    def _on_quick_cookies_selected(self, cookies_path: str) -> None:
+        """Aplica un archivo cookies.txt cargado rápidamente desde Inicio."""
+        if hasattr(self, "configuracion_view") and hasattr(self.configuracion_view, "txt_cookies_file"):
+            self.configuracion_view.txt_cookies_file.setText(cookies_path)
+        settings_repo = getattr(self.view_model, "settings_repository", None)
+        if settings_repo is not None:
+            settings_repo.set("cookies_file", cookies_path, "str", "advanced")
+        self.view_model.apply_settings({"cookies_file": cookies_path})
+        current_url = self.inicio_view.url_input.text().strip()
+        if current_url:
+            self.view_model.analyze_url(current_url)
 
     def _connect_update_signals(self) -> None:
         # Vistas manuales -> coordinador (con feedback visible)

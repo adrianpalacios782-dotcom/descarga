@@ -207,6 +207,10 @@ class BasePlatformAdapter(IPlatformAdapter):
                         continue
                     real_formats = [f for f in formats if not FormatNormalizer.is_auxiliary_format(f)]
                     if real_formats:
+                        retry_info["_warning_message"] = (
+                            f"No se pudieron leer las cookies de '{self.cookies_from_browser}' (el navegador está abierto en Windows). "
+                            "Se muestran calidades públicas. Cierra el navegador por completo o utiliza un archivo cookies.txt para desbloquear 1080p y 4K."
+                        )
                         return retry_info
                 except Exception:
                     continue
@@ -264,6 +268,7 @@ class BasePlatformAdapter(IPlatformAdapter):
             formats_list.append(default_fmt)
 
         media_id = MediaId.from_string(url.value)
+        warning_msg = info.get("_warning_message")
         return MediaMetadata(
             media_id=media_id,
             url=url,
@@ -279,6 +284,7 @@ class BasePlatformAdapter(IPlatformAdapter):
             audio_formats=audio_formats,
             formats=formats_list,
             subtitles=subtitles_list,
+            warning_message=warning_msg,
         )
 
     def analyze_playlist(self, url: Url) -> PlaylistMetadata:

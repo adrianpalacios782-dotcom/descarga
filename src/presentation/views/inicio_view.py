@@ -95,6 +95,7 @@ class InicioView(QWidget):
     download_requested = Signal(object, str, str)  # (media_metadata, format_id, destination_path)
     batch_requested = Signal()
     batch_requested_with_urls = Signal(list)
+    cookies_file_selected = Signal(str)
 
     STATE_EMPTY = "empty"
     STATE_ANALYZING = "analyzing"
@@ -322,11 +323,27 @@ class InicioView(QWidget):
         self.quality_layout.setSpacing(6)
         format_card_layout.addWidget(self.quality_container)
 
+        # Contenedor de sugerencia / cookies con botón de desbloqueo rápido
+        self.hint_container = QWidget()
+        self.hint_container.hide()
+        hint_layout = QVBoxLayout(self.hint_container)
+        hint_layout.setContentsMargins(0, 4, 0, 4)
+        hint_layout.setSpacing(8)
+
         self.lbl_format_hint = QLabel("")
         self.lbl_format_hint.setObjectName("HintLabel")
         self.lbl_format_hint.setWordWrap(True)
-        self.lbl_format_hint.hide()
-        format_card_layout.addWidget(self.lbl_format_hint)
+        hint_layout.addWidget(self.lbl_format_hint)
+
+        self.btn_load_cookies = QPushButton("📁 Cargar archivo cookies.txt para desbloquear calidades (1080p, 4K)")
+        self.btn_load_cookies.setObjectName("SecondaryButton")
+        self.btn_load_cookies.setFixedHeight(34)
+        self.btn_load_cookies.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_load_cookies.clicked.connect(self._on_quick_load_cookies_clicked)
+        self.btn_load_cookies.hide()
+        hint_layout.addWidget(self.btn_load_cookies, alignment=Qt.AlignmentFlag.AlignLeft)
+
+        format_card_layout.addWidget(self.hint_container)
 
         self.quality_button_group = QButtonGroup(self)
         self.quality_button_group.setExclusive(True)
@@ -558,6 +575,17 @@ class InicioView(QWidget):
             return clean
         return sanitize_single_video_url((raw or "").strip())
 
+    def _on_quick_load_cookies_clicked(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleccionar archivo cookies.txt para desbloquear calidades",
+            os.path.expanduser("~"),
+            "Archivos de Cookies (*.txt *.cookie);;Todos los archivos (*.*)",
+        )
+        if file_path:
+            norm_path = os.path.normpath(file_path)
+            self.cookies_file_selected.emit(norm_path)
+
     def _on_paste_clicked(self) -> None:
         clipboard_text = QApplication.clipboard().text().strip()
         if clipboard_text:
@@ -736,11 +764,17 @@ class InicioView(QWidget):
         if rows:
             self.table_header.show()
             self.quality_container.show()
-            self.lbl_format_hint.hide()
             first_row = next((r for r in rows if r.kind == "video"), rows[0])
             if first_row is not None:
                 first_row.radio.setChecked(True)
-            if (
+
+            warning_text = getattr(metadata, "warning_message", None)
+            if warning_text and self._format_tab != TAB_AUDIO:
+                self.lbl_format_hint.setText(f"💡 {warning_text}")
+                self.btn_load_cookies.show()
+                self.lbl_format_hint.show()
+                self.hint_container.show()
+            elif (
                 self._format_tab != TAB_AUDIO
                 and metadata.platform == "YouTube"
                 and len(self._quality_rows) == 1
@@ -749,16 +783,24 @@ class InicioView(QWidget):
                 self.lbl_format_hint.setText(
                     "💡 ¿Esperabas calidades superiores (720p, 1080p, 4K)? YouTube limita ciertos contenidos "
                     "a 360p para visitas anónimas. Para desbloquear todas las calidades y 60 FPS, ve a "
-                    "Configuración (sección Avanzado / Cookies) y selecciona tu archivo cookies.txt o tu navegador."
+                    "Configuración o pulsa el botón siguiente para seleccionar tu archivo cookies.txt:"
                 )
+                self.btn_load_cookies.show()
                 self.lbl_format_hint.show()
+                self.hint_container.show()
+            else:
+                self.btn_load_cookies.hide()
+                self.lbl_format_hint.hide()
+                self.hint_container.hide()
         else:
             self.table_header.hide()
             self.quality_container.hide()
             self.lbl_format_hint.setText(
                 self.TEXT_NO_AUDIO if self._format_tab == TAB_AUDIO else self.TEXT_NO_VIDEO_QUALITIES
             )
+            self.btn_load_cookies.hide()
             self.lbl_format_hint.show()
+            self.hint_container.show()
 
         self._update_download_availability()
 

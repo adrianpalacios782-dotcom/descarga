@@ -26,6 +26,7 @@ class MediaMetadata:
     audio_formats: List[AudioFormat] = field(default_factory=list)
     formats: List[FormatOption] = field(default_factory=list)
     subtitles: List[SubtitleTrack] = field(default_factory=list)
+    warning_message: Optional[str] = None
 
     def __post_init__(self) -> None:
         if not self.title or not self.title.strip():
