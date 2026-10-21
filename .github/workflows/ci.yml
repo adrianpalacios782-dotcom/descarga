@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # CI de osvaldoDownloaderPro
 #
 # Gate de calidad: ruff (lint) + mypy --strict + pytest.
@@ -33,18 +33,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
 
       - name: Node (runtime JS para yt-dlp / solver EJS)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Instalar dependencias
         run: |
@@ -74,7 +74,7 @@ jobs:
 
       - name: Upload de reportes de pytest
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pytest-report
           path: |

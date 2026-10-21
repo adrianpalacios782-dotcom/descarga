@@ -6,7 +6,7 @@
 
 ### Gestor Profesional y Universal de Descargas Multimedia para Windows
 
-[![Version](https://img.shields.io/badge/version-1.5.3-blue.svg?style=flat-square)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.3)
+[![Version](https://img.shields.io/badge/version-1.5.4-blue.svg?style=flat-square)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.4)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg?style=flat-square)](https://www.python.org/)
 [![GUI](https://img.shields.io/badge/Qt6-PySide6-41CD52.svg?style=flat-square)](https://pyside.org/)
 [![Architecture](https://img.shields.io/badge/Clean%20Architecture-Hexagonal%20%2B%20DDD-orange.svg?style=flat-square)]()
@@ -15,7 +15,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
 
 *Aplicación de escritorio nativa, moderna e independiente diseñada para el análisis, descarga acelerada, recorte de segmentos, conversión y organización de contenido multimedia desde más de 15 plataformas web y cualquier sitio público con vídeo o audio.*
-[ Descargar v1.5.3](#-descargar-para-windows) • [ Novedades v1.5.3](#-novedades-en-la-versión-153) • [ Plataformas](#-plataformas-soportadas) • [ Características](#-características-principales) • [ Calidades](#-desbloquear-todas-las-calidades-720p-1080p-4k-60-fps) • [ Seguridad](#-seguridad-y-resiliencia) • [ Desarrollo](#-desarrollo-y-pruebas)
+[ Descargar v1.5.4](#-descargar-para-windows) • [ Novedades v1.5.4](#-novedades-en-la-versión-154) • [ Plataformas](#-plataformas-soportadas) • [ Características](#-características-principales) • [ Calidades](#-desbloquear-todas-las-calidades-720p-1080p-4k-60-fps) • [ Seguridad](#-seguridad-y-resiliencia) • [ Desarrollo](#-desarrollo-y-pruebas)
 
 </div>
 
@@ -23,11 +23,11 @@
 
 ##  Descargar para Windows
 
-###  [Descargar osvaldoDownloaderPro v1.5.3 (Instalador Oficial)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.3)
+###  [Descargar osvaldoDownloaderPro v1.5.4 (Instalador Oficial)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.4)
 
 En la sección **Assets** del lanzamiento oficial de GitHub encontrarás el instalador listo para usar:
 
-> **`osvaldoDownloaderPro-1.5.3-Setup.exe`** (~114 MB)  
+> **`osvaldoDownloaderPro-1.5.4-Setup.exe`** (~114 MB)  
 > *Incluye el ejecutable completo, nuevo icono vectorial HD, motor yt-dlp integrado, FFmpeg nativo y todas las dependencias.*
 
 ```
@@ -36,7 +36,7 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 ```
 
 ###  Instalación Rápida
-1. Descarga **`osvaldoDownloaderPro-1.5.3-Setup.exe`** desde [GitHub Releases](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.3).
+1. Descarga **`osvaldoDownloaderPro-1.5.4-Setup.exe`** desde [GitHub Releases](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.4).
 2. Ejecuta el archivo instalador (no requiere privilegios de administrador para la instalación por usuario).
 3. Sigue el asistente de instalación y abre **osvaldoDownloaderPro** desde el Menú Inicio o acceso directo de escritorio.
 
@@ -52,6 +52,15 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 > **Aviso de Windows SmartScreen:** Al ser una versión de código abierto sin certificado de firma digital comercial de pago, Windows puede mostrar la ventana *"Windows protegió su PC"*. Para continuar, pulse en **Más información** y luego en **Ejecutar de todas formas**.
 
 ---
+
+##  Novedades en la Versión 1.5.4
+
+- **Publicación automatizada en GitHub Actions:** nuevo workflow `release.yml` (y `ci.yml` como gate de calidad) que compila el instalador en `windows-latest`, **verifica que existan los dos assets obligatorios** (`Setup.exe` y `SHA256SUMS.txt`) y publica la release comprobando por API que los assets quedaron disponibles. Una release ya no puede quedar vacía.
+- **Nuevos clientes de YouTube:** se integran los clientes `ios` y `tv_simply` (el player embebido de TV). Además, los `player_client` obsoletos se descartan antes de llamar a yt-dlp, así que ya no se gasta una request con un cliente inexistente.
+- **PO Token y Visitor Data operativos:** ambas credenciales de sesión de YouTube se inyectan donde yt-dlp realmente las lee, dejando de ser opciones sin efecto.
+- **TikTok recupera las opciones de yt-dlp:** el adaptador deja de reconstruir el bloque de opciones desde cero y conserva `remote_components` (solver EJS), `js_runtimes` (Node/Deno) y `ffmpeg_location`.
+- **Las cookies rápidas ya no borran el navegador:** cargar un `cookies.txt` desde Inicio ya no vacía el navegador de cookies global en el motor ni en los 7 adaptadores durante la sesión.
+- **Documentación:** `docs/SIGNING.md` (firma Authenticode: certificado real y autofirmado de pruebas), `docs/CLEANUP.md` (respaldo y limpieza de carpetas y repos externos) y `LOCAL-SETUP.md` con el flujo de release en CI.
 
 ##  Novedades en la Versión 1.5.3
 
@@ -232,8 +241,17 @@ powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1 -SkipSigning
 ```
 
 El artefacto resultante se genera en:
-- `installer/osvaldoDownloaderPro-1.5.3-Setup.exe`
+- `installer/osvaldoDownloaderPro-1.5.4-Setup.exe`
 - `dist/SHA256SUMS.txt`
+
+La publicación también se puede automatizar por completo con GitHub Actions:
+```powershell
+git tag v1.5.4
+git push origin v1.5.4     # dispara .github/workflows/release.yml
+```
+El workflow **no publica** si ruff, mypy o pytest fallan, si la versión del tag
+no coincide con `src/__init__.py`, o si falta cualquiera de los dos assets.
+Ver `docs/SIGNING.md` para el certificado de firma.
 
 ---
 

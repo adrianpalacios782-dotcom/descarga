@@ -1,4 +1,4 @@
-# ============================================================
+﻿# ============================================================
 # Release de osvaldoDownloaderPro
 #
 # Publica el instalador en GitHub Releases SIEMPRE con los dos assets
@@ -52,10 +52,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -83,18 +83,18 @@ jobs:
       release_version: ${{ steps.version.outputs.release_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Python 3.13
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
 
       - name: Node (runtime JS para yt-dlp / solver EJS)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Instalar dependencias de build
         run: |
@@ -169,7 +169,7 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_release.ps1 -SkipSigning
 
       # GATE: si falta cualquiera de los dos assets, el job falla y la
-      # publicacion no llega a ejecutarse. Esto es exactamente lo que faltó
+      # publicacion no llega a ejecutarse. Esto es exactamente lo que faltÃ³
       # en la v1.5.3 (release publicada sin assets).
       - name: GATE - Verificar que existen los 2 assets obligatorios
         shell: pwsh
@@ -196,7 +196,7 @@ jobs:
           }
 
       - name: Subir artefactos (artefacto de la release)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: osvaldoDownloaderPro-release
           path: |
@@ -217,10 +217,10 @@ jobs:
       RELEASE_VERSION: ${{ needs.build.outputs.release_version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Descargar artefactos
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: osvaldoDownloaderPro-release
           path: .

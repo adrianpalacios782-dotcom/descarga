@@ -2,6 +2,31 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [1.5.4] - 2026-10-21
+
+### Añadido
+- **CI y publicación automatizada en GitHub Actions:**
+  - `.github/workflows/ci.yml`: gate de calidad (ruff + mypy `--strict` + pytest) en cada push y PR a `main`.
+  - `.github/workflows/release.yml`: pipeline de 3 jobs (`quality` → `build` → `publish`) que compila el instalador en `windows-latest`, **verifica que existan los dos assets obligatorios** (`osvaldoDownloaderPro-<version>-Setup.exe` y `SHA256SUMS.txt`) y publica la release comprobando por API que los assets quedaron disponibles. La release v1.5.3 quedó vacía justamente porque no existía este automatismo.
+  - Descarga automática de `ffmpeg.exe`/`ffprobe.exe` en el runner (están en `.gitignore` por ser binarios de terceros).
+- **Documentación de firma Authenticode** (`docs/SIGNING.md`): configuración de `scripts\signing.config.json` con certificado real (almac de Windows o PFX) y flujo de autofirmado de pruebas para desarrollo local.
+- **Documentación de limpieza segura** (`docs/CLEANUP.md`): comandos de respaldo, verificación y borrado del prototipo `YTDownloaderPro` y de los repositorios externos con cambios sin commitear.
+
+### Corregido
+- **Adaptador de TikTok:** `TikTokAdapter._build_ydl_opts()` reconstruía el bloque de opciones de yt-dlp desde cero y perdía `remote_components` (solver EJS), `js_runtimes` (Node/Deno) y `ffmpeg_location`. Ahora llama a `super()` y solo añade encima los encabezados `Referer`/`Origin` de TikTok.
+- **Las cookies rápidas ya no borran el navegador global:** `apply_settings` es ahora semántico de **presencia** (solo toca las claves presentes en el diccionario). Antes, el botón de `cookies.txt` de Inicio llamaba `apply_settings({"cookies_file": path})`, lo que terminaba en `set_cookies_from_browser(None)` y vaciaba el navegador de cookies en el motor de descargas y en los 7 adaptadores durante toda la sesión.
+- **Clientes de YouTube `ios` y TV embebido:** se integran `ios` y `tv_simply` en `CLIENT_STRATEGIES`. El parche heredado usaba `tv_embedded`, nombre que **ya no existe** en yt-dlp 2026.x: se descartaba con un warning y consumía una request sin obtener nada. Ahora el adaptador consulta `INNERTUBE_CLIENTS` y filtra los clientes no soportados antes de llamar a yt-dlp.
+
+### Optimizado
+- **PO Token y Visitor Data funcionales:** ambas credenciales de sesión de YouTube estaban declaradas en el constructor pero nunca se usaban. `YouTubeAdapter` las inyecta ahora como `extractor_args` (formato `CLIENT.CONTEXT+TOKEN`), que es donde yt-dlp las lee.
+- **`scripts\build_release.ps1`:** busca `ISCC.exe` en varias rutas (LOCALAPPDATA, `Program Files (x86)`, `Program Files`) para funcionar también en el runner de Actions, y elimina los instaladores de versiones anteriores (12 `Setup.exe` obsoletos = 1.4 GB acumulados).
+- **`scripts\publish_release.ps1`:** nuevo parámetro `-Repo` (lo usa el workflow) y notas de uso actualizadas.
+- **`pyproject.toml`:** PyInstaller entra en el extra `dev` (necesario para compilar en CI).
+
+### Calidad
+- 697 pruebas automatizadas en verde (22 nuevas), `ruff` sin errores y `mypy --strict` sin errores en 110 archivos fuente.
+- Workflow de CI ejecutado en GitHub Actions: `Lint + tipos + tests` en verde.
+
 ## [1.5.3] - 2026-10-20
 
 ### Añadido
