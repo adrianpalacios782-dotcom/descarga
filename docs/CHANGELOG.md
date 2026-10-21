@@ -19,6 +19,8 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 - **Clientes de YouTube `ios` y TV embebido:** se integran `ios` y `tv_simply` en `CLIENT_STRATEGIES`. El parche heredado usaba `tv_embedded`, nombre que **ya no existe** en yt-dlp 2026.x: se descartaba con un warning y consumía una request sin obtener nada. Ahora el adaptador consulta `INNERTUBE_CLIENTS` y filtra los clientes no soportados antes de llamar a yt-dlp.
 
 ### Optimizado
+- **Gate de coherencia del checksum:** `publish_release.ps1` comprueba ahora que el SHA256 del instalador que se va a subir sea **exactamente** la línea que declara `SHA256SUMS.txt`. Si no coinciden, la publicación se aborta: una release con checksum incoherente es indistinguible de una manipulada para el usuario que verifica la descarga, y la app instalada rechazaría la actualización.
+- **Artefactos de CI con nombre único por run:** el artefacto del instalador pasa a llamarse `osvaldoDownloaderPro-release-<run_id>`, de modo que dos runs solapados del mismo tag no pueden pisarse ni dejar que el job `publish` suba un binario procedente de otro run.
 - **PO Token y Visitor Data funcionales:** ambas credenciales de sesión de YouTube estaban declaradas en el constructor pero nunca se usaban. `YouTubeAdapter` las inyecta ahora como `extractor_args` (formato `CLIENT.CONTEXT+TOKEN`), que es donde yt-dlp las lee.
 - **`scripts\build_release.ps1`:** busca `ISCC.exe` en varias rutas (LOCALAPPDATA, `Program Files (x86)`, `Program Files`) para funcionar también en el runner de Actions, y elimina los instaladores de versiones anteriores (12 `Setup.exe` obsoletos = 1.4 GB acumulados).
 - **`scripts\publish_release.ps1`:** nuevo parámetro `-Repo` (lo usa el workflow) y notas de uso actualizadas.

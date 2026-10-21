@@ -217,7 +217,10 @@ jobs:
       - name: Subir artefactos (artefacto de la release)
         uses: actions/upload-artifact@v7
         with:
-          name: osvaldoDownloaderPro-release
+          # Nombre unico por run: si dos runs del mismo tag se solapan, el
+          # segundo no pisa el artefacto del primero y el job 'publish' no
+          # puede subir un binario de otro run.
+          name: osvaldoDownloaderPro-release-${{ github.run_id }}
           path: |
             installer/osvaldoDownloaderPro-*-Setup.exe
             dist/SHA256SUMS.txt
@@ -241,7 +244,7 @@ jobs:
       - name: Descargar artefactos
         uses: actions/download-artifact@v8
         with:
-          name: osvaldoDownloaderPro-release
+          name: osvaldoDownloaderPro-release-${{ github.run_id }}
           path: .
 
       - name: Publicar (gates + subida + verificacion)

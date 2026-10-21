@@ -127,6 +127,28 @@ Write-Step "Instalador OK: $(Split-Path $SetupExe -Leaf)  ($SetupSize MB)"
 Write-Step "SHA256     : $SetupHash"
 Write-Step "Hashes     : $SumsTxt"
 
+# --- 2b. Coherencia interna (GATE) ---
+# El instalador y el archivo de hashes tienen que describir EXACTAMENTE el
+# mismo binario. Si no coinciden, publicar la release produciria un checksum
+# que el usuario no podria verificar (la app instalada rechazaria la
+# actualizacion). Es un gate, no un aviso.
+$InstallerLeaf = Split-Path $SetupExe -Leaf
+$sumsText = Get-Content -LiteralPath $SumsTxt -Raw
+$sumsLines = @($sumsText -split "`r?`n" | Where-Object {
+    $_ -match ("\s" + [regex]::Escape($InstallerLeaf) + "\s*$")
+})
+if ($sumsLines.Count -eq 0) {
+    Write-Fail "SHA256SUMS.txt no contiene ninguna entrada para '$InstallerLeaf'."
+    exit 1
+}
+$sumsHash = (($sumsLines[0] -split "\s+")[0]).ToUpperInvariant()
+if ($sumsHash -ne $SetupHash.ToUpperInvariant()) {
+    Write-Fail "Hash inconsistente: el instalador vale $SetupHash pero SHA256SUMS.txt declara $sumsHash."
+    Write-Fail "No se publica una release cuyo checksum no se puede verificar."
+    exit 1
+}
+Write-Step "Coherencia OK: SHA256SUMS.txt coincide con el instalador."
+
 # --- 3. Tag y release ---
 # "release not found" en stderr significa "todavia no existe" -> hay que crearla.
 $tagExists = ((Invoke-Gh -GhArgs @("release", "view", $Tag, "--repo", $Repo)) -eq 0)
