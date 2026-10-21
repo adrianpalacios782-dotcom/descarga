@@ -128,12 +128,22 @@ def _make_task(tmp_path, fmt, probe_formats=None) -> tuple:
     return task, dest_file
 
 
-def _wait_for(predicate, timeout=8.0) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
+# Espera de sondeo usada por los tests de integracion.
+#
+# NO debe apoyarse en `time.sleep`: algunos tests parchean `time.sleep` para
+# acelerar los reintentos del motor y ese parche, si es global, convierte el
+# sondeo en un busy-wait que satura una CPU y roba tiempo de CPU al hilo de
+# descarga -> timeouts flaky en runners lentos (2 vCPU de GitHub Actions).
+# `Event.wait()` bloquea en el SO: no consume CPU y no depende de `time.sleep`.
+# `time.monotonic()` es immune a cambios de reloj del sistema.
+def _wait_for(predicate, timeout=30.0) -> bool:
+    """Espera activa de una condicion, con presupuesto de tiempo generoso."""
+    deadline = time.monotonic() + timeout
+    waiter = threading.Event()
+    while time.monotonic() < deadline:
         if predicate():
             return True
-        time.sleep(0.05)
+        waiter.wait(0.02)
     return False
 
 
@@ -794,10 +804,13 @@ class TestAntiBotClientFallback:
         with pytest.raises(RuntimeError):
             engine._probe_available_formats("https://youtube.com/watch?v=x", threading.Event())
 
-    def test_download_video_cycles_clients_until_success(self, tmp_path) -> None:
+    def test_download_video_cycles_clients_until_success(self, tmp_path, monkeypatch) -> None:
         """default y tv fallan con bot-check; android tiene éxito → COMPLETED."""
         calls = []
-        time.sleep = lambda *_: None  # acelerar reintentos
+        # Acelera los reintentos del motor (3s y 8s). Se usa `monkeypatch` (no
+        # `time.sleep = ...`) para que el parche se revierta al terminar el
+        # test: un parche global convertiria `_wait_for` en un busy-wait.
+        monkeypatch.setattr(time, "sleep", lambda *_: None)
 
         def factory(opts):
             client = _client_of(opts)
@@ -820,12 +833,14 @@ class TestAntiBotClientFallback:
         assert calls == [None, "tv", "android"]
         assert os.path.exists(dest_file)
 
-    def test_download_fails_after_all_client_strategies_exhausted(self, tmp_path) -> None:
+    def test_download_fails_after_all_client_strategies_exhausted(self, tmp_path, monkeypatch) -> None:
         events = []
         bus = InProcessEventBus()
         bus.subscribe(DownloadFailedEvent, lambda e: events.append(e))
 
-        time.sleep = lambda *_: None
+        # Ver `test_download_video_cycles_clients_until_success`: `monkeypatch`
+        # garantiza que el parche de `time.sleep` no se escape del test.
+        monkeypatch.setattr(time, "sleep", lambda *_: None)
 
         def factory(opts):
             return FakeYoutubeDL(opts, fail_with=RuntimeError("Sign in to confirm you're not a bot"))
@@ -838,6 +853,6 @@ class TestAntiBotClientFallback:
         task.transition_to(DownloadState.DOWNLOADING)
         engine.download(task)
 
-        assert _wait_for(lambda: bool(events), timeout=10.0)
+        assert _wait_for(lambda: bool(events), timeout=30.0)
         assert task.status == DownloadState.FAILED
         assert "Sign in" in str(events[-1].error_message) or "bot" in str(events[-1].error_message).lower()

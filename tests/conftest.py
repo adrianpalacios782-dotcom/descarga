@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import base64
 import os
+import time
 from pathlib import Path
 from typing import Iterator
 from unittest.mock import patch
@@ -37,6 +38,25 @@ _TINY_PNG = base64.b64decode(
 # proceso. Si el objeto se destruye antes que los widgets creados en las
 # pruebas, PySide6 provoca un fallo nativo al salir.
 _QAPP: "object | None" = None
+
+
+@pytest.fixture(autouse=True)
+def _restore_global_time_sleep() -> Iterator[None]:
+    """Red de seguridad: ningun test puede dejar parcheado `time.sleep` globalmente.
+
+    Parchear `time.sleep` a nivel de modulo (no con `monkeypatch`) es una bomba
+    de reloja: el parche sobrevive al test y convierte cualquier bucle de sondeo
+    con `time.sleep(...)` en un *busy-wait* que satura una CPU. En un runner
+    lento (2 vCPU en GitHub Actions) eso roba CPU al hilo de descarga y provoca
+    timeouts flaky en tests que, en local, pasaban siempre.
+
+    Este fixture restaura el `time.sleep` original tras cada test, de modo que
+    un parche accidental solo afecta al test que lo hizo.
+    """
+    original = time.sleep
+    yield
+    if time.sleep is not original:
+        time.sleep = original
 
 
 @pytest.fixture(scope="session", autouse=True)

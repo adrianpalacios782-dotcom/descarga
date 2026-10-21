@@ -113,12 +113,17 @@ def _make_task(time_range: Optional[TimeRange] = None, is_audio: bool = False, t
     )
 
 
-def _wait_for(predicate, timeout: float = 8.0) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
+# Ver `test_download_engine.py`: `_wait_for` no debe apoyarse en `time.sleep`
+# (algunos tests lo parchean globalmente) ni girar en busy-wait, porque eso roba
+# CPU al hilo de descarga y provoca timeouts flaky en runners lentos.
+def _wait_for(predicate, timeout: float = 30.0) -> bool:
+    """Espera activa de una condicion, con presupuesto de tiempo generoso."""
+    deadline = time.monotonic() + timeout
+    waiter = threading.Event()
+    while time.monotonic() < deadline:
         if predicate():
             return True
-        time.sleep(0.05)
+        waiter.wait(0.02)
     return False
 
 
@@ -137,7 +142,7 @@ def test_ytdlp_engine_configures_time_range_video(tmp_path):
 
     engine.download(task)
 
-    assert _wait_for(lambda: task.status in (DownloadState.COMPLETED, DownloadState.FAILED), timeout=8.0)
+    assert _wait_for(lambda: task.status in (DownloadState.COMPLETED, DownloadState.FAILED), timeout=30.0)
     assert task.status == DownloadState.COMPLETED
     assert len(CapturingFakeYoutubeDL.captured_opts) >= 1
 
@@ -164,7 +169,7 @@ def test_ytdlp_engine_configures_time_range_audio(tmp_path):
 
     engine.download(task)
 
-    assert _wait_for(lambda: task.status in (DownloadState.COMPLETED, DownloadState.FAILED), timeout=8.0)
+    assert _wait_for(lambda: task.status in (DownloadState.COMPLETED, DownloadState.FAILED), timeout=30.0)
     assert task.status == DownloadState.COMPLETED
     download_opts = [o for o in CapturingFakeYoutubeDL.captured_opts if not o.get("skip_download")]
     assert len(download_opts) >= 1

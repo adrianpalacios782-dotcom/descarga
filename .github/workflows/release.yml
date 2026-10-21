@@ -60,6 +60,11 @@ jobs:
           python-version: "3.13"
           cache: pip
 
+      - name: Node (runtime JS para yt-dlp / solver EJS)
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
@@ -72,7 +77,21 @@ jobs:
         run: python -m mypy --strict
 
       - name: Pytest
-        run: python -m pytest -q --basetemp=scratch/pytest_tmp
+        run: python -m pytest -q --durations=10 --basetemp=scratch/pytest_tmp
+
+      # Este job es INTENCIONALMENTE identico al de ci.yml: si divergieran,
+      # un release podria pasar el gate de calidad y fallar en CI (o al reves).
+      - name: Version coherente (src/__init__.py == scripts/version_info.txt)
+        shell: pwsh
+        run: |
+          $srcVersion = (Select-String -Path src\__init__.py -Pattern '__version__\s*=\s*"(\d+\.\d+\.\d+)"').Matches[0].Groups[1].Value
+          $quad = "$srcVersion.0"
+          $vi = Get-Content scripts\version_info.txt -Raw
+          if ($vi -notmatch [regex]::Escape("StringStruct('FileVersion', '$quad')")) {
+            Write-Error "version_info.txt desincronizado con src/__init__.py ($srcVersion)"
+            exit 1
+          }
+          Write-Host "Version coherente: $srcVersion"
 
   build:
     name: Compilar instalador
