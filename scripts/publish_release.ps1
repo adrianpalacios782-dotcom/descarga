@@ -43,6 +43,35 @@ function Write-Step($msg) { Write-Host "[PUBLISH] $msg" -ForegroundColor Cyan }
 function Write-Fail($msg) { Write-Host "[PUBLISH][ERROR] $msg" -ForegroundColor Red }
 function Write-Warn($msg) { Write-Host "[PUBLISH][AVISO] $msg" -ForegroundColor Yellow }
 
+# Ejecuta 'gh' capturando stdout y descartando stderr, y devuelve el codigo de
+# salida. Es imprescindible porque con $ErrorActionPreference = "Stop" (Windows
+# PowerShell y PowerShell 7) redirigir el stderr de un comando nativo con 2>&1
+# genera una excepcion NativeCommandError que ABORTA el script. Eso rompia
+# exactamente la comprobacion "la release ya existe?": 'gh release view' escribe
+# "release not found" en stderr cuando la release no existe todavia (caso
+# normal de creacion) y el script moria ahi sin llegar a crearla.
+function Invoke-Gh {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$GhArgs,
+        [switch]$CaptureOutput
+    )
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $stdout = & gh @GhArgs 2>$null
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+    if ($CaptureOutput) {
+        return [pscustomobject]@{
+            Output   = (($stdout | Out-String).Trim())
+            ExitCode = $code
+        }
+    }
+    return $code
+}
+
 Set-Location -LiteralPath $ProjectRoot
 
 # --- 0. gh CLI ---
@@ -50,8 +79,7 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
     Write-Fail "No se encontro la CLI 'gh'. Instala GitHub CLI y ejecuta 'gh auth login'."
     exit 1
 }
-gh auth status 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) {
+if ((Invoke-Gh -GhArgs @("auth", "status")) -ne 0) {
     Write-Fail "gh no esta autenticado. Ejecuta 'gh auth login'."
     exit 1
 }
@@ -100,9 +128,8 @@ Write-Step "SHA256     : $SetupHash"
 Write-Step "Hashes     : $SumsTxt"
 
 # --- 3. Tag y release ---
-$tagExists = $false
-gh release view $Tag --repo $Repo 2>&1 | Out-Null
-if ($LASTEXITCODE -eq 0) { $tagExists = $true }
+# "release not found" en stderr significa "todavia no existe" -> hay que crearla.
+$tagExists = ((Invoke-Gh -GhArgs @("release", "view", $Tag, "--repo", $Repo)) -eq 0)
 
 if ($DryRun) {
     Write-Step "--- DRY RUN: no se sube nada ---"
@@ -131,8 +158,7 @@ Verificacion:
 Get-FileHash .\$(Split-Path $SetupExe -Leaf) -Algorithm SHA256
 ``````
 "@
-    gh release create $Tag --repo $Repo --title "osvaldoDownloaderPro $Version" --notes $notes 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
+    if ((Invoke-Gh -GhArgs @("release", "create", $Tag, "--repo", $Repo, "--title", "osvaldoDownloaderPro $Version", "--notes", $notes)) -ne 0) {
         Write-Fail "No se pudo crear la release $Tag."
         exit 1
     }
@@ -145,8 +171,7 @@ Get-FileHash .\$(Split-Path $SetupExe -Leaf) -Algorithm SHA256
 $assets = @($SetupExe, $SumsTxt)
 foreach ($a in $assets) {
     Write-Step "Subiendo $(Split-Path $a -Leaf)..."
-    gh release upload $Tag $a --repo $Repo --clobber 2>&1 | Out-Null
-    if ($LASTEXITCODE -ne 0) {
+    if ((Invoke-Gh -GhArgs @("release", "upload", $Tag, $a, "--repo", $Repo, "--clobber")) -ne 0) {
         Write-Fail "Fallo al subir $(Split-Path $a -Leaf)."
         exit 1
     }
@@ -154,7 +179,12 @@ foreach ($a in $assets) {
 
 # --- 5. Verificacion post-subida ---
 Write-Step "Verificando assets publicados..."
-$remote = gh release view $Tag --repo $Repo --json assets 2>&1 | ConvertFrom-Json
+$view = Invoke-Gh -GhArgs @("release", "view", $Tag, "--repo", $Repo, "--json", "assets") -CaptureOutput
+if ($view.ExitCode -ne 0) {
+    Write-Fail "No se pudo leer la release $Tag tras la subida."
+    exit 1
+}
+$remote = $view.Output | ConvertFrom-Json
 $names = @($remote.assets | ForEach-Object { $_.name })
 
 $missing = @()
