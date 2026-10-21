@@ -24,8 +24,10 @@ Todos los cambios notables realizados en este proyecto se documentan en este arc
 - **`pyproject.toml`:** PyInstaller entra en el extra `dev` (necesario para compilar en CI).
 
 ### Calidad
-- 697 pruebas automatizadas en verde (22 nuevas), `ruff` sin errores y `mypy --strict` sin errores en 110 archivos fuente.
+- 701 pruebas automatizadas en verde (26 nuevas), `ruff` sin errores y `mypy --strict` sin errores en 110 archivos fuente.
 - Workflow de CI ejecutado en GitHub Actions: `Lint + tipos + tests` en verde.
+- **Timeouts flaky en el job `quality` del workflow de Release (corregidos):** `tests/integration/test_download_engine.py` parcheaba `time.sleep` sobre el **módulo `time` completo** y nunca lo restauraba. El parche sobrevivía al test y convertía el sondeo de `_wait_for` en un *busy-wait* que saturaba una CPU y robaba tiempo de CPU al hilo de descarga; con un presupuesto de espera de 8 s, en un runner de 2 vCPU (57 s de suite frente a 31 s en local) los dos tests de descarga expiraban. No era un fallo funcional del motor: el mismo commit pasó el job de CI y falló el de Release. Ahora `time.sleep` se parchea con `monkeypatch` (se revierte al terminar el test), `_wait_for` espera con `threading.Event.wait()` (bloqueo real del SO, sin busy-wait) y `time.monotonic()`, el presupuesto sube a 30 s, y un fixture autouse en `tests/conftest.py` restaura `time.sleep` tras cada test como red de seguridad. Se añade `tests/unit/test_test_hygiene.py` como test de regresión del antipatrón.
+- El job `quality` de `release.yml` queda **idéntico** al de `ci.yml` (Node + gate de coherencia de versión) para que ambos no diverjan, y ambos workflows ejecutan pytest con `--durations=10` para poder diagnosticar cualquier futura caída.
 
 ## [1.5.3] - 2026-10-20
 
