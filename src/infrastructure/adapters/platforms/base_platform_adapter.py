@@ -8,12 +8,14 @@ import re
 from src.domain.entities.format_option import FormatOption
 from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.entities.playlist_metadata import PlaylistEntry, PlaylistMetadata
+from src.domain.services.error_classifier import ErrorClassifier
 from src.domain.services.format_normalizer import FormatNormalizer
 from src.domain.exceptions.domain_exceptions import MediaAnalysisError
 from src.domain.ports.platform_adapter import IPlatformAdapter
 from src.domain.value_objects.media_id import MediaId
 from src.domain.value_objects.url import Url
 from src.infrastructure.adapters.media.subtitle_extractor import extract_subtitle_tracks
+from src.infrastructure.adapters.platforms.browser_detector import get_first_available_browser
 from src.infrastructure.adapters.platforms.youtube_client_strategy import (
     NATIVE_FALLBACK_CLIENTS,
     YOUTUBE_NAMESPACE,
@@ -56,6 +58,13 @@ class BasePlatformAdapter(IPlatformAdapter):
         ["android"],              # cliente Android: contenido real aunque limitado (sin PO token)
         ["mweb"],                 # cliente web movil
     ]
+
+    #: Cuántas estrategias se reintentan con la sesión del navegador detectada
+    #: (Capa 2). Solo la primera: es el fallback nativo multi-cliente, que ya
+    #: prueba varios clientes y fusiona sus formatos. Si el bloqueo es de IP,
+    #: ningún cliente lo resuelve y repetir la escalera solo multiplica la
+    #: espera del usuario.
+    COOKIE_RETRY_STRATEGIES: int = 1
 
     def __init__(
         self,
@@ -102,7 +111,20 @@ class BasePlatformAdapter(IPlatformAdapter):
         self,
         player_clients: Optional[List[str]] = None,
         disable_browser_cookies: bool = False,
+        browser_override: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """Construye las opciones de yt-dlp.
+
+        Args:
+            player_clients: clientes a forzar para los extractores que lo
+                soportan (YouTube). ``None`` usa los defaults de yt-dlp.
+            disable_browser_cookies: ignora el navegador configurado. Se usa
+                para reintentar sin cookies cuando el almacén del navegador
+                está bloqueado (navegador abierto en Windows).
+            browser_override: navegador concreto del que leer cookies. Tiene
+                prioridad sobre el configurado: es el mecanismo de la Capa 2
+                (reintento con el navegador detectado automáticamente).
+        """
         ydl_opts: Dict[str, Any] = {
             "quiet": True,
             "no_warnings": True,
@@ -139,8 +161,12 @@ class BasePlatformAdapter(IPlatformAdapter):
 
         if self.cookiefile and os.path.isfile(self.cookiefile):
             ydl_opts["cookiefile"] = self.cookiefile
-        elif self.cookies_from_browser and not disable_browser_cookies:
-            ydl_opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
+        else:
+            browser = browser_override or self.cookies_from_browser
+            if disable_browser_cookies:
+                browser = None
+            if browser:
+                ydl_opts["cookiesfrombrowser"] = (browser,)
 
         # La clase base es agnóstica de plataforma: solo aplica `player_client`
         # cuando la estrategia lo pide. La política completa de YouTube
@@ -153,27 +179,33 @@ class BasePlatformAdapter(IPlatformAdapter):
                 ydl_opts["extractor_args"] = {YOUTUBE_NAMESPACE: {"player_client": effective}}
         return ydl_opts
 
-    def _extract_with_ytdlp(self, url: Url) -> Dict[str, Any]:
-        """Extrae la información con la mejor estrategia de clientes disponible.
+    def _run_strategies(
+        self,
+        url: Url,
+        strategies: List[Optional[List[str]]],
+        errors: List[str],
+        disable_browser_cookies: bool = False,
+        browser_override: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Ejecuta las estrategias de cliente en orden y devuelve la mejor respuesta.
 
         Una estrategia solo se considera exitosa si entregó al menos un formato REAL
         de medios (no storyboard/mhtml/thumbnail). Se acepta la primera estrategia
         que entregue video real; si ninguna entrega video, se usa la mejor que haya
-        entregado solo audio; si todas fallan o devuelven únicamente recursos
-        auxiliares, se lanza MediaAnalysisError.
+        entregado solo audio. Si ninguna sirve, se devuelve ``None`` y los fallos
+        quedan registrados en ``errors``.
         """
         video_info: Optional[Dict[str, Any]] = None
         audio_only_info: Optional[Dict[str, Any]] = None
         direct_url_info: Optional[Dict[str, Any]] = None
-        errors: List[str] = []
-
-        plat_name = url.detect_platform()
-        is_youtube = plat_name == "YouTube"
-        strategies = self.CLIENT_STRATEGIES if is_youtube else [None]
 
         for clients in strategies:
             try:
-                opts = self._build_ydl_opts(clients)
+                opts = self._build_ydl_opts(
+                    clients,
+                    disable_browser_cookies=disable_browser_cookies,
+                    browser_override=browser_override,
+                )
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     raw_info = ydl.extract_info(url.value, download=False)
                 if not raw_info or not isinstance(raw_info, dict):
@@ -216,59 +248,123 @@ class BasePlatformAdapter(IPlatformAdapter):
                 errors.append(str(ex))
                 continue
 
-        chosen = video_info if video_info is not None else (
+        return video_info if video_info is not None else (
             direct_url_info if direct_url_info is not None else audio_only_info
         )
+
+    def _has_effective_cookies(self) -> bool:
+        """Indica si hay cookies realmente aplicables (archivo existente o navegador)."""
+        if self.cookiefile and os.path.isfile(self.cookiefile):
+            return True
+        return bool(self.cookies_from_browser)
+
+    @staticmethod
+    def _is_cookie_recoverable(errors: List[str], plat_name: str) -> bool:
+        """Indica si algún fallo se puede recuperar aportando una sesión con cookies.
+
+        Reutiliza la clasificación de dominio (ErrorClassifier) en lugar de
+        duplicar los patrones: bot-check, restricción de edad, contenido de
+        miembros, contenido privado, "inicia sesión" y error de cookies.
+        """
+        for err in errors:
+            if not err:
+                continue
+            if ErrorClassifier.classify(err, platform_name=plat_name).is_cookie_recoverable:
+                return True
+        return False
+
+    @staticmethod
+    def _has_cookie_read_error(errors: List[str]) -> bool:
+        """Detecta el fallo al leer el almacén de cookies (navegador abierto / DPAPI)."""
+        for err in errors:
+            low = err.lower()
+            if (
+                ("could not copy" in low and "cookie" in low)
+                or "dpapi" in low
+                or ("could not find" in low and "cookie" in low)
+            ):
+                return True
+        return False
+
+    def _extract_with_ytdlp(self, url: Url) -> Dict[str, Any]:
+        """Extrae la información con la mejor estrategia de clientes disponible.
+
+        Capas de recuperación, en orden:
+
+        1. **Estrategias de cliente** (fallback nativo de yt-dlp) con la
+           configuración de cookies actual.
+        2. **Capa 2 (cookies automáticas)**: si el fallo es recuperable con
+           cookies (bot-check, restricción de edad, "inicia sesión") y no hay
+           ninguna cookie configurada, se reintenta con la sesión del
+           navegador detectado automáticamente. Es la misma lógica que ya
+           aplica el motor de descarga, aplicada también al análisis.
+        3. **Degradación**: si el navegador está abierto y su almacén de
+           cookies no se puede leer, se reintenta sin cookies para no perder
+           el contenido público.
+
+        Una estrategia solo se considera exitosa si entregó al menos un formato REAL
+        de medios (no storyboard/mhtml/thumbnail). Se acepta la primera estrategia
+        que entregue video real; si ninguna entrega video, se usa la mejor que haya
+        entregado solo audio; si todas fallan o devuelven únicamente recursos
+        auxiliares, se lanza MediaAnalysisError.
+        """
+        errors: List[str] = []
+
+        plat_name = url.detect_platform()
+        is_youtube = plat_name == "YouTube"
+        strategies: List[Optional[List[str]]] = self.CLIENT_STRATEGIES if is_youtube else [None]
+
+        chosen = self._run_strategies(url, strategies, errors)
         if chosen is not None:
             return chosen
 
-        has_cookie_err = any(
-            ("could not copy" in e.lower() and "cookie" in e.lower())
-            or "dpapi" in e.lower()
-            or ("could not find" in e.lower() and "cookie" in e.lower())
-            for e in errors
-        )
+        # --- Capa 2: reintento con la sesión del navegador detectado ---
+        auto_browser: Optional[str] = None
+        if not self._has_effective_cookies() and self._is_cookie_recoverable(errors, plat_name):
+            auto_browser = get_first_available_browser()
+            if auto_browser:
+                logger.info(
+                    "Reintentando el análisis con la sesión del navegador '%s' "
+                    "(el fallo es recuperable con cookies).",
+                    auto_browser,
+                )
+                chosen = self._run_strategies(
+                    url,
+                    strategies[: self.COOKIE_RETRY_STRATEGIES],
+                    errors,
+                    browser_override=auto_browser,
+                )
+                if chosen is not None:
+                    return chosen
+
+        has_cookie_err = self._has_cookie_read_error(errors)
 
         # Si falló por bloqueo/encriptación del navegador de cookies, reintentar sin cookies del navegador
         # para no romper videos públicos si el usuario dejó Chrome/Edge seleccionado con el navegador abierto.
         if has_cookie_err and self.cookies_from_browser:
-            for clients in strategies:
-                try:
-                    opts = self._build_ydl_opts(clients, disable_browser_cookies=True)
-                    with yt_dlp.YoutubeDL(opts) as ydl:
-                        raw_retry = ydl.extract_info(url.value, download=False)
-                    if not raw_retry or not isinstance(raw_retry, dict):
-                        continue
-                    retry_info: Dict[str, Any] = dict(raw_retry)
-                    if "entries" in retry_info or retry_info.get("_type") == "playlist":
-                        raw_entries = retry_info.get("entries")
-                        if isinstance(raw_entries, list):
-                            dict_entries = [e for e in raw_entries if isinstance(e, dict)]
-                            if dict_entries:
-                                retry_info = dict_entries[0]
-                    formats = retry_info.get("formats") or []
-                    if not formats:
-                        if retry_info.get("url"):
-                            return retry_info
-                        continue
-                    real_formats = [f for f in formats if not FormatNormalizer.is_auxiliary_format(f)]
-                    if real_formats:
-                        retry_info["_warning_message"] = (
-                            f"No se pudieron leer las cookies de '{self.cookies_from_browser}' (el navegador está abierto en Windows). "
-                            "Se muestran calidades públicas. Cierra el navegador por completo o utiliza un archivo cookies.txt para desbloquear 1080p y 4K."
-                        )
-                        return retry_info
-                except Exception:
-                    continue
+            retry_errors: List[str] = []
+            retry_info = self._run_strategies(
+                url,
+                strategies,
+                retry_errors,
+                disable_browser_cookies=True,
+            )
+            if retry_info is not None:
+                retry_info["_warning_message"] = (
+                    f"No se pudieron leer las cookies de '{self.cookies_from_browser}' (el navegador está abierto en Windows). "
+                    "Se muestran calidades públicas. Cierra el navegador por completo o utiliza un archivo cookies.txt para desbloquear 1080p y 4K."
+                )
+                return retry_info
 
         raw_msg = errors[0] if errors else "Respuesta vacía"
         clean_msg = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", raw_msg)
         clean_msg = re.sub(r"ERROR:\s*", "", clean_msg).strip()
 
         is_age_restricted = any(term in clean_msg.lower() for term in ("confirm your age", "age-restricted", "age restricted", "restricción de edad", "inappropriate for some users")) or ("age" in clean_msg.lower() and "sign in" in clean_msg.lower())
-        if has_cookie_err and self.cookies_from_browser:
+        browser_used = self.cookies_from_browser or auto_browser
+        if has_cookie_err and browser_used:
             clean_msg = (
-                f"No se pudieron leer las cookies de '{self.cookies_from_browser}' (el navegador está abierto o protegido por Windows). "
+                f"No se pudieron leer las cookies de '{browser_used}' (el navegador está abierto o protegido por Windows). "
                 "Cierra el navegador por completo o utiliza un archivo cookies.txt en la pestaña Configuración."
             )
         elif is_age_restricted:
@@ -280,7 +376,7 @@ class BasePlatformAdapter(IPlatformAdapter):
             clean_msg = (
                 f"La plataforma ({plat_name}) ha restringido temporalmente las solicitudes "
                 "o requiere verificación de cuenta para este contenido. "
-                "Puedes configurar un archivo cookies.txt o tu navegador en Configuración (sección 'Avanzado (Sesión y Cookies)')."
+                + self._cookie_advice(auto_browser)
             )
         elif all("auxiliares" in e for e in errors):
             clean_msg = (
@@ -289,6 +385,25 @@ class BasePlatformAdapter(IPlatformAdapter):
             )
 
         raise MediaAnalysisError(f"Fallo al analizar el contenido multimedia: {clean_msg}")
+
+    def _cookie_advice(self, auto_browser: Optional[str]) -> str:
+        """Mensaje de orientación sobre cookies según lo que ya se intentó."""
+        if auto_browser:
+            return (
+                f"Se intentó usar automáticamente la sesión del navegador '{auto_browser}' y no fue suficiente. "
+                "Cierra el navegador por completo o carga un archivo cookies.txt en Configuración "
+                "(sección 'Avanzado (Sesión y Cookies)')."
+            )
+        if not self._has_effective_cookies():
+            return (
+                "No se encontró ningún navegador en el sistema del que tomar la sesión automáticamente: "
+                "carga un archivo cookies.txt o selecciona tu navegador en Configuración "
+                "(sección 'Avanzado (Sesión y Cookies)')."
+            )
+        return (
+            "Puedes configurar un archivo cookies.txt o tu navegador en Configuración "
+            "(sección 'Avanzado (Sesión y Cookies)')."
+        )
 
     def _parse_ytdlp_info(self, url: Url, info: Dict[str, Any], platform_name: str) -> MediaMetadata:
         title = info.get("title") or "Sin título"
@@ -334,19 +449,29 @@ class BasePlatformAdapter(IPlatformAdapter):
         )
 
     def analyze_playlist(self, url: Url) -> PlaylistMetadata:
-        """Extrae la lista de reproducción de forma plana y rápida (extract_flat)."""
-        opts = self._build_ydl_opts()
-        opts["extract_flat"] = "in_playlist"
-        opts["noplaylist"] = False
+        """Extrae la lista de reproducción de forma plana y rápida (extract_flat).
 
-        try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url.value, download=False)
-        except Exception as ex:
-            raise MediaAnalysisError(f"No se pudo analizar la lista de reproducción: {ex}") from ex
+        Aplica la misma Capa 2 que el análisis de un video: si el fallo es
+        recuperable con cookies y no hay ninguna configurada, se reintenta con
+        la sesión del navegador detectado automáticamente.
+        """
+        errors: List[str] = []
+        info = self._extract_playlist_info(url, errors)
 
-        if not info or not isinstance(info, dict):
-            raise MediaAnalysisError("La plataforma devolvió una lista vacía o no válida.")
+        if info is None and not self._has_effective_cookies():
+            plat_name = url.detect_platform()
+            if self._is_cookie_recoverable(errors, plat_name):
+                auto_browser = get_first_available_browser()
+                if auto_browser:
+                    logger.info(
+                        "Reintentando el análisis de la lista con la sesión del navegador '%s'.",
+                        auto_browser,
+                    )
+                    info = self._extract_playlist_info(url, errors, browser_override=auto_browser)
+
+        if info is None:
+            detail = errors[0] if errors else "La plataforma devolvió una lista vacía o no válida."
+            raise MediaAnalysisError(f"No se pudo analizar la lista de reproducción: {detail}")
 
         entries_raw = info.get("entries")
         entries_list = entries_raw if isinstance(entries_raw, list) else []
@@ -382,4 +507,27 @@ class BasePlatformAdapter(IPlatformAdapter):
             description=str(info.get("description") or ""),
             entries=entries,
         )
+
+    def _extract_playlist_info(
+        self,
+        url: Url,
+        errors: List[str],
+        browser_override: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Extrae la lista de reproducción; devuelve None si no se pudo."""
+        opts = self._build_ydl_opts(browser_override=browser_override)
+        opts["extract_flat"] = "in_playlist"
+        opts["noplaylist"] = False
+
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url.value, download=False)
+        except Exception as ex:
+            errors.append(str(ex))
+            return None
+
+        if not info or not isinstance(info, dict):
+            errors.append("La plataforma devolvió una lista vacía o no válida.")
+            return None
+        return info
 

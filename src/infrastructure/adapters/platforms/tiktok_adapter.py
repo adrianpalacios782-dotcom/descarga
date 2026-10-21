@@ -100,6 +100,7 @@ class TikTokAdapter(BasePlatformAdapter):
         self,
         player_clients: Optional[List[str]] = None,
         disable_browser_cookies: bool = False,
+        browser_override: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Opciones para TikTok: construccion base + cabeceras de TikTok.
 
@@ -119,7 +120,11 @@ class TikTokAdapter(BasePlatformAdapter):
         ffmpeg_location: sin ellos YouTube/TikTok devolvian respuestas
         degradadas o fallaban al post-procesar.
         """
-        base_opts = super()._build_ydl_opts(player_clients, disable_browser_cookies)
+        base_opts = super()._build_ydl_opts(
+            player_clients,
+            disable_browser_cookies=disable_browser_cookies,
+            browser_override=browser_override,
+        )
 
         # Copia desacoplada: el overlay nunca muta el dict de la clase base.
         ydl_opts: Dict[str, Any] = copy.deepcopy(base_opts)

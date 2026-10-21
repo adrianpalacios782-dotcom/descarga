@@ -140,7 +140,7 @@ materializa como `["ios", "tv_downgraded", "web"]`.
 
 ---
 
-## 4. Capa 2 — con cookies
+## 4. Capa 2 — con cookies (implementada)
 
 Cuando la IP está marcada por YouTube (HTTP 429 + *"Sign in to confirm you're
 not a bot"*), **ninguna** configuración de clientes funciona: es un bloqueo a
@@ -148,14 +148,57 @@ nivel de IP, no de protocolo. En sandbox, desde una IP marcada, 10 de 11
 combinaciones de cliente fallaron con bot-check y la única que respondió
 (`web_safari`/`mweb`) devolvió precisamente el ladder de 360p.
 
-Ahí entra la Capa 2, ya presente en la app:
+Contra ese bloqueo solo cabe una cosa: **hablar con una sesión iniciada**. Por
+eso la Capa 2 usa cookies, y por eso la Capa 1 (sin cookies) nunca llegará a
+1080p/4K desde una IP marcada.
+
+### 4.1 Reintento automático del análisis con la sesión del navegador
+
+El motor de descarga ya reintentaba con el navegador detectado cuando el error
+era recuperable con cookies; el **análisis no lo hacía**. Ese era el único
+hueco: un bot-check o un age-gate bloqueaban el análisis aunque el usuario
+tuviera la sesión abierta en Chrome.
+
+Ahora `BasePlatformAdapter` aplica la misma lógica en el análisis
+(`_extract_with_ytdlp`) y en el análisis de listas (`analyze_playlist`):
+
+```
+pasada 1  estrategias de cliente con la configuración de cookies actual
+   ↓  falla con un error recuperable con cookies y NO hay cookies configuradas
+pasada 2  misma estrategia con cookiesfrombrowser=(navegador detectado)
+   ↓  el navegador está abierto y su almacén no se puede leer
+pasada 3  degradación: se reintenta sin cookies (calidades públicas + aviso)
+```
+
+Reglas que rigen el reintento:
+
+| regla | por qué |
+|-------|---------|
+| solo si el error es **recuperable con cookies** | "Video unavailable" no se arregla con una sesión: no se gasta una request de red extra |
+| solo si **no hay ninguna cookie configurada** | si el usuario ya eligió su sesión (`cookiefile` o `cookies_from_browser`), no se le cambia a escondidas |
+| solo la **primera estrategia** (`COOKIE_RETRY_STRATEGIES = 1`) | es el fallback nativo multi-cliente; si el bloqueo es de IP, ningún cliente lo resuelve y repetir la escalera solo multiplica la espera |
+| la clasificación **no se reimplementa** | se reutiliza `ErrorClassifier.classify(...).is_cookie_recoverable` (dominio), el mismo que usa el motor de descarga |
+
+### 4.2 Cuando el navegador está abierto
+
+En Windows, leer el almacén de cookies de Chrome/Edge con el navegador
+**abierto** falla por DPAPI. La app no se queda sin contenido: degrada a las
+calidades públicas y lo avisa.
+
+```
+No se pudieron leer las cookies de 'chrome' (el navegador está abierto en Windows).
+Se muestran calidades públicas. Cierra el navegador por completo o utiliza un
+archivo cookies.txt para desbloquear 1080p y 4K.
+```
+
+### 4.3 Lo que ya hacía la app
 
 - Botón rápido de `cookies.txt` en Inicio (alcance por adaptador:
   `PlatformRegistry.set_cookie_file_scoped`).
-- Navegador de cookies global (`cookiesfrombrowser`).
-- Reintento automático con el navegador detectado cuando la extracción falla
-  por bloqueo de cookies (`ErrorClassifier.is_cookie_recoverable`).
-- Con cookies, `player_skip` **no** se aplica: se conserva la página inicial.
+- Navegador de cookies global (`cookiesfrombrowser`) en Configuración →
+  Avanzado (Sesión y Cookies).
+- Con cookies, `player_skip` **no** se aplica: se conserva la página inicial,
+  que aporta el `player_response` y el `visitor_data` de mayor calidad.
 
 ---
 
@@ -207,7 +250,8 @@ print(heights)          # el ladder real que devuelve YouTube
 > deno como alternativa) y descarga el solver desde
 > `remote_components: ["ejs:github"]`.
 
-Pruebas automatizadas del contrato: `tests/unit/infrastructure/test_youtube_native_fallback.py`.
+Pruebas automatizadas del contrato: `tests/unit/infrastructure/test_youtube_native_fallback.py`
+(Capa 1) y `tests/unit/infrastructure/test_analysis_cookie_fallback.py` (Capa 2).
 
 ---
 
@@ -218,5 +262,8 @@ Pruebas automatizadas del contrato: `tests/unit/infrastructure/test_youtube_nati
 | Política compartida | `src/infrastructure/adapters/platforms/youtube_client_strategy.py` |
 | Aplicación en análisis | `src/infrastructure/adapters/platforms/youtube_adapter.py::_build_ydl_opts` |
 | Escalera de estrategias | `src/infrastructure/adapters/platforms/base_platform_adapter.py::CLIENT_STRATEGIES` |
+| Capa 2 (cookies automáticas) | `src/infrastructure/adapters/platforms/base_platform_adapter.py::_extract_with_ytdlp` / `_run_strategies` |
+| Clasificación de errores | `src/domain/services/error_classifier.py::ErrorClassifier` |
+| Detección de navegador | `src/infrastructure/adapters/platforms/browser_detector.py::get_first_available_browser` |
 | Aplicación en descarga | `src/infrastructure/adapters/download/ytdlp_download_engine.py::_apply_clients` |
-| Contrato (pruebas) | `tests/unit/infrastructure/test_youtube_native_fallback.py` |
+| Contrato (pruebas) | `tests/unit/infrastructure/test_youtube_native_fallback.py` · `tests/unit/infrastructure/test_analysis_cookie_fallback.py` |

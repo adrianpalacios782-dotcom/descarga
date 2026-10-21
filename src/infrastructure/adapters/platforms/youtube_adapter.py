@@ -24,6 +24,7 @@ class YouTubeAdapter(BasePlatformAdapter):
         self,
         player_clients: Optional[List[str]] = None,
         disable_browser_cookies: bool = False,
+        browser_override: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Opciones de yt-dlp + la política completa de YouTube.
 
@@ -43,7 +44,11 @@ class YouTubeAdapter(BasePlatformAdapter):
            de DASH completo. Se inyectan como extractor_args, que es donde
            yt-dlp las lee (ver yt_dlp/extractor/youtube/_video.py::_get_config_po_token).
         """
-        ydl_opts = super()._build_ydl_opts(player_clients, disable_browser_cookies)
+        ydl_opts = super()._build_ydl_opts(
+            player_clients,
+            disable_browser_cookies=disable_browser_cookies,
+            browser_override=browser_override,
+        )
 
         extractor_args = dict(ydl_opts.get("extractor_args") or {})
         youtube_args = dict(extractor_args.get(YOUTUBE_NAMESPACE) or {})
