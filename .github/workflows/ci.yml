@@ -1,0 +1,84 @@
+# ============================================================
+# CI de osvaldoDownloaderPro
+#
+# Gate de calidad: ruff (lint) + mypy --strict + pytest.
+# Es el job que BLOQUEA la publicacion de releases: el workflow
+# release.yml depende (needs) de este, asi que un fallo aqui impide
+# compilar y publicar un instalador roto.
+#
+# Corre en windows-latest porque el proyecto es de escritorio Windows
+# (PySide6) y las pruebas de GUI usan QT_QPA_PLATFORM=offscreen.
+# ============================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint + tipos + tests
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Node (runtime JS para yt-dlp / solver EJS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Ruff (lint)
+        run: python -m ruff check .
+
+      - name: Mypy (strict)
+        run: python -m mypy --strict
+
+      - name: Pytest
+        run: python -m pytest -q --basetemp=scratch/pytest_tmp
+
+      - name: Version coherente (src/__init__.py == scripts/version_info.txt)
+        shell: pwsh
+        run: |
+          $srcVersion = (Select-String -Path src\__init__.py -Pattern '__version__\s*=\s*"(\d+\.\d+\.\d+)"').Matches[0].Groups[1].Value
+          $quad = "$srcVersion.0"
+          $vi = Get-Content scripts\version_info.txt -Raw
+          if ($vi -notmatch [regex]::Escape("StringStruct('FileVersion', '$quad')")) {
+            Write-Error "version_info.txt desincronizado con src/__init__.py ($srcVersion)"
+            exit 1
+          }
+          Write-Host "Version coherente: $srcVersion"
+
+      - name: Upload de reportes de pytest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report
+          path: |
+            scratch/
+            build/
+          retention-days: 7
+          if-no-files-found: ignore

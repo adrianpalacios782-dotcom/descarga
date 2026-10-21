@@ -184,7 +184,7 @@ class TestAdapterDegenerateResponses:
         })
         adapter = YouTubeAdapter()
         metadata = adapter.analyze(Url("https://www.youtube.com/watch?v=F3tKutGo1Fo"))
-        assert calls == ["default", "tv", "android"]
+        assert calls == ["default", "tv", "tv_simply", "android"]
         labels = [o.label for o in metadata.video_quality_options]
         assert labels == ["360p"], "Solo hay una altura real: sin síntetica 'Mejor calidad'"
         assert metadata.video_quality_options[0].video_format_id == "18"
@@ -201,7 +201,7 @@ class TestAdapterDegenerateResponses:
         })
         adapter = YouTubeAdapter()
         metadata = adapter.analyze(Url("https://www.youtube.com/watch?v=eUX086mraqc"))
-        assert calls == ["default", "tv", "android", "web", "mweb"], "Debe agotar estrategias buscando video"
+        assert calls == ["default", "tv", "tv_simply", "android", "ios", "web", "mweb"], "Debe agotar estrategias buscando video"
         assert metadata.audio_formats, "Debe conservar las pistas de audio"
         assert not metadata.video_quality_options
 

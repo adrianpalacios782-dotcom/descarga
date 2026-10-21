@@ -57,6 +57,8 @@ python -m venv .venv
 
 ## Build y release
 
+### En local
+
 ```powershell
 # 1) Tests + empaquetado + instalador (valida version_info.txt vs src/__init__.py)
 powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1 -SkipSigning
@@ -64,6 +66,41 @@ powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1 -SkipSigning
 # 2) Publicar en GitHub (crea o actualiza la release y sube los assets)
 powershell -ExecutionPolicy Bypass -File scripts\publish_release.ps1
 ```
+
+### En GitHub Actions (recomendado)
+
+Hay dos workflows:
+
+| Workflow | Cuándo corre | Qué hace |
+|---|---|---|
+| `.github/workflows/ci.yml` | push/PR a `main` | ruff + mypy `--strict` + pytest. Es el gate de calidad. |
+| `.github/workflows/release.yml` | tag `v*` o manual (`workflow_dispatch`) | quality → build (PyInstaller + Inno Setup) → publish con gates |
+
+Publicar una release con CI:
+
+```powershell
+# 1) Subir los cambios
+git add -A
+git commit -m "release: v1.5.4"
+git push origin main
+
+# 2) Crear y subir el tag (dispara el workflow)
+git tag v1.5.4
+git push origin v1.5.4
+```
+
+El workflow **falla** (y no publica) si:
+
+- ruff, mypy o pytest fallan,
+- la versión del tag no coincide con `src/__init__.py::__version__`,
+- falta `installer\osvaldoDownloaderPro-<version>-Setup.exe` o `dist\SHA256SUMS.txt`,
+- tras subir, la API de GitHub no devuelve los 2 assets.
+
+El instalador que produce CI sale **sin firma** (no hay certificado en el
+runner). Ver `docs/SIGNING.md`.
+
+> En CI, `bin/ffmpeg.exe` y `bin/ffprobe.exe` se descargan automáticamente
+> (están en `.gitignore`); en local se conservan.
 
 El paso 2 produce/usa estos dos archivos:
 

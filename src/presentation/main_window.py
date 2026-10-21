@@ -360,7 +360,13 @@ class MainWindow(QMainWindow):
                 app.setStyleSheet(get_theme_qss(str(settings["theme"])))
 
     def _on_quick_cookies_selected(self, cookies_path: str) -> None:
-        """Aplica un archivo cookies.txt cargado rápidamente desde Inicio."""
+        """Aplica un archivo cookies.txt cargado rápidamente desde Inicio.
+
+        Solo se envia "cookies_file": apply_settings es semantico de PRESENCIA
+        (no de sobrescritura), asi que el navegador de cookies global
+        configurado en Configuracion se conserva intacto en el motor y en los
+        7 adaptadores durante toda la sesion.
+        """
         if hasattr(self, "configuracion_view") and hasattr(self.configuracion_view, "txt_cookies_file"):
             self.configuracion_view.txt_cookies_file.setText(cookies_path)
         settings_repo = getattr(self.view_model, "settings_repository", None)

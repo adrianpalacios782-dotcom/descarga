@@ -32,9 +32,21 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $DistDir     = Join-Path $ProjectRoot "dist"
 $BuildDir    = Join-Path $ProjectRoot "build"
 $AppDir      = Join-Path $DistDir "osvaldoDownloaderPro"
-$IsccPath    = Join-Path $Env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"
+$InstallerDir = Join-Path $ProjectRoot "installer"
 $IssPath     = Join-Path $ProjectRoot "installer.iss"
 $ReleaseDir  = Join-Path $BuildDir "release"
+
+# Inno Setup 6 puede estar en varias rutas segun como se instalo:
+# - LOCALAPPDATA (instalador por usuario, ruta por defecto en este PC)
+# - Program Files (x86) (instalador de maquina, ruta por defecto en los runners
+#   de GitHub Actions windows-latest)
+$IsccCandidates = @(
+    (Join-Path $Env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
+    "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+    "C:\Program Files\Inno Setup 6\ISCC.exe",
+    (Join-Path ${Env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe")
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+$IsccPath = @($IsccCandidates)[0]
 
 # --- Version desde la UNICA fuente de verdad: src/__init__.py ---
 $SrcInitPath = Join-Path $ProjectRoot "src\__init__.py"
@@ -54,10 +66,14 @@ function Write-Fail($msg) { Write-Host "[BUILD][ERROR] $msg" -ForegroundColor Re
 Set-Location -LiteralPath $ProjectRoot
 
 # --- 0. Herramientas ---
-if (-not (Test-Path -LiteralPath $IsccPath)) {
-    Write-Fail "ISCC.exe no encontrado en: $IsccPath"
+if (-not $IsccPath) {
+    Write-Fail "ISCC.exe no encontrado. Rutas revisadas:"
+    Write-Fail "  $(Join-Path $Env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')"
+    Write-Fail "  C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+    Write-Fail "  C:\Program Files\Inno Setup 6\ISCC.exe"
     exit 1
 }
+Write-Step "Inno Setup 6: $IsccPath"
 
 # --- Modo de firma: firmado solo si NO se pidio -SkipSigning Y existe config ---
 $SigningConfigPath = Join-Path $PSScriptRoot "signing.config.json"
@@ -95,6 +111,18 @@ foreach ($dir in @($BuildDir, $DistDir)) {
     if (Test-Path -LiteralPath $dir) {
         Remove-Item -LiteralPath $dir -Recurse -Force
         if (Test-Path -LiteralPath $dir) { Write-Fail "No se pudo limpiar: $dir"; exit 1 }
+    }
+}
+
+# Limpieza de instaladores de versiones anteriores (~120 MB cada uno).
+# Sin esto, installer\ acumula cada Setup.exe OLD (12 archivos = 1.4 GB).
+# Se conservan solo los de la version que se va a compilar.
+if (Test-Path -LiteralPath $InstallerDir) {
+    $stale = Get-ChildItem -LiteralPath $InstallerDir -Filter "osvaldoDownloaderPro-*-Setup.exe" -File -ErrorAction SilentlyContinue |
+             Where-Object { $_.Name -ne (Split-Path $SetupExe -Leaf) }
+    foreach ($f in $stale) {
+        Write-Step "Eliminando instalador obsoleto: $($f.Name)"
+        Remove-Item -LiteralPath $f.FullName -Force
     }
 }
 

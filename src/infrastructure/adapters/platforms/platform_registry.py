@@ -35,11 +35,10 @@ class PlatformRegistry(IPlatformAdapter):
 
     def set_cookies_from_browser(self, browser: Optional[str]) -> None:
         """Propaga el navegador de cookies a todos los adaptadores."""
+        value = browser.strip() if browser and browser.strip() else None
         for adapter in self._adapters:
             if isinstance(adapter, BasePlatformAdapter):
-                adapter.cookies_from_browser = (
-                    browser.strip() if browser and browser.strip() else None
-                )
+                adapter.set_cookies_from_browser(value)
 
     def set_cookie_file(self, cookiefile: Optional[str]) -> None:
         """Propaga la ruta del archivo de cookies (cookies.txt) a todos los adaptadores."""

@@ -1,4 +1,3 @@
-import os
 import logging
 import re
 import time
@@ -90,20 +89,18 @@ class TikTokAdapter(BasePlatformAdapter):
         player_clients: Optional[List[str]] = None,
         disable_browser_cookies: bool = False,
     ) -> Dict[str, Any]:
-        """Opciones para TikTok — incluye cookies y headers para reducir bloqueos."""
-        ydl_opts = {
-            "quiet": True,
-            "no_warnings": True,
-            "no_color": True,
-            "skip_download": True,
-            "noplaylist": True,
-            "socket_timeout": 30,
-            "format": "all",
-            "referer": "https://www.tiktok.com/",
-            "origin": "https://www.tiktok.com/",
-        }
-        if self.cookiefile and os.path.isfile(self.cookiefile):
-            ydl_opts["cookiefile"] = self.cookiefile
-        elif self.cookies_from_browser and not disable_browser_cookies:
-            ydl_opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
+        """Opciones para TikTok.
+
+        Reutiliza la construccion base (remote_components, js_runtimes,
+        ffmpeg_location y la politica de cookies) y encima aplica los headers
+        de TikTok, que son los que reducen los bloqueos.
+
+        Antes esta clase reconstruia el dict desde cero, lo que perdia
+        remote_components (solver EJS), js_runtimes (node/deno) y
+        ffmpeg_location: sin ellos YouTube/TikTok devolvian respuestas
+        degradadas o fallaban al post-procesar.
+        """
+        ydl_opts = super()._build_ydl_opts(player_clients, disable_browser_cookies)
+        ydl_opts["referer"] = "https://www.tiktok.com/"
+        ydl_opts["origin"] = "https://www.tiktok.com/"
         return ydl_opts

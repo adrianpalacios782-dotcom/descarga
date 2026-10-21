@@ -17,6 +17,10 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\publish_release.ps1 -DryRun
 #       Verifica todo y muestra lo que haria, SIN subir nada.
 #
+#   powershell -ExecutionPolicy Bypass -File scripts\publish_release.ps1 -Repo owner/repo
+#       Publica en otro repositorio (lo usa el workflow de GitHub Actions, que
+#       pasa el repo del checkout y autentica con la variable GH_TOKEN).
+#
 # Codigos de salida:
 #   0 = release publicada y verificada
 #   1 = error / faltan artefactos / fallo de subida o verificacion
@@ -24,13 +28,13 @@
 
 param(
     [string]$Version,
+    [string]$Repo = "adrianpalacios782-dotcom/descarga",
     [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$Repo        = "adrianpalacios782-dotcom/descarga"
 $DistDir     = Join-Path $ProjectRoot "dist"
 $SetupName   = "osvaldoDownloaderPro-{0}-Setup.exe"
 $SumsName    = "SHA256SUMS.txt"

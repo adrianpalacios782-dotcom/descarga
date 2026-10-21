@@ -107,18 +107,27 @@ class MainViewModel(QObject):
             self.download_queue.quality_warning.connect(self.download_quality_warning.emit)
 
     def apply_settings(self, settings: dict[str, Any]) -> None:
-        """Aplica configuraciones en caliente al motor de descargas, cola y adaptadores."""
-        browser = settings.get("cookies_browser")
-        if hasattr(self.download_engine, "set_cookies_from_browser"):
-            self.download_engine.set_cookies_from_browser(browser)
-        if hasattr(self.platform_adapter, "set_cookies_from_browser"):
-            self.platform_adapter.set_cookies_from_browser(browser)
+        """Aplica configuraciones en caliente al motor de descargas, cola y adaptadores.
 
-        cookies_file = settings.get("cookies_file")
-        if hasattr(self.download_engine, "set_cookie_file"):
-            self.download_engine.set_cookie_file(cookies_file)
-        if hasattr(self.platform_adapter, "set_cookie_file"):
-            self.platform_adapter.set_cookie_file(cookies_file)
+        Solo se tocan los valores PRESENTES en el diccionario. Un ajuste parcial
+        (por ejemplo el de cookies rapidas de Inicio) no puede borrar ajustes
+        ajenos: antes, ``apply_settings({"cookies_file": path})`` terminaba en
+        ``set_cookies_from_browser(None)`` y vaciaba el navegador de cookies
+        global en el motor y en los 7 adaptadores durante toda la sesion.
+        """
+        if "cookies_browser" in settings:
+            browser = settings.get("cookies_browser")
+            if hasattr(self.download_engine, "set_cookies_from_browser"):
+                self.download_engine.set_cookies_from_browser(browser)
+            if hasattr(self.platform_adapter, "set_cookies_from_browser"):
+                self.platform_adapter.set_cookies_from_browser(browser)
+
+        if "cookies_file" in settings:
+            cookies_file = settings.get("cookies_file")
+            if hasattr(self.download_engine, "set_cookie_file"):
+                self.download_engine.set_cookie_file(cookies_file)
+            if hasattr(self.platform_adapter, "set_cookie_file"):
+                self.platform_adapter.set_cookie_file(cookies_file)
 
         speed_limit = settings.get("speed_limit")
         if speed_limit is not None and hasattr(self.download_engine, "set_rate_limit"):
