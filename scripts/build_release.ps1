@@ -252,4 +252,15 @@ if ($DoSign) {
     Write-Step "RELEASE BETA NO FIRMADO COMPLETO. Instalador: $SetupExe | Hashes: dist\SHA256SUMS.txt"
     Write-Host "[AVISO] Recuerda: el beta NO FIRMADO puede ser bloqueado por Smart App Control/antivirus." -ForegroundColor Yellow
 }
+
+# --- 9. Publicacion (paso siguiente, separado a proposito) ---
+# El build NO sube nada a GitHub a proposito: publicar es una accion aparte
+# (se hace con scripts\publish_release.ps1) para que un build local nunca
+# modifique la release remota por accidente.
+#
+# Recordatorio: una release publicada SIN assets rompe el actualizador de la
+# app instalada (detecta "actualizacion disponible" pero no puede instalarla).
+# publish_release.ps1 verifica que existan los DOS assets antes de subir.
+Write-Step "Siguiente paso: publicar en GitHub con scripts\publish_release.ps1"
+Write-Host "[BUILD]    powershell -ExecutionPolicy Bypass -File scripts\publish_release.ps1" -ForegroundColor Cyan
 exit 0

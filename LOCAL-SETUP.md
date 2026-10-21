@@ -59,16 +59,22 @@ python -m venv .venv
 
 ```powershell
 # 1) Tests + empaquetado + instalador (valida version_info.txt vs src/__init__.py)
-powershell -File scripts\build_release.ps1
+powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1 -SkipSigning
 
-# 2) Subir los assets a la release de GitHub
-#    -> installer\osvaldoDownloaderPro-<VERSION>-Setup.exe
-#    -> dist\SHA256SUMS.txt
+# 2) Publicar en GitHub (crea o actualiza la release y sube los assets)
+powershell -ExecutionPolicy Bypass -File scripts\publish_release.ps1
 ```
+
+El paso 2 produce/usa estos dos archivos:
+
+- `installer\osvaldoDownloaderPro-<VERSION>-Setup.exe`
+- `dist\SHA256SUMS.txt`
 
 > La release **debe** tener ambos assets. Si se publica el tag sin ellos, la
 > app instalada detecta "actualización disponible" pero no puede instalarla
 > (ver `src/infrastructure/updater/` y `docs/TROUBLESHOOTING.md`).
+> Eso fue exactamente lo que pasó con la v1.5.3, publicada sin assets.
+> `publish_release.ps1` se niega a publicar si falta alguno.
 
 ## Carpetas pesadas regenerables
 
