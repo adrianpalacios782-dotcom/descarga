@@ -5,6 +5,8 @@
 # obligatorios que exige el actualizador de la app instalada:
 #   - osvaldoDownloaderPro-<version>-Setup.exe
 #   - SHA256SUMS.txt
+# y ademas un artefacto portable empaquetado en ZIP:
+#   - osvaldoDownloaderPro-<version>-portable.zip
 #
 # La release v1.5.3 quedo VACIA porque no habia workflow y el build se
 # publico a mano. Este workflow cierra ese hueco:
@@ -12,10 +14,16 @@
 #   1. job "quality"  -> ruff + mypy + pytest (mismo gate que CI.yml).
 #                         Si falla, NO se compila ni se publica nada.
 #   2. job "build"    -> PyInstaller + Inno Setup en windows-latest.
-#                         GATE explicito: si falta el Setup.exe o el
-#                         SHA256SUMS.txt, el job falla y no se publica.
-#   3. job "publish"  -> sube los assets con gh release upload y VERIFICA
-#                         via API que los dos assets quedaron disponibles.
+#                         Empaqueta el salida de PyInstaller en un .zip
+#                         portable. GATE ESTRICTO: cada asset debe existir Y
+#                         pesar al menos 1 MB; si no, el job falla y no se
+#                         publica nada.
+#   3. job "publish"  -> sube el Setup.exe y el SHA256SUMS.txt con
+#                         scripts\publish_release.ps1 (que ya tiene sus propios
+#                         gates, incluido el de coherencia del checksum) y el
+#                         .zip portable con softprops/action-gh-release.
+#                         Despues VERIFICA via API que los tres assets
+#                         quedaron disponibles.
 #
 # Uso:
 #   git tag v1.5.4 && git push origin v1.5.4     -> dispara el workflow
@@ -30,7 +38,10 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      # Solo tags de version semantica completa (v1.5.4). Un tag "v"
+      # suelto o "v1" NO dispara nada: se evita publicar un binario con
+      # version incoherente con src\__init__.py.
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version:
@@ -187,23 +198,62 @@ jobs:
           # El instalador sale como BETA NO FIRMADO (ver docs/SIGNING.md).
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_release.ps1 -SkipSigning
 
-      # GATE: si falta cualquiera de los dos assets, el job falla y la
-      # publicacion no llega a ejecutarse. Esto es exactamente lo que faltÃ³
-      # en la v1.5.3 (release publicada sin assets).
-      - name: GATE - Verificar que existen los 2 assets obligatorios
+      # Empaquetado del artefacto portable: se comprime la carpeta que produce
+      # PyInstaller (dist\osvaldoDownloaderPro: el .exe + _internal + bin).
+      # Se usa shutil.make_archive de la stdlib porque Python esta SIEMPRE
+      # disponible en el runner y tolera rutas largas mejor que Compress-Archive.
+      - name: Empaquetar ZIP portable (salida de PyInstaller)
         shell: pwsh
         run: |
           $version = $env:RELEASE_VERSION
-          $setup = "installer\osvaldoDownloaderPro-$version-Setup.exe"
-          $sums  = "dist\SHA256SUMS.txt"
-          $fail = $false
-          if (-not (Test-Path -LiteralPath $setup)) { Write-Error "Falta el instalador: $setup"; $fail = $true }
-          else {
-            $size = [math]::Round((Get-Item -LiteralPath $setup).Length / 1MB, 1)
-            Write-Host "Instalador OK: $setup ($size MB)"
+          $root = (Get-Location).Path
+          $appDir = Join-Path $root "dist\osvaldoDownloaderPro"
+          if (-not (Test-Path -LiteralPath (Join-Path $appDir "osvaldoDownloaderPro.exe"))) {
+            Write-Error "No se encontro la salida de PyInstaller en $appDir"
+            exit 1
           }
-          if (-not (Test-Path -LiteralPath $sums)) { Write-Error "Falta el archivo de hashes: $sums"; $fail = $true }
-          else { Write-Host "Hashes OK: $sums" }
+          # Rutas ABSOLUTAS a proposito: make_archive() hace chdir() a root_dir
+          # y resolver el nombre del zip de forma relativa al cwd tras el chdir
+          # es sutil. Con absolutas el resultado no depende de esa semantica.
+          $base  = Join-Path $root "dist\osvaldoDownloaderPro-$version-portable"
+          $dist  = Join-Path $root "dist"
+          python -c "import shutil,sys; sys.exit(0 if shutil.make_archive(sys.argv[1], 'zip', root_dir=sys.argv[2], base_dir='osvaldoDownloaderPro') else 1)" $base $dist
+          if ($LASTEXITCODE -ne 0) { Write-Error "Fallo al empaquetar el ZIP portable"; exit 1 }
+          $zip = "$base.zip"
+          if (-not (Test-Path -LiteralPath $zip)) { Write-Error "No se genero el ZIP portable: $zip"; exit 1 }
+          Write-Host ("ZIP portable OK: {0} ({1} MB)" -f $zip, [math]::Round((Get-Item -LiteralPath $zip).Length / 1MB, 1))
+
+      # GATE ESTRICTO: si falta cualquiera de los assets o alguno pesa menos de
+      # 1 MB, el job falla y la publicacion no llega a ejecutarse. Esto es
+      # exactamente lo que falto en la v1.5.3 (release publicada sin assets) y
+      # lo que evita publicar un binario truncado o vacio.
+      - name: GATE - Assets obligatorios (existen y los binarios pesan >= 1 MB)
+        shell: pwsh
+        run: |
+          $version = $env:RELEASE_VERSION
+          $minBytes = 1MB
+          $assets = @(
+            @{ Path = "installer\osvaldoDownloaderPro-$version-Setup.exe"; Label = "instalador"; Min = $minBytes },
+            @{ Path = "dist\osvaldoDownloaderPro-$version-portable.zip";  Label = "zip portable"; Min = $minBytes },
+            # El archivo de hashes es texto: solo se exige que exista.
+            @{ Path = "dist\SHA256SUMS.txt";                            Label = "hashes";      Min = 0 }
+          )
+          $fail = $false
+          foreach ($a in $assets) {
+            if (-not (Test-Path -LiteralPath $a.Path)) {
+              Write-Error "Falta el asset ($($a.Label)): $($a.Path)"
+              $fail = $true
+              continue
+            }
+            $len = (Get-Item -LiteralPath $a.Path).Length
+            $mb = [math]::Round($len / 1MB, 1)
+            if ($len -lt $a.Min) {
+              Write-Error "Asset por debajo del minimo de 1 MB ($($a.Label)): $($a.Path) = $len bytes"
+              $fail = $true
+              continue
+            }
+            Write-Host ("  OK  {0,-12} {1} ({2} MB)" -f $a.Label, $a.Path, $mb)
+          }
           if ($fail) { exit 1 }
 
       - name: Reporte de release
@@ -224,6 +274,7 @@ jobs:
           path: |
             installer/osvaldoDownloaderPro-*-Setup.exe
             dist/SHA256SUMS.txt
+            dist/osvaldoDownloaderPro-*-portable.zip
           retention-days: 30
           if-no-files-found: error
 
@@ -255,20 +306,52 @@ jobs:
             -Version $version `
             -Repo "${{ github.repository }}"
 
+      # Publicacion del artefacto portable con softprops/action-gh-release.
+      # Se ejecuta DESPUES de publish_release.ps1, que ya creo la release (y el
+      # tag) con sus notas y sus assets obligatorios. La accion reutiliza esa
+      # release en vez de crear otra: no se pasan `body` ni
+      # `generate_release_notes` para no pisar las notas ya escritas.
+      # `fail_on_unmatched_files` convierte un glob que no coincide en un fallo
+      # del job en vez de publicar una release sin el ZIP.
+      - name: Publicar ZIP portable (softprops/action-gh-release)
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ env.RELEASE_VERSION }}
+          name: osvaldoDownloaderPro ${{ env.RELEASE_VERSION }}
+          files: |
+            dist/osvaldoDownloaderPro-${{ env.RELEASE_VERSION }}-portable.zip
+          fail_on_unmatched_files: true
+          preserve_order: true
+          overwrite_files: true
+
       # Verificacion final e independiente del script: la release debe tener
-      # los 2 assets y ambos deben responder 200.
+      # los 3 assets y el ZIP debe pesar al menos 1 MB.
       - name: Verificar assets publicados
         shell: pwsh
         run: |
           $version = $env:RELEASE_VERSION
           $tag = "v$version"
-          $expected = @("osvaldoDownloaderPro-$version-Setup.exe", "SHA256SUMS.txt")
+          $minBytes = 1MB
+          $expected = @(
+            @{ Name = "osvaldoDownloaderPro-$version-Setup.exe"; Min = $minBytes },
+            @{ Name = "SHA256SUMS.txt";                           Min = 0 },
+            @{ Name = "osvaldoDownloaderPro-$version-portable.zip"; Min = $minBytes }
+          )
           $json = gh release view $tag --repo "${{ github.repository }}" --json assets,tagName,url | ConvertFrom-Json
           $names = @($json.assets | ForEach-Object { $_.name })
           Write-Host "Release $($json.tagName) -> $($json.url)"
           $missing = @()
           foreach ($e in $expected) {
-            if ($names -contains $e) { Write-Host "  OK  $e" } else { $missing += $e }
+            $asset = @($json.assets | Where-Object { $_.name -eq $e.Name })
+            if ($asset.Count -eq 0) {
+              $missing += $e.Name
+              continue
+            }
+            if ($asset[0].size -lt $e.Min) {
+              Write-Error "Asset publicado por debajo del minimo: $($e.Name) = $($asset[0].size) bytes"
+              exit 1
+            }
+            Write-Host ("  OK  {0}  ({1} MB)" -f $e.Name, [math]::Round($asset[0].size / 1MB, 1))
           }
           if ($missing.Count -gt 0) {
             Write-Error "Assets ausentes en la release publicada: $($missing -join ', ')"

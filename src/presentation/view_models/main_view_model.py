@@ -106,7 +106,7 @@ class MainViewModel(QObject):
             self.download_queue.started.connect(self.download_started.emit)
             self.download_queue.quality_warning.connect(self.download_quality_warning.emit)
 
-    def apply_settings(self, settings: dict[str, Any]) -> None:
+    def apply_settings(self, settings: dict[str, Any], scope_url: Optional[str] = None) -> None:
         """Aplica configuraciones en caliente al motor de descargas, cola y adaptadores.
 
         Solo se tocan los valores PRESENTES en el diccionario. Un ajuste parcial
@@ -114,6 +114,9 @@ class MainViewModel(QObject):
         ajenos: antes, ``apply_settings({"cookies_file": path})`` terminaba en
         ``set_cookies_from_browser(None)`` y vaciaba el navegador de cookies
         global en el motor y en los 7 adaptadores durante toda la sesion.
+
+        ``scope_url`` acota el alcance del archivo de cookies al adaptador de
+        esa URL (ver :meth:`_apply_cookie_file_to_adapters`).
         """
         if "cookies_browser" in settings:
             browser = settings.get("cookies_browser")
@@ -126,8 +129,7 @@ class MainViewModel(QObject):
             cookies_file = settings.get("cookies_file")
             if hasattr(self.download_engine, "set_cookie_file"):
                 self.download_engine.set_cookie_file(cookies_file)
-            if hasattr(self.platform_adapter, "set_cookie_file"):
-                self.platform_adapter.set_cookie_file(cookies_file)
+            self._apply_cookie_file_to_adapters(cookies_file, scope_url)
 
         speed_limit = settings.get("speed_limit")
         if speed_limit is not None and hasattr(self.download_engine, "set_rate_limit"):
@@ -147,6 +149,40 @@ class MainViewModel(QObject):
                 self.download_engine.set_concurrent_fragments(int(concurrent_fragments))
             except (ValueError, TypeError):
                 pass
+
+    def _apply_cookie_file_to_adapters(
+        self,
+        cookies_file: Optional[str],
+        scope_url: Optional[str],
+    ) -> None:
+        """Aplica el archivo de cookies acotando el alcance al adaptador seleccionado.
+
+        El boton de cookies rapido de Inicio debe afectar SOLO al adaptador de
+        la URL que se esta analizando: los demas adaptadores conservan intactos
+        tanto su `cookiefile` como su `cookies_from_browser`. Mutar por
+        referencia el dict de opciones compartida contaminaria a los demas.
+
+        Sin URL de referencia (o si el adaptador no admite alcance) se aplica a
+        todos, que es el comportamiento del guardado de la configuracion global
+        y del arranque de la aplicacion.
+
+        La comprobacion es ``is True`` (no truthiness) a proposito: con un
+        doble de prueba (MagicMock) cualquier valor devuelto seria truthy y
+        dejaria el camino global sin cubrir.
+        """
+        adapter = self.platform_adapter
+
+        if scope_url:
+            scoped = getattr(adapter, "set_cookie_file_scoped", None)
+            if callable(scoped):
+                try:
+                    if scoped(cookies_file, scope_url) is True:
+                        return
+                except Exception as exc:  # noqa: BLE001 - degradacion segura
+                    logger.debug("No se pudo acotar el alcance del archivo de cookies: %s", exc)
+
+        if hasattr(adapter, "set_cookie_file"):
+            adapter.set_cookie_file(cookies_file)
 
     @staticmethod
     def _parse_speed_limit(val: str) -> Optional[int]:

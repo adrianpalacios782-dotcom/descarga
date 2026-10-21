@@ -9,31 +9,58 @@ Regla general: **ningún borrado sin un respaldo verificable detrás**.
 
 ## 1. Prototipo viejo `D:\Proyectos\Python\YTDownloaderPro`
 
-**Estado:** 3.26 MB, 437 archivos, **sin Git**, arquitectura pre-refactor
-(`ytdownloader/`, `ui/`, `app.py`, `pyproject.toml` con solo black/ruff),
-fechado ago-2026. Puede servir de referencia histórica (por ejemplo
-`docs/contracts/versioning.md` ADR-008), pero no participa del build actual.
+**Estado verificado (2026-10-21):** 3.26 MB, **437 archivos**, **sin Git**
+(no hay `.git`), arquitectura pre-refactor (`ytdownloader/`, `ui/`, `app.py`,
+`pyproject.toml` con solo black/ruff). La **última escritura** de la carpeta
+es del **19-oct-2026 22:04**, no de agosto de 2026. Puede servir de referencia
+histórica (por ejemplo `docs/contracts/versioning.md` ADR-008), pero no
+participa del build actual.
 
-### 1.1 Respaldar (zip con timestamp, fuera del repo)
+### 1.1 Respaldar (ZIP fechado, fuera del repo)
 
 ```powershell
-$src = "D:\Proyectos\Python\YTDownloaderPro"
-$dst = "D:\Proyectos\Python\_backups\YTDownloaderPro-prototipo-ago2026.zip"
+$src   = "D:\Proyectos\Python\YTDownloaderPro"
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"           # el ZIP queda fechado
+$dst   = "D:\Proyectos\Python\_backups\YTDownloaderPro-prototipo-$stamp.zip"
 
 New-Item -ItemType Directory -Path (Split-Path $dst) -Force | Out-Null
 Compress-Archive -Path (Join-Path $src "*") -DestinationPath $dst -Force
 
-# Verificar el zip antes de borrar el original
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zip = [System.IO.Compression.ZipFile]::OpenRead($dst)
-Write-Host "Entradas en el zip: $($zip.Entries.Count)"
-$zip.Dispose()
-Get-FileHash $dst -Algorithm SHA256
+Write-Host "Respaldo creado: $dst"
+Get-FileHash -LiteralPath $dst -Algorithm SHA256
 ```
 
 > `Compress-Archive` no incluye carpetas ocultas (`.ruff_cache`, `.coverage`).
 > Es aceptable: son cachés regenerables. Si se quiere un respaldo exacto,
 > usar `robocopy` (ver 1.2).
+
+### 1.1b Comprobación de integridad (obligatoria antes de borrar)
+
+```powershell
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+$zip = [System.IO.Compression.ZipFile]::OpenRead($dst)
+try {
+    # a) Numero de entradas con contenido == numero de archivos del origen
+    $entries = @($zip.Entries | Where-Object { $_.Length -gt 0 })
+    $esperados = (Get-ChildItem -LiteralPath $src -Recurse -File -Force).Count
+    Write-Host "Entradas en el zip: $($entries.Count) / archivos en el origen: $esperados"
+    if ($entries.Count -ne $esperados) {
+        throw "El zip no contiene todos los archivos del origen ($($entries.Count) != $esperados)"
+    }
+
+    # b) CRC de cada entrada: descomprime el archivo entero. Si el zip esta
+    #    corrupto, .NET lanza excepcion aqui.
+    $buffer = New-Object byte[] 65536
+    foreach ($e in $entries) {
+        $s = $e.Open()
+        try { while ($s.Read($buffer, 0, $buffer.Length) -gt 0) { } }
+        finally { $s.Dispose() }
+    }
+    Write-Host "Integridad OK: $($entries.Count) entradas descomprimidas sin error de CRC"
+}
+finally { $zip.Dispose() }
+```
 
 ### 1.2 Alternativa: copia exacta con robocopy
 
@@ -48,20 +75,30 @@ if ($LASTEXITCODE -ge 8) { throw "robocopy fallo con codigo $LASTEXITCODE" }
 
 ```powershell
 $src = "D:\Proyectos\Python\YTDownloaderPro"
-$dst = "D:\Proyectos\Python\_backups\YTDownloaderPro-prototipo-ago2026.zip"
 
 # 1) El respaldo tiene que existir y pesar mas de 1 MB
-if (-not (Test-Path $dst)) { throw "No existe el respaldo: $dst" }
-if ((Get-Item $dst).Length -lt 1MB) { throw "El respaldo parece incompleto" }
+if (-not (Test-Path -LiteralPath $dst)) { throw "No existe el respaldo: $dst" }
+if ((Get-Item -LiteralPath $dst).Length -lt 1MB) { throw "El respaldo parece incompleto" }
 
-# 2) Borrar
+# 2) Y tiene que seguir abriendo y conteniendo los 437 archivos
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip = [System.IO.Compression.ZipFile]::OpenRead($dst)
+try {
+    if (@($zip.Entries | Where-Object { $_.Length -gt 0 }).Count -lt 400) {
+        throw "El respaldo esta incompleto: no se borra el original"
+    }
+}
+finally { $zip.Dispose() }
+
+# 3) Borrado recursivo y forzado
 Remove-Item -LiteralPath $src -Recurse -Force
 ```
 
 ### 1.4 ¿Recuperarlo después?
 
 ```powershell
-Expand-Archive -Path "D:\Proyectos\Python\_backups\YTDownloaderPro-prototipo-ago2026.zip" `
+# Sustituir <stamp> por el del ZIP realmente generado en 1.1
+Expand-Archive -Path "D:\Proyectos\Python\_backups\YTDownloaderPro-prototipo-<stamp>.zip" `
                 -DestinationPath "D:\Proyectos\Python\YTDownloaderPro" -Force
 ```
 
@@ -222,12 +259,22 @@ git -C "D:\Proyectos\Web\peponna\pepokita" stash list
 ## 5. Resumen (copiar/pegar)
 
 ```powershell
-# --- 1) Prototipo YTDownloaderPro ---
-$src = "D:\Proyectos\Python\YTDownloaderPro"
-$dst = "D:\Proyectos\Python\_backups\YTDownloaderPro-prototipo-ago2026.zip"
+# --- 1) Prototipo YTDownloaderPro: respaldar, verificar y borrar ---
+$src   = "D:\Proyectos\Python\YTDownloaderPro"
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$dst   = "D:\Proyectos\Python\_backups\YTDownloaderPro-prototipo-$stamp.zip"
+
 New-Item -ItemType Directory -Path (Split-Path $dst) -Force | Out-Null
 Compress-Archive -Path (Join-Path $src "*") -DestinationPath $dst -Force
-if ((Get-Item $dst).Length -lt 1MB) { throw "Respaldo incompleto" }
+
+# Verificacion: existe, pesa > 1 MB y abre sin error de CRC
+if (-not (Test-Path -LiteralPath $dst)) { throw "No existe el respaldo" }
+if ((Get-Item -LiteralPath $dst).Length -lt 1MB) { throw "Respaldo incompleto" }
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zip = [System.IO.Compression.ZipFile]::OpenRead($dst)
+try { Write-Host "Entradas: $(@($zip.Entries).Count)" } finally { $zip.Dispose() }
+
+# Solo ahora se borra el original
 Remove-Item -LiteralPath $src -Recurse -Force
 
 # --- 2) app tarija: publicar los 2 commits pendientes ---
@@ -239,3 +286,7 @@ git -C "D:\Proyectos\Web\peponna\pepokita" add -A
 git -C "D:\Proyectos\Web\peponna\pepokita" commit -m "feat(reservations): code entropy y rate-limit"
 git -C "D:\Proyectos\Web\peponna\pepokita" log --oneline -3
 ```
+
+> Los repos externos (`app tarija`, `pepokita`) **no se tocan desde este
+> repositorio**: los comandos de arriba son para ejecutarlos a mano en su
+> propia carpeta. Ver `docs/EXTERNAL_REPOS.md` para el detalle completo.

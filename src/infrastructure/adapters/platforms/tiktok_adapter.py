@@ -1,7 +1,8 @@
+import copy
 import logging
 import re
 import time
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import yt_dlp
 
@@ -27,6 +28,17 @@ class TikTokAdapter(BasePlatformAdapter):
 
     MAX_RETRIES = 3
     RETRY_DELAYS = [2.0, 5.0, 10.0]
+
+    #: Claves de runtime que el overlay de TikTok no puede perder bajo ningun
+    #: concepto, porque sin ellas yt-dlp deja de funcionar correctamente:
+    #:   - remote_components: descarga del solver EJS (YouTube/TikTok lo usan).
+    #:   - js_runtimes:       Node/Deno para ejecutar el JS de TikTok.
+    #:   - ffmpeg_location:   ruta a ffmpeg para el post-procesado (mux).
+    RUNTIME_KEYS: Tuple[str, ...] = (
+        "remote_components",
+        "js_runtimes",
+        "ffmpeg_location",
+    )
 
     def detect(self, url: Url) -> bool:
         return url.detect_platform() == "TikTok"
@@ -89,18 +101,35 @@ class TikTokAdapter(BasePlatformAdapter):
         player_clients: Optional[List[str]] = None,
         disable_browser_cookies: bool = False,
     ) -> Dict[str, Any]:
-        """Opciones para TikTok.
+        """Opciones para TikTok: construccion base + cabeceras de TikTok.
 
-        Reutiliza la construccion base (remote_components, js_runtimes,
-        ffmpeg_location y la politica de cookies) y encima aplica los headers
-        de TikTok, que son los que reducen los bloqueos.
+        Se parte de `super()._build_ydl_opts(...)` y se trabaja sobre una COPIA
+        DESACOPLADA (`copy.deepcopy`): el dict de la clase base contiene
+        estructuras mutables anidadas (`extractor_args`, `js_runtimes`,
+        `remote_components`) y el overlay de TikTok no debe poder mutar por
+        referencia la configuracion que construye la base.
+
+        El runtime se re-afirma de forma explicita (`RUNTIME_KEYS`): sin
+        `remote_components` no se descarga el solver EJS, sin `js_runtimes` no
+        hay Node/Deno para ejecutar el JS de TikTok y sin `ffmpeg_location` el
+        post-procesado falla.
 
         Antes esta clase reconstruia el dict desde cero, lo que perdia
         remote_components (solver EJS), js_runtimes (node/deno) y
         ffmpeg_location: sin ellos YouTube/TikTok devolvian respuestas
         degradadas o fallaban al post-procesar.
         """
-        ydl_opts = super()._build_ydl_opts(player_clients, disable_browser_cookies)
+        base_opts = super()._build_ydl_opts(player_clients, disable_browser_cookies)
+
+        # Copia desacoplada: el overlay nunca muta el dict de la clase base.
+        ydl_opts: Dict[str, Any] = copy.deepcopy(base_opts)
+
+        # Re-afirmacion explicita del runtime (contrato con yt-dlp). Se hace
+        # sobre la copia, nunca sobre `base_opts`.
+        for key in self.RUNTIME_KEYS:
+            if key in base_opts:
+                ydl_opts[key] = copy.deepcopy(base_opts[key])
+
         ydl_opts["referer"] = "https://www.tiktok.com/"
         ydl_opts["origin"] = "https://www.tiktok.com/"
         return ydl_opts

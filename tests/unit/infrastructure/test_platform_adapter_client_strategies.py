@@ -143,6 +143,64 @@ class TestTikTokAdapterOptions:
         opts = adapter._build_ydl_opts(disable_browser_cookies=True)
         assert "cookiesfrombrowser" not in opts
 
+    def test_tiktok_options_are_decoupled_from_the_base(self, monkeypatch) -> None:
+        """El overlay de TikTok no puede mutar por referencia el dict de la base.
+
+        Sin `copy.deepcopy`, mutar una estructura anidada del dict devuelto
+        (extractor_args, js_runtimes, remote_components) contaminaria la
+        configuracion compartida y afectaria a las demas extracciones.
+        """
+        base: Dict[str, Any] = {
+            "remote_components": ["ejs:github"],
+            "js_runtimes": {"node": {"path": ["node"]}},
+            "ffmpeg_location": "C:/bin/ffmpeg.exe",
+            "extractor_args": {"youtube": {"player_client": ["web"]}},
+        }
+        monkeypatch.setattr(
+            BasePlatformAdapter,
+            "_build_ydl_opts",
+            lambda self, *args, **kwargs: base,
+        )
+
+        opts = TikTokAdapter()._build_ydl_opts()
+
+        # Mutar el resultado NO puede tocar el dict de la clase base.
+        opts["remote_components"].append("ejs:otro")
+        opts["js_runtimes"]["node"]["path"].append("deno")
+        opts["extractor_args"]["youtube"]["player_client"].append("ios")
+
+        assert base["remote_components"] == ["ejs:github"]
+        assert base["js_runtimes"]["node"]["path"] == ["node"]
+        assert base["extractor_args"]["youtube"]["player_client"] == ["web"]
+
+    def test_tiktok_runtime_keys_are_guaranteed(self, monkeypatch) -> None:
+        """remote_components, js_runtimes y ffmpeg_location se re-afirman."""
+        base: Dict[str, Any] = {
+            "remote_components": ["ejs:github"],
+            "js_runtimes": {"node": {}},
+            "ffmpeg_location": "C:/bin/ffmpeg.exe",
+        }
+        monkeypatch.setattr(
+            BasePlatformAdapter,
+            "_build_ydl_opts",
+            lambda self, *args, **kwargs: dict(base),
+        )
+
+        opts = TikTokAdapter()._build_ydl_opts()
+
+        for key in TikTokAdapter.RUNTIME_KEYS:
+            assert key in opts, f"TikTok perdio la clave de runtime {key}"
+        assert opts["remote_components"] == ["ejs:github"]
+        assert opts["js_runtimes"] == {"node": {}}
+        assert opts["ffmpeg_location"] == "C:/bin/ffmpeg.exe"
+
+    def test_runtime_keys_contract(self) -> None:
+        assert TikTokAdapter.RUNTIME_KEYS == (
+            "remote_components",
+            "js_runtimes",
+            "ffmpeg_location",
+        )
+
 
 class TestCookiesFromBrowserSetter:
 

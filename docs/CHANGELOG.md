@@ -2,6 +2,27 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [Unreleased]
+
+### Añadido
+- **Artefacto portable en `.zip` en cada release:** `release.yml` empaqueta la salida de PyInstaller (`dist\osvaldoDownloaderPro`) en `osvaldoDownloaderPro-<version>-portable.zip` con `shutil.make_archive` (stdlib de Python, siempre presente en el runner y más tolerante con rutas largas que `Compress-Archive`). El ZIP se publica con `softprops/action-gh-release@v3` **después** de `publish_release.ps1`, que ya crea la release con sus notas y sus dos assets obligatorios; al no pasarle `body`, la acción conserva las notas ya escritas.
+- **Gate estricto de assets en `release.yml`:** cada asset se valida por **existencia y tamaño mínimo de 1 MB** (el `SHA256SUMS.txt` solo por existencia, porque es texto). Verificado con tres casos: todo válido → exit 0; ZIP truncado (500 KB) → exit 1; ZIP ausente → exit 1.
+- **Disparador de release endurecido:** la publicación automática pasa de `v*` a `v*.*.*`, de modo que un tag suelto (`v`, `v1`) no puede lanzar una build con la versión desincronizada de `src\__init__.py`.
+- **`docs/EXTERNAL_REPOS.md`:** guía de operaciones de los dos repositorios externos (`app_tarija` y `pepokita`) con los comandos Git exactos, el estado verificado de cada uno y **el comando de recuperación de cada operación destructiva** (`git stash pop`, `git reset --soft HEAD~1`, `git rebase --abort`).
+
+### Corregido
+- **El botón de cookies rápido ya no muta los demás adaptadores:** `PlatformRegistry.set_cookie_file` seguía propagando el `cookies.txt` a los 7 adaptadores registrados, de modo que cargar un archivo para una plataforma reescribía el `cookiefile` de las demás. Se añade `set_cookie_file_scoped(cookiefile, url)`, que aplica el archivo **solo** al adaptador de esa URL, y `MainViewModel.apply_settings(settings, scope_url=None)` lo usa cuando conoce la URL analizada. El motor de descargas sigue recibiendo el archivo de forma global (descarga de cualquier plataforma) y `cookies_from_browser` permanece intacto en todos los adaptadores.
+- **Adaptador de TikTok: copia desacoplada del bloque de opciones:** `_build_ydl_opts` trabaja ahora sobre un `copy.deepcopy` de las opciones de la clase base, de modo que el overlay de TikTok no puede mutar por referencia estructuras anidadas (`extractor_args`, `js_runtimes`, `remote_components`) que comparten estado con la base. El runtime se re-afirma de forma explícita mediante la constante `RUNTIME_KEYS = ("remote_components", "js_runtimes", "ffmpeg_location")`.
+- **`docs/CLEANUP.md` con datos verificados:** el prototipo `YTDownloaderPro` mide **3,26 MB, 437 archivos, sin Git**, con última escritura el **19-oct-2026 22:04** (no agosto de 2026, como decía la versión anterior). El ZIP de respaldo ahora se genera con timestamp real (`Get-Date -Format "yyyyMMdd-HHmmss"`) en vez de un nombre fijo, y la comprobación de integridad verifica **el CRC de cada entrada** descomprimiendo el archivo entero, además de comparar el número de entradas con el de archivos del origen.
+
+### Optimizado
+- **`release.yml` documenta y separa las etapas:** los jobs `quality` → `build` → `publish` pasan a estar comentados con el flujo real (empaquetado → gate estricto → publicación con `gh` + `softprops` → verificación por API de los tres assets, con el mínimo de 1 MB comprobado también en remoto).
+
+### Calidad
+- 715 pruebas automatizadas en verde (14 nuevas), `ruff` sin errores y `mypy --strict` sin errores en 110 archivos fuente.
+- Pruebas nuevas: aislamiento de la copia de TikTok (`copy.deepcopy`: mutar el resultado no afecta a la base) y garantía explícita de las tres claves de runtime; alcance del archivo de cookies por adaptador (el archivo solo llega al adaptador de la URL, `cookies_from_browser` intacto en el resto, fallback global cuando la URL no es válida) y propagación del `scope_url` desde `MainWindow._on_quick_cookies_selected`.
+- Lógica de empaquetado y gate probada localmente antes de subirl: ZIP generado con la estructura `osvaldoDownloaderPro/` correcta y gate validado en los tres escenarios (válido / truncado / ausente).
+
 ## [1.5.4] - 2026-10-21
 
 ### Añadido

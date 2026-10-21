@@ -366,14 +366,18 @@ class MainWindow(QMainWindow):
         (no de sobrescritura), asi que el navegador de cookies global
         configurado en Configuracion se conserva intacto en el motor y en los
         7 adaptadores durante toda la sesion.
+
+        El alcance se acota al adaptador de la URL que se esta analizando
+        (``scope_url``): el archivo cargado habilita esa plataforma y no debe
+        reescribir la configuracion de cookies de las demas.
         """
         if hasattr(self, "configuracion_view") and hasattr(self.configuracion_view, "txt_cookies_file"):
             self.configuracion_view.txt_cookies_file.setText(cookies_path)
         settings_repo = getattr(self.view_model, "settings_repository", None)
         if settings_repo is not None:
             settings_repo.set("cookies_file", cookies_path, "str", "advanced")
-        self.view_model.apply_settings({"cookies_file": cookies_path})
         current_url = self.inicio_view.url_input.text().strip()
+        self.view_model.apply_settings({"cookies_file": cookies_path}, scope_url=current_url or None)
         if current_url:
             self.view_model.analyze_url(current_url)
 

@@ -2,7 +2,7 @@ from typing import List, Optional
 
 from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.entities.playlist_metadata import PlaylistMetadata
-from src.domain.exceptions.domain_exceptions import UnsupportedPlatformError
+from src.domain.exceptions.domain_exceptions import DomainError, UnsupportedPlatformError
 from src.domain.ports.platform_adapter import IPlatformAdapter
 from src.domain.value_objects.url import Url
 from src.infrastructure.adapters.platforms.base_platform_adapter import BasePlatformAdapter
@@ -45,6 +45,28 @@ class PlatformRegistry(IPlatformAdapter):
         for adapter in self._adapters:
             if isinstance(adapter, BasePlatformAdapter):
                 adapter.set_cookie_file(cookiefile)
+
+    def set_cookie_file_scoped(self, cookiefile: Optional[str], url: str) -> bool:
+        """Aplica el archivo de cookies SOLO al adaptador que corresponde a la URL.
+
+        Es el alcance del boton de cookies rapido de Inicio: el archivo que el
+        usuario carga habilita el contenido de ESA plataforma y no debe
+        reescribir la configuracion de cookies de las demas (ni su
+        `cookies_from_browser`, que es un ajuste global independiente).
+
+        Devuelve True si se aplico a un adaptador concreto y False si la URL
+        no es valida o no la soporta ninguno de los adaptadores registrados,
+        para que el llamante decida si aplica el fallback global.
+        """
+        try:
+            adapter = self.find_adapter(Url(url))
+        except DomainError:
+            # DomainError cubre InvalidUrlError (URL no valida) y
+            # UnsupportedPlatformError (sin adaptador compatible).
+            return False
+        if isinstance(adapter, BasePlatformAdapter):
+            adapter.set_cookie_file(cookiefile)
+        return True
 
     def register_adapter(self, adapter: IPlatformAdapter) -> None:
         """Registra un nuevo adaptador de plataforma en tiempo de ejecución."""
