@@ -3,6 +3,11 @@ from typing import Any, Dict, List, Optional
 from src.domain.entities.media_metadata import MediaMetadata
 from src.domain.value_objects.url import Url
 from src.infrastructure.adapters.platforms.base_platform_adapter import BasePlatformAdapter
+from src.infrastructure.adapters.platforms.youtube_client_strategy import (
+    NATIVE_FALLBACK_CLIENTS,
+    YOUTUBE_NAMESPACE,
+    build_youtube_extractor_args,
+)
 
 
 class YouTubeAdapter(BasePlatformAdapter):
@@ -20,22 +25,41 @@ class YouTubeAdapter(BasePlatformAdapter):
         player_clients: Optional[List[str]] = None,
         disable_browser_cookies: bool = False,
     ) -> Dict[str, Any]:
-        """Opciones de yt-dlp + las que solo aplican a YouTube (PO token / visitor_data).
+        """Opciones de yt-dlp + la política completa de YouTube.
 
-        El PO token y el visitor_data son credenciales de sesion de YouTube: sin
-        ellos los clientes "web"/"tv" responden con storyboards en vez de DASH
-        completo. Se inyectan como extractor_args, que es donde yt-dlp las lee
-        (ver yt_dlp/extractor/youtube/_video.py::_get_config_po_token).
+        Reúne tres cosas en el bloque ``extractor_args['youtube']``:
+
+        1. ``player_client``: fallback NATIVO de yt-dlp. Una lista de clientes
+           que yt-dlp prueba EN ORDEN dentro de una sola extracción y cuyos
+           formatos fusiona. Sin esta lista, yt-dlp usa sus defaults
+           (``visionos`` + ``web``), que exigen PO token y devuelven como
+           máximo 360p en visita anónima.
+        2. ``player_skip``: en la vía anónima se saltan la página inicial y el
+           ``ytcfg`` por cliente, que son las peticiones que devuelven la
+           respuesta degradada. Con cookies NO se saltan: la página aporta el
+           ``player_response`` y el ``visitor_data`` de mayor calidad.
+        3. ``po_token`` / ``visitor_data``: credenciales de sesión de YouTube.
+           Sin ellos los clientes "web"/"tv" responden con storyboards en vez
+           de DASH completo. Se inyectan como extractor_args, que es donde
+           yt-dlp las lee (ver yt_dlp/extractor/youtube/_video.py::_get_config_po_token).
         """
         ydl_opts = super()._build_ydl_opts(player_clients, disable_browser_cookies)
-        youtube_args = ydl_opts.setdefault("extractor_args", {}).setdefault("youtube", {})
+
+        extractor_args = dict(ydl_opts.get("extractor_args") or {})
+        youtube_args = dict(extractor_args.get(YOUTUBE_NAMESPACE) or {})
+
+        anonymous = not ("cookiefile" in ydl_opts or "cookiesfrombrowser" in ydl_opts)
+        youtube_args.update(build_youtube_extractor_args(player_clients, anonymous=anonymous))
 
         if self.po_token:
             youtube_args["po_token"] = self._po_token_entries(player_clients)
         if self.visitor_data:
             youtube_args["visitor_data"] = self.visitor_data
 
-        if not youtube_args:
+        if youtube_args:
+            extractor_args[YOUTUBE_NAMESPACE] = youtube_args
+            ydl_opts["extractor_args"] = extractor_args
+        else:
             ydl_opts.pop("extractor_args", None)
         return ydl_opts
 
@@ -45,6 +69,10 @@ class YouTubeAdapter(BasePlatformAdapter):
         - Si el valor ya viene en ese formato ("web.gvs+AAAA") se pasa tal cual.
         - Si es un token "crudo" (base64url sin prefijo) se aplica a todos los
           clientes de la estrategia actual con contexto GVS.
+
+        Cuando la estrategia usa los defaults de yt-dlp (visionos + web) se
+        cubren tambien esos clientes: el token se indexa por nombre de cliente,
+        asi que las entradas que no apliquen se ignoran solas.
         """
         raw = (self.po_token or "").strip()
         if not raw:
@@ -55,5 +83,9 @@ class YouTubeAdapter(BasePlatformAdapter):
             return [raw]
         clients = [c for c in (player_clients or []) if c]
         if not clients:
-            clients = ["web"]
-        return [f"{client}.gvs+{raw}" for client in clients]
+            clients = list(NATIVE_FALLBACK_CLIENTS) + ["visionos"]
+        seen: List[str] = []
+        for client in clients:
+            if client not in seen:
+                seen.append(client)
+        return [f"{client}.gvs+{raw}" for client in seen]

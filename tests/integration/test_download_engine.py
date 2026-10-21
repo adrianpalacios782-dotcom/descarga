@@ -16,6 +16,10 @@ from src.domain.value_objects.download_id import DownloadId
 from src.domain.value_objects.media_id import MediaId
 from src.domain.value_objects.url import Url
 from src.infrastructure.adapters.download.ytdlp_download_engine import YtDlpDownloadEngine
+from src.infrastructure.adapters.platforms.youtube_client_strategy import (
+    DEFAULT_PLAYER_SKIP,
+    NATIVE_FALLBACK_CLIENTS,
+)
 from src.infrastructure.event_bus.in_process_event_bus import InProcessEventBus
 
 
@@ -367,6 +371,8 @@ class TestYtDlpDownloadEngine:
         assert any(t.status == DownloadState.CANCELLED for t in saved)
 
     def test_no_player_client_restriction(self, tmp_path) -> None:
+        """La descarga NO debe forzar un unico player_client: usa el fallback
+        nativo de yt-dlp (varios clientes en una sola extracción)."""
         seen_opts = {}
 
         def factory(opts):
@@ -383,9 +389,14 @@ class TestYtDlpDownloadEngine:
         engine.download(task)
 
         assert _wait_for(lambda: task.status == DownloadState.COMPLETED)
-        assert "extractor_args" not in seen_opts
+        youtube_args = (seen_opts.get("extractor_args") or {}).get("youtube") or {}
+        clients = youtube_args.get("player_client") or []
+        assert len(clients) > 1, "No se debe restringir a un solo player_client"
+        assert clients == list(NATIVE_FALLBACK_CLIENTS)
 
-    def test_probe_uses_no_restriction(self, tmp_path) -> None:
+    def test_probe_uses_the_same_client_policy_than_the_download(self, tmp_path) -> None:
+        """El sondeo previo debe usar EXACTAMENTE la misma politica de clientes
+        que la descarga: si no, podría descartar una calidad que sí se puede bajar."""
         seen_opts = []
 
         def factory(opts):
@@ -405,7 +416,9 @@ class TestYtDlpDownloadEngine:
         probe_opts = seen_opts[0]
         assert probe_opts["skip_download"] is True
         assert probe_opts["format"] == "all"
-        assert "extractor_args" not in probe_opts
+        probe_youtube = (probe_opts.get("extractor_args") or {}).get("youtube") or {}
+        assert probe_youtube.get("player_client") == list(NATIVE_FALLBACK_CLIENTS)
+        assert probe_youtube.get("player_skip") == list(DEFAULT_PLAYER_SKIP)
 
     def test_360p_request(self, tmp_path) -> None:
         seen_opts = {}
@@ -766,22 +779,31 @@ class TestYtDlpDownloadEngine:
 # ---------------------------------------------------------------------------
 
 def _client_of(opts) -> object:
+    """Clave de la estrategia: la lista COMPLETA de player_client unida por comas.
+
+    Indexar por la lista completa permite distinguir el fallback nativo
+    (varios clientes en una sola extracción) de una estrategia de un solo
+    cliente. None significa "defaults de yt-dlp".
+    """
     ea = (opts.get("extractor_args") or {}).get("youtube") or {}
-    clients = ea.get("player_client") or [None]
-    return clients[0]
+    clients = ea.get("player_client") or []
+    return ",".join(clients) if clients else None
+
+
+NATIVE_KEY = ",".join(NATIVE_FALLBACK_CLIENTS)
 
 
 class TestAntiBotClientFallback:
 
     def test_probe_uses_next_strategy_when_default_returns_storyboards_only(self) -> None:
-        """Causa raíz #4 (sondeo): el cliente default responde solo storyboards
+        """Causa raíz #4 (sondeo): el fallback nativo responde solo storyboards
         (bot-check silencioso); la pre-validación debe usar la siguiente estrategia."""
         calls = []
 
         def factory(opts):
             client = _client_of(opts)
             calls.append(client)
-            if client is None:
+            if client == NATIVE_KEY:
                 storyboards = [{"format_id": f"sb{i}", "ext": "mhtml", "vcodec": "none",
                                 "acodec": "none", "protocol": "mhtml"} for i in range(4)]
                 return FakeYoutubeDL(opts, probe_formats=storyboards)
@@ -789,7 +811,7 @@ class TestAntiBotClientFallback:
 
         engine = YtDlpDownloadEngine(ydl_factory=factory)
         info = engine._probe_available_formats("https://youtube.com/watch?v=x", threading.Event())
-        assert calls[0] is None and calls[1] == "tv"
+        assert calls[0] == NATIVE_KEY and calls[1] is None
         heights = engine._extract_available_video_heights(info)
         assert heights == [360]
 
@@ -805,7 +827,8 @@ class TestAntiBotClientFallback:
             engine._probe_available_formats("https://youtube.com/watch?v=x", threading.Event())
 
     def test_download_video_cycles_clients_until_success(self, tmp_path, monkeypatch) -> None:
-        """default y tv fallan con bot-check; android tiene éxito → COMPLETED."""
+        """El fallback nativo y los defaults fallan con bot-check; el cliente de
+        TV embebido tiene éxito → COMPLETED."""
         calls = []
         # Acelera los reintentos del motor (3s y 8s). Se usa `monkeypatch` (no
         # `time.sleep = ...`) para que el parche se revierta al terminar el
@@ -816,7 +839,7 @@ class TestAntiBotClientFallback:
             client = _client_of(opts)
             if "outtmpl" in opts:
                 calls.append(client)
-            if client in (None, "tv"):
+            if client in (NATIVE_KEY, None):
                 return FakeYoutubeDL(opts, fail_with=RuntimeError("Sign in to confirm you're not a bot"))
             return FakeYoutubeDL(opts)
 
@@ -830,7 +853,7 @@ class TestAntiBotClientFallback:
         engine.download(task)
 
         assert _wait_for(lambda: task.status == DownloadState.COMPLETED)
-        assert calls == [None, "tv", "android"]
+        assert calls == [NATIVE_KEY, None, "tv_downgraded"]
         assert os.path.exists(dest_file)
 
     def test_download_fails_after_all_client_strategies_exhausted(self, tmp_path, monkeypatch) -> None:

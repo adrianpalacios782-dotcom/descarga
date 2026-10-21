@@ -1,7 +1,7 @@
 import logging
 import os
 import shutil
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 import yt_dlp
 import re
 
@@ -14,57 +14,48 @@ from src.domain.ports.platform_adapter import IPlatformAdapter
 from src.domain.value_objects.media_id import MediaId
 from src.domain.value_objects.url import Url
 from src.infrastructure.adapters.media.subtitle_extractor import extract_subtitle_tracks
+from src.infrastructure.adapters.platforms.youtube_client_strategy import (
+    NATIVE_FALLBACK_CLIENTS,
+    YOUTUBE_NAMESPACE,
+    get_supported_player_clients,
+    resolve_player_clients,
+)
 
 logger = logging.getLogger(__name__)
 
-# Cache perezoso de los player_client soportados por la version de yt-dlp instalada.
-# Permite descartar nombres obsoletos (p. ej. "tv_embedded", que ya no existe en
-# yt-dlp 2026.x) ANTES de gastar una request de red: yt-dlp solo emite un
-# warning ("Skipping unsupported client") y cae a los clientes por defecto.
-_SUPPORTED_CLIENTS: Optional[Set[str]] = None
-
-
-def get_supported_player_clients() -> Optional[Set[str]]:
-    """Devuelve los nombres de player_client soportados por la version de yt-dlp instalada.
-
-    Devuelve None si no se puede determinar (import fallido), en cuyo caso no se
-    filtra nada y se comporta como antes.
-    """
-    global _SUPPORTED_CLIENTS
-    if _SUPPORTED_CLIENTS is None:
-        try:
-            from yt_dlp.extractor.youtube._base import INNERTUBE_CLIENTS
-            _SUPPORTED_CLIENTS = {c for c in INNERTUBE_CLIENTS if not c.startswith("_")}
-        except Exception:  # noqa: BLE001 - degradacion segura: no filtrar
-            logger.debug("No se pudo obtener la lista de player_client de yt-dlp; no se filtrara.")
-            return None
-    return _SUPPORTED_CLIENTS or None
-
-
-
+__all__ = [
+    "BasePlatformAdapter",
+    "NATIVE_FALLBACK_CLIENTS",
+    "get_supported_player_clients",
+    "resolve_player_clients",
+]
 
 
 
 class BasePlatformAdapter(IPlatformAdapter):
     """Adaptador base de infraestructura que aísla yt-dlp detrás del contrato IPlatformAdapter.
 
-    Usa estrategias de player_client ordenadas por confiabilidad para obtener la lista completa de formatos
-    (DASH video-only, audio-only, progresivos) sin provocar 403 ni limitar resoluciones.
+    Usa el fallback NATIVO de yt-dlp (``player_client`` con varios clientes):
+    en una sola extracción yt-dlp prueba cada cliente en orden y fusiona sus
+    formatos. Es preferible a N extracciones secuenciales (una por estrategia)
+    porque cada extracción secuencial es una request extra a YouTube.
+    En la vía anónima se añaden los saltos del extractor (``player_skip``) que
+    evitan la respuesta degradada a 360p.
     Soporta cookies de navegador y archivos cookies.txt personalizados para contenido con restricción de edad.
     """
 
+    # Estrategia principal: fallback nativo de yt-dlp (ios -> tv_downgraded ->
+    # tv_simply -> web) en UNA extracción. Las siguientes son reintentos con un
+    # cliente aislado, por si la extracción multi-cliente falla entera
+    # (p. ej. IP bloqueada).
     CLIENT_STRATEGIES: List[Optional[List[str]]] = [
-        None,           # defaults de yt-dlp (agrega varios clientes internamente)
-        ["tv"],         # cliente TV: suele sortear el bot-check con DASH completo
-        ["tv_simply"],  # cliente TV "simply": equivalente moderno de tv_embedded
-        ["android"],    # cliente Android: contenido real aunque limitado (sin PO token)
-        ["ios"],        # cliente iOS: segunda via con DASH y sin PO token
-        ["web"],        # cliente web clasico
-        ["mweb"],       # cliente web movil
+        NATIVE_FALLBACK_CLIENTS,  # fallback nativo: yt-dlp fusiona los formatos
+        None,                     # defaults de yt-dlp (visionos + web)
+        ["tv_downgraded"],        # cliente de TV embebido aislado (sin PO token)
+        ["tv_simply"],            # cliente TVHTML5_SIMPLY (exige PO token)
+        ["android"],              # cliente Android: contenido real aunque limitado (sin PO token)
+        ["mweb"],                 # cliente web movil
     ]
-    # Clientes que SOLO se activan si el usuario aporta un PO token valido.
-    # Sin PO token, "tv"/"web" devuelven storyboards (ver test_platform_adapter_formats.py).
-    PO_TOKEN_CLIENTS: Set[str] = {"tv", "web"}
 
     def __init__(
         self,
@@ -101,25 +92,11 @@ class BasePlatformAdapter(IPlatformAdapter):
 
     @staticmethod
     def _filter_supported_clients(player_clients: List[str]) -> List[str]:
-        """Descarta player_client que la version de yt-dlp instalada no soporta.
+        """Normaliza los player_client: alias historicos + descarte de no soportados.
 
-        yt-dlp NO falla ante un cliente invalido: solo avisa ("Skipping
-        unsupported client") y cae a los clientes por defecto, es decir, se
-        gasta una request de red para repetir la extraccion por defecto. Filtrar
-        aqui evita ese desperdicio y hace visibles los nombres obsoletos.
+        Ver ``youtube_client_strategy.resolve_player_clients``.
         """
-        supported = get_supported_player_clients()
-        if not supported:
-            return list(player_clients)
-        valid = [c for c in player_clients if c in supported]
-        dropped = [c for c in player_clients if c not in supported]
-        if dropped:
-            logger.warning(
-                "player_client no soportado por yt-dlp %s, se omite: %s",
-                getattr(getattr(yt_dlp, "version", None), "__version__", "?"),
-                ", ".join(dropped),
-            )
-        return valid
+        return resolve_player_clients(player_clients)
 
     def _build_ydl_opts(
         self,
@@ -165,10 +142,15 @@ class BasePlatformAdapter(IPlatformAdapter):
         elif self.cookies_from_browser and not disable_browser_cookies:
             ydl_opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
 
+        # La clase base es agnóstica de plataforma: solo aplica `player_client`
+        # cuando la estrategia lo pide. La política completa de YouTube
+        # (player_client + player_skip + credenciales) la aplica YouTubeAdapter,
+        # para no colar un bloque `extractor_args` de YouTube en otras
+        # plataformas (TikTok, Instagram, ...).
         if player_clients:
-            effective = self._filter_supported_clients(player_clients)
+            effective = resolve_player_clients(player_clients)
             if effective:
-                ydl_opts["extractor_args"] = {"youtube": {"player_client": effective}}
+                ydl_opts["extractor_args"] = {YOUTUBE_NAMESPACE: {"player_client": effective}}
         return ydl_opts
 
     def _extract_with_ytdlp(self, url: Url) -> Dict[str, Any]:

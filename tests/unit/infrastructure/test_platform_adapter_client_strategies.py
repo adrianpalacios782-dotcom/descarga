@@ -37,6 +37,7 @@ class TestClientStrategies:
         flat = [c for s in strategies for c in (s or [])]
         assert "ios" in flat, "El cliente iOS debe estar en las estrategias"
         assert "tv_simply" in flat, "El cliente TV embebido (tv_simply) debe estar en las estrategias"
+        assert "tv_downgraded" in flat, "El cliente TV sin PO token (tv_downgraded) debe estar en las estrategias"
         # "tv_embedded" no existe en yt-dlp 2026.x: no debe volver a colarse.
         assert "tv_embedded" not in flat
 
@@ -55,6 +56,13 @@ class TestClientStrategies:
         opts = YouTubeAdapter()._build_ydl_opts(["tv_embedded"])
         youtube_args = (opts.get("extractor_args") or {}).get("youtube") or {}
         assert "tv_embedded" not in (youtube_args.get("player_client") or [])
+
+    def test_legacy_tv_embedded_is_aliased_to_its_modern_equivalent(self) -> None:
+        """"tv_embedded" fue retirado de yt-dlp: debe traducirse al cliente de TV
+        embebido vigente, que ademas NO exige PO token."""
+        opts = YouTubeAdapter()._build_ydl_opts(["ios", "tv_embedded", "web"])
+        youtube_args = (opts.get("extractor_args") or {}).get("youtube") or {}
+        assert youtube_args["player_client"] == ["ios", "tv_downgraded", "web"]
 
     def test_valid_clients_are_kept_untouched(self) -> None:
         opts = YouTubeAdapter()._build_ydl_opts(["ios", "tv_simply"])
@@ -83,14 +91,24 @@ class TestPoTokenAndVisitorData:
         assert youtube_args["visitor_data"] == "VISITOR-XYZ"
 
     def test_no_extractor_args_when_nothing_configured(self) -> None:
+        """Sin PO token ni visitor_data no debe colarse ningun extractor_arg de
+        credenciales; solo queda el bloque de la politica anonima."""
         opts = YouTubeAdapter()._build_ydl_opts()
-        assert "extractor_args" not in opts
+        youtube_args = (opts.get("extractor_args") or {}).get("youtube") or {}
+        assert "po_token" not in youtube_args
+        assert "visitor_data" not in youtube_args
+        assert "player_client" not in youtube_args
 
-    def test_po_token_without_clients_defaults_to_web(self) -> None:
+    def test_po_token_without_clients_covers_the_fallback_clients(self) -> None:
+        """Sin estrategia explicita, el token se indexa para los clientes del
+        fallback nativo mas los defaults de yt-dlp (visionos + web)."""
         adapter = YouTubeAdapter(po_token="TOKEN_CRUZ")
         opts = adapter._build_ydl_opts()
         youtube_args = (opts.get("extractor_args") or {}).get("youtube") or {}
-        assert youtube_args["po_token"] == ["web.gvs+TOKEN_CRUZ"]
+        entries = youtube_args["po_token"]
+        assert "web.gvs+TOKEN_CRUZ" in entries
+        assert "ios.gvs+TOKEN_CRUZ" in entries
+        assert "visionos.gvs+TOKEN_CRUZ" in entries
 
 
 class TestTikTokAdapterOptions:

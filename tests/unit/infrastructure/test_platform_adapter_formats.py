@@ -17,6 +17,12 @@ import src.infrastructure.adapters.platforms.base_platform_adapter as bpa_module
 from src.domain.exceptions.domain_exceptions import MediaAnalysisError
 from src.domain.value_objects.url import Url
 from src.infrastructure.adapters.platforms.youtube_adapter import YouTubeAdapter
+from src.infrastructure.adapters.platforms.youtube_client_strategy import NATIVE_FALLBACK_CLIENTS
+
+#: Clave con la que el fake indexa la ESTRATEGIA PRINCIPAL: el fallback NATIVO
+#: de yt-dlp (varios clientes en una sola extracción). Se indexa por la lista
+#: COMPLETA para distinguirla de una estrategia de un solo cliente.
+NATIVE_KEY = ",".join(NATIVE_FALLBACK_CLIENTS)
 
 
 STORYBOARD_ONLY_FORMATS = [
@@ -67,8 +73,12 @@ def _info(formats: List[Dict[str, Any]], title: str = "Junior H - PARIS [Officia
 class ScriptedYoutubeDL:
     """Fake de yt_dlp.YoutubeDL que responde según el player_client solicitado.
 
-    behaviors: lista de dicts {clients|default -> ("storyboards"|"full"|"audio"|"error")}.
-    Registra cada client usado para verificar cuántas estrategias se intentaron.
+    behaviors: lista de dicts {clave -> ("storyboards"|"full"|"audio"|"error")}.
+    La clave es la lista COMPLETA de player_client unida por comas, o "default"
+    si la extracción usa los clientes por defecto de yt-dlp. Indexar por la
+    lista completa permite distinguir el fallback nativo (varios clientes en una
+    extracción) de una estrategia de un solo cliente.
+    Registra cada estrategia usada para verificar cuántas se intentaron.
     """
 
     def __init__(self, opts, behaviors: Dict[str, str], calls: List[str]):
@@ -86,11 +96,10 @@ class ScriptedYoutubeDL:
         pass
 
     def extract_info(self, url, download=False):
-        clients = None
         ea = self.opts.get("extractor_args") or {}
         youtube_args = ea.get("youtube") or {}
-        clients = (youtube_args.get("player_client") or [None])[0]
-        key = "default" if clients is None else clients
+        clients = youtube_args.get("player_client") or []
+        key = ",".join(clients) if clients else "default"
         self.calls.append(key)
         behavior = self.behaviors.get(key, "error")
         if behavior == "error":
@@ -121,16 +130,18 @@ def _install(monkeypatch, behaviors: Dict[str, str]) -> List[str]:
 class TestAdapterDegenerateResponses:
 
     def test_caso_c_storyboard_default_falls_back_to_tv_full_formats(self, monkeypatch) -> None:
-        """CASO C (PARIS): default responde solo storyboards; tv entrega DASH completo.
+        """CASO C (PARIS): el fallback nativo y los defaults responden solo
+        storyboards; tv_downgraded entrega DASH completo.
         El análisis DEBE terminar con calidades reales, no con tarjetas vacías."""
         calls = _install(monkeypatch, {
+            NATIVE_KEY: "storyboards",
             "default": "storyboards",
-            "tv": "full",
+            "tv_downgraded": "full",
         })
         adapter = YouTubeAdapter()
         metadata = adapter.analyze(Url("https://www.youtube.com/watch?v=eUX086mraqc"))
 
-        assert calls == ["default", "tv"], "Debe intentar la siguiente estrategia al detectar storyboards"
+        assert calls == [NATIVE_KEY, "default", "tv_downgraded"], "Debe intentar la siguiente estrategia al detectar storyboards"
         heights = [v.height for v in metadata.video_quality_options]
         assert heights, "Deben existir opciones de calidad"
         assert 2160 in heights and 1440 in heights and 1080 in heights
@@ -140,9 +151,11 @@ class TestAdapterDegenerateResponses:
         """Si TODAS las estrategias devuelven solo storyboards, el análisis debe
         fallar con mensaje claro en lugar de mostrar una previsualización sin calidades."""
         calls = _install(monkeypatch, {
+            NATIVE_KEY: "storyboards",
             "default": "storyboards",
-            "tv": "storyboards",
-            "web": "storyboards",
+            "tv_downgraded": "storyboards",
+            "tv_simply": "storyboards",
+            "android": "storyboards",
             "mweb": "storyboards",
         })
         adapter = YouTubeAdapter()
@@ -152,39 +165,43 @@ class TestAdapterDegenerateResponses:
         assert "Fallo al analizar" in str(ex.value)
 
     def test_bot_check_error_then_full_formats_on_next_strategy(self, monkeypatch) -> None:
-        """Estrategia default lanza bot-check; la siguiente entrega formatos completos."""
+        """El fallback nativo lanza bot-check; la siguiente estrategia entrega
+        formatos completos."""
         calls = _install(monkeypatch, {
-            "default": "error",
-            "tv": "full",
+            NATIVE_KEY: "error",
+            "default": "full",
         })
         adapter = YouTubeAdapter()
         metadata = adapter.analyze(Url("https://www.youtube.com/watch?v=eUX086mraqc"))
-        assert calls == ["default", "tv"]
+        assert calls == [NATIVE_KEY, "default"]
         assert metadata.video_quality_options
 
     def test_first_strategy_with_real_video_wins_without_extra_calls(self, monkeypatch) -> None:
-        """Camino feliz (CASO A): default entrega formatos completos y no se
-        consultan más estrategias (latencia mínima)."""
-        calls = _install(monkeypatch, {"default": "full"})
+        """Camino feliz (CASO A): el fallback nativo entrega formatos completos y
+        no se consultan más estrategias (latencia mínima)."""
+        calls = _install(monkeypatch, {NATIVE_KEY: "full"})
         adapter = YouTubeAdapter()
         metadata = adapter.analyze(Url("https://www.youtube.com/watch?v=F3tKutGo1Fo"))
-        assert calls == ["default"]
+        assert calls == [NATIVE_KEY]
         labels = [o.label for o in metadata.video_quality_options]
         assert "Mejor calidad" in labels
         assert "1440p" in labels
 
     def test_android_fallback_accepts_capped_real_formats(self, monkeypatch) -> None:
-        """IP restringida (verificada en sandbox): default/tv con bot-check y
-        android entrega contenido real pero limitado (itag 18, 640x338).
+        """IP restringida (verificada en sandbox): el fallback nativo y los
+        clientes previos dan bot-check y android entrega contenido real pero
+        limitado (itag 18, 640x338).
         El adapter debe aceptarlo: 360p real > cero tarjetas."""
         calls = _install(monkeypatch, {
+            NATIVE_KEY: "error",
             "default": "error",
-            "tv": "error",
+            "tv_downgraded": "error",
+            "tv_simply": "error",
             "android": "capped",
         })
         adapter = YouTubeAdapter()
         metadata = adapter.analyze(Url("https://www.youtube.com/watch?v=F3tKutGo1Fo"))
-        assert calls == ["default", "tv", "tv_simply", "android"]
+        assert calls == [NATIVE_KEY, "default", "tv_downgraded", "tv_simply", "android"]
         labels = [o.label for o in metadata.video_quality_options]
         assert labels == ["360p"], "Solo hay una altura real: sin síntetica 'Mejor calidad'"
         assert metadata.video_quality_options[0].video_format_id == "18"
@@ -194,22 +211,26 @@ class TestAdapterDegenerateResponses:
         """Contenido solo-audio legítimo: se agotan estrategias buscando video y
         al final se acepta la respuesta solo-audio sin explotar."""
         calls = _install(monkeypatch, {
+            NATIVE_KEY: "audio",
             "default": "audio",
-            "tv": "audio",
-            "web": "audio",
+            "tv_downgraded": "audio",
+            "tv_simply": "audio",
+            "android": "audio",
             "mweb": "audio",
         })
         adapter = YouTubeAdapter()
         metadata = adapter.analyze(Url("https://www.youtube.com/watch?v=eUX086mraqc"))
-        assert calls == ["default", "tv", "tv_simply", "android", "ios", "web", "mweb"], "Debe agotar estrategias buscando video"
+        assert calls == [NATIVE_KEY, "default", "tv_downgraded", "tv_simply", "android", "mweb"], "Debe agotar estrategias buscando video"
         assert metadata.audio_formats, "Debe conservar las pistas de audio"
         assert not metadata.video_quality_options
 
     def test_degenerate_error_message_is_user_friendly(self, monkeypatch) -> None:
         _install(monkeypatch, {
+            NATIVE_KEY: "storyboards",
             "default": "storyboards",
-            "tv": "storyboards",
-            "web": "storyboards",
+            "tv_downgraded": "storyboards",
+            "tv_simply": "storyboards",
+            "android": "storyboards",
             "mweb": "storyboards",
         })
         adapter = YouTubeAdapter()

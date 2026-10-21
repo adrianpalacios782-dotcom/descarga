@@ -34,6 +34,11 @@ from src.infrastructure.adapters.media.ffmpeg_adapter import FFmpegProcessAdapte
 # Re-exportado como parte de la API pública del motor (lo usan las pruebas de subtítulos).
 from src.infrastructure.adapters.media.subtitle_extractor import extract_subtitle_tracks  # noqa: F401
 from src.infrastructure.adapters.platforms.browser_detector import get_first_available_browser
+from src.infrastructure.adapters.platforms.youtube_client_strategy import (
+    NATIVE_FALLBACK_CLIENTS,
+    YOUTUBE_NAMESPACE,
+    build_youtube_extractor_args,
+)
 from src.infrastructure.event_bus.in_process_event_bus import InProcessEventBus
 
 
@@ -145,24 +150,45 @@ class YtDlpDownloadEngine(IDownloadEngine):
     # YouTube). Cuando la plataforma restringe el cliente por defecto ("Sign in to
     # confirm you're not a bot"), se alterna el cliente entre reintentos igual que
     # hace el análisis (base_platform_adapter.CLIENT_STRATEGIES).
+    #
+    # La primera estrategia es el fallback NATIVO de yt-dlp: una sola extracción
+    # en la que yt-dlp prueba ios -> tv_downgraded -> tv_simply -> web y fusiona
+    # sus formatos. Es la misma política que usa el análisis, de modo que la
+    # descarga puede bajar exactamente las calidades que el análisis prometió.
     DOWNLOAD_CLIENT_STRATEGIES: List[Optional[List[str]]] = [
-        None,        # defaults de yt-dlp
-        ["tv"],
-        ["android"],
+        NATIVE_FALLBACK_CLIENTS,  # fallback nativo: yt-dlp fusiona los formatos
+        None,                     # defaults de yt-dlp
+        ["tv_downgraded"],         # cliente de TV embebido aislado (sin PO token)
+        ["android"],               # cliente Android
     ]
 
     PROBE_CLIENT_STRATEGIES: List[Optional[List[str]]] = [
+        NATIVE_FALLBACK_CLIENTS,
         None,
-        ["tv"],
+        ["tv_downgraded"],
         ["android"],
-        ["web"],
         ["mweb"],
     ]
 
     @staticmethod
     def _apply_clients(opts: Dict[str, Any], clients: Optional[List[str]]) -> Dict[str, Any]:
-        if clients:
-            opts["extractor_args"] = {"youtube": {"player_client": list(clients)}}
+        """Aplica la politica de clientes de YouTube a las opciones de yt-dlp.
+
+        Reutiliza exactamente la misma politica que el análisis
+        (``youtube_client_strategy.build_youtube_extractor_args``): mismo
+        ``player_client`` y mismo ``player_skip``. En la vía anónima se saltan
+        la página inicial y el ytcfg por cliente, que son las peticiones que
+        devuelven la respuesta degradada a 360p; con cookies no se saltan,
+        porque la página aporta el player_response de mayor calidad.
+        """
+        anonymous = not ("cookiefile" in opts or "cookiesfrombrowser" in opts)
+        youtube_args = build_youtube_extractor_args(clients, anonymous=anonymous)
+        if youtube_args:
+            # Se construye un dict nuevo:(opts) es una copia superficial y
+            # mutar el extractor_args compartido contaminaria el resto.
+            extractor_args = dict(opts.get("extractor_args") or {})
+            extractor_args[YOUTUBE_NAMESPACE] = youtube_args
+            opts["extractor_args"] = extractor_args
         return opts
 
     def download(self, task: DownloadTask) -> None:
