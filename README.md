@@ -6,7 +6,7 @@
 
 ### Gestor Profesional y Universal de Descargas Multimedia para Windows
 
-[![Version](https://img.shields.io/badge/version-1.5.2-blue.svg?style=flat-square)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.2)
+[![Version](https://img.shields.io/badge/version-1.5.3-blue.svg?style=flat-square)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.3)
 [![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg?style=flat-square)](https://www.python.org/)
 [![GUI](https://img.shields.io/badge/Qt6-PySide6-41CD52.svg?style=flat-square)](https://pyside.org/)
 [![Architecture](https://img.shields.io/badge/Clean%20Architecture-Hexagonal%20%2B%20DDD-orange.svg?style=flat-square)]()
@@ -15,7 +15,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
 
 *Aplicación de escritorio nativa, moderna e independiente diseñada para el análisis, descarga acelerada, recorte de segmentos, conversión y organización de contenido multimedia desde más de 15 plataformas web y cualquier sitio público con vídeo o audio.*
-[ Descargar v1.5.2](#-descargar-para-windows) • [ Novedades v1.5.2](#-novedades-en-la-versión-151) • [ Plataformas](#-plataformas-soportadas) • [ Características](#-características-principales) • [ Calidades](#-desbloquear-todas-las-calidades-720p-1080p-4k-60-fps) • [ Seguridad](#-seguridad-y-resiliencia) • [ Desarrollo](#-desarrollo-y-pruebas)
+[ Descargar v1.5.3](#-descargar-para-windows) • [ Novedades v1.5.3](#-novedades-en-la-versión-153) • [ Plataformas](#-plataformas-soportadas) • [ Características](#-características-principales) • [ Calidades](#-desbloquear-todas-las-calidades-720p-1080p-4k-60-fps) • [ Seguridad](#-seguridad-y-resiliencia) • [ Desarrollo](#-desarrollo-y-pruebas)
 
 </div>
 
@@ -23,11 +23,11 @@
 
 ##  Descargar para Windows
 
-###  [Descargar osvaldoDownloaderPro v1.5.2 (Instalador Oficial)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.2)
+###  [Descargar osvaldoDownloaderPro v1.5.3 (Instalador Oficial)](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.3)
 
 En la sección **Assets** del lanzamiento oficial de GitHub encontrarás el instalador listo para usar:
 
-> **`osvaldoDownloaderPro-1.5.2-Setup.exe`** (~114 MB)  
+> **`osvaldoDownloaderPro-1.5.3-Setup.exe`** (~114 MB)  
 > *Incluye el ejecutable completo, nuevo icono vectorial HD, motor yt-dlp integrado, FFmpeg nativo y todas las dependencias.*
 
 ```
@@ -36,7 +36,7 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 ```
 
 ###  Instalación Rápida
-1. Descarga **`osvaldoDownloaderPro-1.5.2-Setup.exe`** desde [GitHub Releases](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.2).
+1. Descarga **`osvaldoDownloaderPro-1.5.3-Setup.exe`** desde [GitHub Releases](https://github.com/adrianpalacios782-dotcom/descarga/releases/tag/v1.5.3).
 2. Ejecuta el archivo instalador (no requiere privilegios de administrador para la instalación por usuario).
 3. Sigue el asistente de instalación y abre **osvaldoDownloaderPro** desde el Menú Inicio o acceso directo de escritorio.
 
@@ -52,6 +52,19 @@ Consulte SHA256SUMS.txt en la página de releases para verificar la integridad d
 > **Aviso de Windows SmartScreen:** Al ser una versión de código abierto sin certificado de firma digital comercial de pago, Windows puede mostrar la ventana *"Windows protegió su PC"*. Para continuar, pulse en **Más información** y luego en **Ejecutar de todas formas**.
 
 ---
+
+##  Novedades en la Versión 1.5.3
+
+- **Desbloqueo Rápido de Calidades con `cookies.txt`:** Nuevo botón **"Cargar archivo cookies.txt para desbloquear calidades (1080p, 4K)"** en la pantalla de Inicio. Seleccionas el archivo y la app re-analiza la URL al instante, sin pasar por Configuración.
+- **Aviso de Bloqueo del Navegador:** Si en Windows no se pueden leer las cookies del navegador (Chrome/Edge abiertos bloquean su base de datos de cookies), la app lo detecta, lo explica con un mensaje claro y ofrece cargar un `cookies.txt` como alternativa.
+- **Cookies en TikTok:** El adaptador de TikTok ahora envía las cookies del navegador o del archivo `cookies.txt`, además de los encabezados `Referer`/`Origin`, para reducir bloqueos y devolver todas las calidades.
+- **Tema Claro Corregido:** `QPlainTextEdit` y `QTextEdit` ya respetan la paleta del tema (antes mostraban fondo oscuro en modo claro).
+
+##  Novedades en la Versión 1.5.2
+
+- **Optimización de formatos YouTube (Anti-Bot / SABR / EJS):** integración nativa de Node.js y ejecutor JavaScript EJS (`yt-dlp-ejs>=0.8.0`) con `remote_components = ["ejs:github"]` para solventar los retos antibot y de firma `n-challenge` de YouTube a velocidad nativa.
+- **Inyección automática de FFmpeg** (`ffmpeg_location`) para combinar pistas DASH (1080p, 1440p, 4K) y audio.
+- **Guía de cookies:** nueva documentación en `docs/COOKIES.md` con el método seguro de exportación mediante *Get cookies.txt LOCALLY*.
 
 ##  Novedades en la Versión 1.5.1
 
@@ -219,7 +232,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build_release.ps1 -SkipSigning
 ```
 
 El artefacto resultante se genera en:
-- `installer/osvaldoDownloaderPro-1.5.2-Setup.exe`
+- `installer/osvaldoDownloaderPro-1.5.3-Setup.exe`
 - `dist/SHA256SUMS.txt`
 
 ---

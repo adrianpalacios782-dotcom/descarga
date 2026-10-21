@@ -2,6 +2,20 @@
 
 Todos los cambios notables realizados en este proyecto se documentan en este archivo.
 
+## [1.5.3] - 2026-10-20
+
+### Añadido
+- **Desbloqueo rápido de calidades con `cookies.txt`:** nuevo botón en `InicioView` para seleccionar un archivo `cookies.txt` y re-analizar la URL al instante, sin salir de la pantalla de inicio. Persiste el ajuste y lo aplica en caliente a los adaptadores.
+- **Aviso de bloqueo de cookies del navegador:** cuando en Windows no se pueden leer las cookies de Chrome/Edge (navegador abierto), la app lo comunica con un mensaje explícito y ofrece cargar un `cookies.txt` como alternativa.
+- **Soporte de cookies en TikTok:** `TikTokAdapter` envía `cookiefile` o `cookiesfrombrowser`, más los encabezados `Referer`/`Origin`, para reducir bloqueos y recuperar todas las calidades.
+
+### Corregido
+- **Tema claro:** `QPlainTextEdit` y `QTextEdit` respetan la paleta del tema y ya no muestran fondo oscuro en modo claro.
+
+### Calidad
+- Sincronización de versión entre `src/__init__.py`, `scripts/version_info.txt`, `installer.iss` y `README.md` (el build de releaseaba de forma abortada por desincronización).
+- Hook `pre-push` versionado en `.githooks/` que muestra el destino del push, y `LOCAL-SETUP.md` documentando la carpeta canónica local.
+
 ## [1.5.2] - 2026-10-19
 
 ### Optimizado y Mejorado

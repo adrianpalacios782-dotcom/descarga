@@ -1,0 +1,9 @@
+# Forzar finales de linea LF en los hooks de shell.
+# El repositorio tiene core.autocrlf=true, que convertiria estos scripts a
+# CRLF en el working tree y Git Bash los rechazaria con
+# "bad interpreter: /bin/sh\r".
+.githooks/* text eol=lf
+
+# Los .bat y .cmd de Windows deben mantenerse con CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
