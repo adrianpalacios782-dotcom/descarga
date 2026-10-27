@@ -2,6 +2,7 @@
 from unittest.mock import patch
 
 from src.infrastructure.adapters.platforms.browser_detector import (
+    SESSION_BROWSER_ORDER,
     detect_installed_browsers,
     get_first_available_browser,
 )
@@ -24,7 +25,12 @@ def test_get_first_available_browser_honors_preferred() -> None:
         return_value=["chrome", "firefox", "edge"],
     ):
         assert get_first_available_browser("edge") == "edge"
-        assert get_first_available_browser() == "firefox"  # según orden preferido
+        assert get_first_available_browser() == "chrome"  # según orden preferido
+
+
+def test_the_session_order_is_chrome_brave_edge_firefox() -> None:
+    """Orden pedido para vincular la sesión automáticamente."""
+    assert SESSION_BROWSER_ORDER == ["chrome", "brave", "edge", "firefox"]
 
 
 def test_get_first_available_browser_none_when_empty() -> None:

@@ -2,8 +2,12 @@
 
 Este documento explica el diagnóstico del problema "**en visita anónima YouTube
 solo devuelve 360p**" (caso real: *No Doubt - Don't Speak (Official 4K Music
-Video)*, `TR3Vdo5etCQ`) y la solución de dos capas implementada en
-`osvaldoDownloaderPro`.
+Video)*, `TR3Vdo5etCQ`) y la solución implementada en `osvaldoDownloaderPro`.
+
+> **Nota de revisión (2026-10).** La primera versión de este documento
+> afirmaba que `player_skip: ["webpage", "configs"]` mejoraba el resultado.
+> **Era falso**: ese `player_skip` era precisamente lo que recortaba el ladder
+> a 360p. La evidencia medida está en §3.2 y corregió la implementación.
 
 ---
 
@@ -11,7 +15,7 @@ Video)*, `TR3Vdo5etCQ`) y la solución de dos capas implementada en
 
 Al analizar un video musical en 4K sin sesión iniciada, el panel de calidades
 mostraba como máximo **360p**, acompañado de storyboards (`sb0`–`sb3`). El
-ladder observado en sandbox fue exactamente:
+ladder observado fue exactamente:
 
 ```
 [27, 45, 90, 180, 360]
@@ -39,8 +43,8 @@ En yt-dlp 2026.08.19, cada cliente de YouTube declara su política GVS en
 | `tv_simply`    | TVHTML5_SIMPLY       | no      | REQ   | REQ  | rec  | sí          |
 | `visionos`     | VISIONOS             | no      | **no** | **no** | **no** | no       |
 | `web`          | WEB                  | sí      | REQ   | REQ  | rec  | sí          |
-| `web_creator`  | WEB_CREATOR          | sí      | REQ   | REQ  | rec  | sí          |
-| `web_embedded` | WEB_EMBEDDED_PLAYER  | sí      | **no** | **no** | **no** | sí    |
+| **`web_creator`** | WEB_CREATOR        | sí      | REQ   | REQ  | rec  | sí          |
+| **`web_embedded`** | WEB_EMBEDDED_PLAYER | sí   | **no** | **no** | **no** | sí    |
 | `web_music`    | WEB_REMIX            | sí      | REQ   | REQ  | rec  | sí          |
 | `web_safari`   | WEB_SAFARI           | sí      | REQ   | REQ  | rec  | sí          |
 
@@ -56,7 +60,7 @@ Clientes que **no exigen PO token** para vídeo de alta resolución:
 
 ---
 
-## 3. Capa 1 — sin cookies (implementada)
+## 3. Capa 1 — sin cookies
 
 Dos mecanismos **nativos de yt-dlp**, sin parches ni proxies.
 
@@ -84,45 +88,68 @@ Dos garantías hacen que esto sea robusto:
        self.report_warning(e)
        continue
    ```
-   Un bot-check en `ios` no impide que `tv_downgraded` aporte sus formatos.
+   Un bot-check en `ios` no impide que `web_embedded` aporte sus formatos.
 2. **Los formatos de todos los clientes se fusionan**, así que el resultado es
    la unión, no el último en ganar.
 
-Configuración enviada por la app:
+Configuración enviada por la app **en la vía anónima**:
 
 ```python
 "extractor_args": {
     "youtube": {
-        "player_client": ["ios", "tv_downgraded", "tv_simply", "web"],
-        "player_skip": ["webpage", "configs"],
+        "player_client": ["web_embedded", "ios", "android", "web"],
     }
 }
 ```
 
+- `web_embedded` — **el cliente que rompe el tope de 360p**: no exige PO token
+  en ningún protocolo, así que entrega el ladder DASH completo (hasta 2160p)
+  con 4 pistas de audio separadas.
 - `ios` — no exige PO token para DASH (video-only de alta resolución).
-- `tv_downgraded` — TVHTML5; **no exige PO token en ningún protocolo**.
-- `tv_simply` — TVHTML5_SIMPLY; rinde al máximo cuando hay PO token.
+- `android` — DASH de alta resolución; exige PO token, pero no estorba si la
+  app no tiene ninguno.
 - `web` — cierre, tal como en la configuración original.
 
-### 3.2 `player_skip`: evitar la vía degradada
+Con **sesión** se usa la lista autenticada, que añade `web_creator`:
+
+```python
+"player_client": ["web_embedded", "ios", "android", "web", "web_creator"]
+```
+
+`web_creator` es el único cliente de la lista con `REQUIRE_AUTH: True`
+("*this client now requires sign-in for every video*"), de modo que solo
+existe si hay cookies; es el que aporta las calidades de cuenta (Premium,
+contenido para miembros).
+
+### 3.2 `player_skip`: por qué YA NO se salta nada
 
 `player_skip` es un `extractor_arg` **válido** en yt-dlp 2026.x (el namespace
 es `youtube`, se lee con `self._configuration_arg('player_skip')`). Valores
 reconocidos: `webpage`, `configs`, `js`, `initial_data`.
 
-| valor          | efecto en yt-dlp                                              | por qué lo usamos |
-|----------------|---------------------------------------------------------------|-------------------|
-| `webpage`      | no descarga la página inicial (`_video.py:3808`)              | es la petición que dispara el bot-check / age-gate que degrada a 360p |
-| `configs`      | no descarga el `ytcfg` de cada cliente no-web (`_video.py:3065`) | una request menos por cliente ⇒ menos riesgo de HTTP 429 |
-| `js`           | no descarga el player JS                                       | **no** se usa: los clientes con `REQUIRE_JS_PLAYER` lo necesitan |
-| `initial_data` | no extrae el initial data                                      | no aporta nada aquí |
+**Evidencia medida** (yt-dlp 2026.08.19, `TR3Vdo5etCQ`, misma IP, sin sesión):
 
-El propio yt-dlp usa `player_skip: ['webpage']` en su suite de pruebas
-(`_video.py:1518-1522`).
+| `player_client`                       | `player_skip`            | ladder                | notas |
+|---------------------------------------|--------------------------|-----------------------|-------|
+| `web_embedded`                        | *(ninguno)*              | **144…2160** (4K)     | 4 audios separados |
+| `web_embedded`                        | `["webpage"]`            | 144…2160 (4K)         | equivalente |
+| `web_embedded`                        | `["configs"]`            | **ERROR 152**         | el ladder se pierde |
+| `web_embedded`                        | `["webpage","configs"]`  | **ERROR 152**         | el ladder se pierde |
+| `web_embedded`                        | `["initial_data"]`       | 360                   | se pierde |
+| `android ios web_creator web`         | *(ninguno)*              | 360                   | se pierde |
+| `android ios web_creator web`         | `["webpage","configs"]`  | 360                   | se pierde |
 
-> **Los saltos solo se aplican en la vía anónima.** Con cookies, la página
-> inicial aporta el `player_response` y el `visitor_data` de mayor calidad:
-> saltarla solo empeoraría el resultado.
+Conclusiones:
+
+- **Saltar `configs` destruye el ladder**: `web_embedded` falla con *"Error
+  code: 152"* (YouTube rechaza el contexto de embed) y no queda ningún formato
+  por encima de 360p.
+- **Saltar `webpage`** no rompe el ladder, pero elimina el `visitor_data` que
+  necesitan los clientes autenticados (`web`, `web_creator`) para resolver su
+  PO token.
+- **`DEFAULT_PLAYER_SKIP` es ahora `[]`**: ahorrar una request por cliente no
+  compensa perder el 4K. El salto sigue siendo una capacidad configurable
+  (`player_skip` explícito) por si hay que minimizar tráfico.
 
 ### 3.3 `tv_embedded` no existe
 
@@ -135,70 +162,82 @@ el cliente de TV embebido vigente y el único de la familia que **no exige PO
 token**. (`tv_simply` pertenece a la familia TV pero **sí** lo exige para
 DASH/HTTPS, por lo que sus formatos se descartan sin token.)
 
-Resultado: la configuración literal `["ios", "tv_embedded", "web"]` se
-materializa como `["ios", "tv_downgraded", "web"]`.
-
 ---
 
-## 4. Capa 2 — con cookies (implementada)
+## 4. Capa 2 — sesión automática del navegador
 
-Cuando la IP está marcada por YouTube (HTTP 429 + *"Sign in to confirm you're
-not a bot"*), **ninguna** configuración de clientes funciona: es un bloqueo a
-nivel de IP, no de protocolo. En sandbox, desde una IP marcada, 10 de 11
-combinaciones de cliente fallaron con bot-check y la única que respondió
-(`web_safari`/`mweb`) devolvió precisamente el ladder de 360p.
+### 4.1 Sesión vinculada sin intervención del usuario
 
-Contra ese bloqueo solo cabe una cosa: **hablar con una sesión iniciada**. Por
-eso la Capa 2 usa cookies, y por eso la Capa 1 (sin cookies) nunca llegará a
-1080p/4K desde una IP marcada.
+El objetivo es que el usuario **nunca** tenga que cargar un `cookies.txt`. La
+app detecta sola el navegador con **perfil activo** y aplica
+`cookiesfrombrowser` de forma silenciosa.
 
-### 4.1 Reintento automático del análisis con la sesión del navegador
+`src/infrastructure/adapters/platforms/browser_detector.py`:
 
-El motor de descarga ya reintentaba con el navegador detectado cuando el error
-era recuperable con cookies; el **análisis no lo hacía**. Ese era el único
-hueco: un bot-check o un age-gate bloqueaban el análisis aunque el usuario
-tuviera la sesión abierta en Chrome.
+| pieza | qué hace |
+|-------|----------|
+| `SESSION_BROWSER_ORDER` | orden de prioridad: **Chrome → Brave → Edge → Firefox** |
+| `detect_browser_sessions()` | recorre los navegadores y sus perfiles, y devuelve las sesiones con almacén de cookies |
+| `detect_active_browser_session()` | elige la mejor: por orden de navegador, luego perfil activo, y a igualdad el de almacén **legible** |
 
-Ahora `BasePlatformAdapter` aplica la misma lógica en el análisis
-(`_extract_with_ytdlp`) y en el análisis de listas (`analyze_playlist`):
+Perfil activo:
 
-```
-pasada 1  estrategias de cliente con la configuración de cookies actual
-   ↓  falla con un error recuperable con cookies y NO hay cookies configuradas
-pasada 2  misma estrategia con cookiesfrombrowser=(navegador detectado)
-   ↓  el navegador está abierto y su almacén no se puede leer
-pasada 3  degradación: se reintenta sin cookies (calidades públicas + aviso)
-```
+- **Chromium** (Chrome/Brave/Edge): `Local State` → `profile.last_used`, con
+  reserva en `Default` y `Profile N`. El almacén es `<perfil>/Network/Cookies`.
+- **Firefox**: `profiles.ini` → sección marcada `Default=1`. El almacén es
+  `Profiles/<perfil>/cookies.sqlite`.
 
-Reglas que rigen el reintento:
+El perfil se le pasa a yt-dlp explícitamente (`cookiesfrombrowser=(navegador,
+perfil)`) para que no elija otro por su cuenta.
 
-| regla | por qué |
-|-------|---------|
-| solo si el error es **recuperable con cookies** | "Video unavailable" no se arregla con una sesión: no se gasta una request de red extra |
-| solo si **no hay ninguna cookie configurada** | si el usuario ya eligió su sesión (`cookiefile` o `cookies_from_browser`), no se le cambia a escondidas |
-| solo la **primera estrategia** (`COOKIE_RETRY_STRATEGIES = 1`) | es el fallback nativo multi-cliente; si el bloqueo es de IP, ningún cliente lo resuelve y repetir la escalera solo multiplica la espera |
-| la clasificación **no se reimplementa** | se reutiliza `ErrorClassifier.classify(...).is_cookie_recoverable` (dominio), el mismo que usa el motor de descarga |
-
-### 4.2 Cuando el navegador está abierto
-
-En Windows, leer el almacén de cookies de Chrome/Edge con el navegador
-**abierto** falla por DPAPI. La app no se queda sin contenido: degrada a las
-calidades públicas y lo avisa.
+Prioridad de las cookies (adapter y motor de descarga comparten la misma):
 
 ```
-No se pudieron leer las cookies de 'chrome' (el navegador está abierto en Windows).
-Se muestran calidades públicas. Cierra el navegador por completo o utiliza un
-archivo cookies.txt para desbloquear 1080p y 4K.
+cookies.txt del usuario  >  navegador configurado  >  sesión automática
 ```
 
-### 4.3 Lo que ya hacía la app
+### 4.2 El límite real de Windows: el navegador abierto
 
-- Botón rápido de `cookies.txt` en Inicio (alcance por adaptador:
-  `PlatformRegistry.set_cookie_file_scoped`).
-- Navegador de cookies global (`cookiesfrombrowser`) en Configuración →
-  Avanzado (Sesión y Cookies).
-- Con cookies, `player_skip` **no** se aplica: se conserva la página inicial,
-  que aporta el `player_response` y el `visitor_data` de mayor calidad.
+En Windows, los navegadores Chromium (Chrome, Brave, Edge) mantienen su base
+de cookies **exclusivamente bloqueada** mientras están abiertos: `CreateFile`
+devuelve `WinError 32` y yt-dlp falla con *"Could not copy Chrome cookie
+database"*. Se comprobó que ni siquiera la API de respaldo de Windows
+(`BackupRead`) permite saltarse el bloqueo.
+
+Por eso la detección **mide la legibilidad** del almacén antes de usarlo:
+
+| estado | qué hace la app |
+|--------|-----------------|
+| almacén legible (navegador cerrado) | aplica `cookiesfrombrowser` y usa la lista de clientes autenticada |
+| almacén bloqueado (navegador abierto) | sigue en vía anónima, degrada a calidades públicas y **avisa** de que se cierre el navegador |
+| sin navegador con perfil activo | sigue en vía anónima y avisa |
+
+Firefox no sufre este bloqueo (SQLite permite lectores concurrentes), así que
+su almacén suele ser legible incluso con el navegador abierto.
+
+### 4.3 El aviso en la interfaz
+
+El banner *"¿Esperabas calidades superiores (720p, 1080p, 4K)? … Cargar
+cookies.txt"* se sustituyó por un **indicador de estado de sesión**:
+
+| estado | texto en la vista | botón `cookies.txt` |
+|--------|-------------------|---------------------|
+| `LINKED` | 🔗 Sesión vinculada automáticamente desde Chrome (perfil Default). Se están usando las calidades de tu sesión. | oculto |
+| `BLOCKED` | ⚠ No se pudo vincular la sesión de Chrome (perfil Default): el navegador está abierto y Windows bloquea su almacén de cookies. Ciérralo por completo… | visible (último recurso) |
+| `UNAVAILABLE` | ℹ No se encontró ningún navegador con sesión activa: se muestran las calidades públicas… | visible (último recurso) |
+
+El estado viaja desde la infraestructura hasta la vista en el value object
+`src/domain/value_objects/session_status.py` (`SessionStatus` + `SessionState`),
+que `MediaMetadata` expone como `session_status`.
+
+### 4.4 Runtime JS
+
+Los retos de firma (n-token) de YouTube solo se resuelven con un runtime
+JavaScript. `src/infrastructure/adapters/media/js_runtime_detector.py` detecta
+`deno`, `node`, `quickjs` (binario `qjs`) y `bun`, y **valida la versión** de
+cada uno contra el mínimo que exige yt-dlp (node ≥ 22, deno ≥ 2.3, quickjs ≥
+2023.12.9, bun ≥ 1.2.11): un runtime demasiado antiguo hace fallar el reto y
+con él se pierden las calidades altas.
 
 ---
 
@@ -209,16 +248,21 @@ la política vive en **un solo sitio**
 (`src/infrastructure/adapters/platforms/youtube_client_strategy.py`) y la
 consumen tanto el adaptador de análisis como el motor de descarga:
 
-| consumidor                       | `player_client`                  | `player_skip`          |
-|----------------------------------|----------------------------------|------------------------|
-| `BasePlatformAdapter` (análisis) | `CLIENT_STRATEGIES[0]` (nativo)  | `["webpage", "configs"]` |
-| `YtDlpDownloadEngine` (descarga) | `DOWNLOAD_CLIENT_STRATEGIES[0]`  | `["webpage", "configs"]` |
-| `YtDlpDownloadEngine` (sondeo)   | `PROBE_CLIENT_STRATEGIES[0]`     | `["webpage", "configs"]` |
+| consumidor                       | `player_client` (sin sesión) | `player_client` (con sesión) | `player_skip` |
+|----------------------------------|------------------------------|------------------------------|---------------|
+| `BasePlatformAdapter` (análisis) | `ANONYMOUS_FALLBACK_CLIENTS` | `AUTHENTICATED_FALLBACK_CLIENTS` | `[]` |
+| `YtDlpDownloadEngine` (descarga) | idem                          | idem                          | `[]` |
+| `YtDlpDownloadEngine` (sondeo)   | idem                          | idem                          | `[]` |
 
 La clase base es **agnóstica de plataforma**: solo aplica `player_client` cuando
 la estrategia lo pide. La política completa (`player_skip`, PO token,
 `visitor_data`) la aplica `YouTubeAdapter`, para no colar un bloque
 `extractor_args` de YouTube en TikTok, Instagram, etc.
+
+El merge con FFmpeg ya existía: `bestvideo+bestaudio` + `merge_output_format=mp4`.
+Lo que faltaba era que el análisis entregara el ladder completo; con
+`web_embedded` sin `player_skip` se obtiene **video DASH + audio separados**
+(4 pistas de audio) y la tabla lista 720p, 1080p, 1440p y 2160p.
 
 ---
 
@@ -233,25 +277,27 @@ opts = {
     "remote_components": ["ejs:github"],
     "js_runtimes": {"node": {"path": r"C:\Program Files\nodejs\node.exe"}},
     "extractor_args": {"youtube": {
-        "player_client": ["ios", "tv_downgraded", "tv_simply", "web"],
-        "player_skip": ["webpage", "configs"],
+        "player_client": ["web_embedded", "ios", "android", "web"],
     }},
 }
 with yt_dlp.YoutubeDL(opts) as ydl:
     info = ydl.extract_info("https://www.youtube.com/watch?v=TR3Vdo5etCQ", download=False)
 
 heights = sorted({f["height"] for f in info["formats"] if f.get("height")})
-print(heights)          # el ladder real que devuelve YouTube
+print(heights)          # [144, 240, 360, 480, 720, 1080, 1440, 2160]
 ```
 
-> **Node.js es necesario.** Los clientes con `REQUIRE_JS_PLAYER` (`tv`,
-> `tv_downgraded`, `web`) necesitan el solver EJS. La app ya lo detecta
-> (`js_runtimes`: node en `shutil.which` y en las rutas de `Program Files`,
-> deno como alternativa) y descarga el solver desde
+> **Node.js es necesario.** Los clientes con `REQUIRE_JS_PLAYER`
+> (`web_embedded`, `web`, `web_creator`) necesitan el solver EJS. La app lo
+> detecta (`js_runtime_detector`) y descarga el solver desde
 > `remote_components: ["ejs:github"]`.
 
-Pruebas automatizadas del contrato: `tests/unit/infrastructure/test_youtube_native_fallback.py`
-(Capa 1) y `tests/unit/infrastructure/test_analysis_cookie_fallback.py` (Capa 2).
+Pruebas automatizadas del contrato:
+
+- `tests/unit/infrastructure/test_youtube_native_fallback.py` (política de clientes y `player_skip`).
+- `tests/unit/infrastructure/test_analysis_cookie_fallback.py` (reintento con sesión).
+- `tests/unit/infrastructure/test_browser_session.py` (detección de sesión).
+- `tests/unit/infrastructure/test_session_status_ui.py` (indicador de la vista).
 
 ---
 
@@ -262,8 +308,11 @@ Pruebas automatizadas del contrato: `tests/unit/infrastructure/test_youtube_nati
 | Política compartida | `src/infrastructure/adapters/platforms/youtube_client_strategy.py` |
 | Aplicación en análisis | `src/infrastructure/adapters/platforms/youtube_adapter.py::_build_ydl_opts` |
 | Escalera de estrategias | `src/infrastructure/adapters/platforms/base_platform_adapter.py::CLIENT_STRATEGIES` |
-| Capa 2 (cookies automáticas) | `src/infrastructure/adapters/platforms/base_platform_adapter.py::_extract_with_ytdlp` / `_run_strategies` |
+| Sesión automática | `src/infrastructure/adapters/platforms/base_platform_adapter.py::_resolve_cookie_source` / `_client_strategies` |
+| Detección de sesión | `src/infrastructure/adapters/platforms/browser_detector.py::detect_active_browser_session` |
+| Runtime JS | `src/infrastructure/adapters/media/js_runtime_detector.py::detect_js_runtimes` |
+| Estado de sesión (dominio) | `src/domain/value_objects/session_status.py` |
+| Indicador en la vista | `src/presentation/views/inicio_view.py::_session_hint_text` |
 | Clasificación de errores | `src/domain/services/error_classifier.py::ErrorClassifier` |
-| Detección de navegador | `src/infrastructure/adapters/platforms/browser_detector.py::get_first_available_browser` |
 | Aplicación en descarga | `src/infrastructure/adapters/download/ytdlp_download_engine.py::_apply_clients` |
-| Contrato (pruebas) | `tests/unit/infrastructure/test_youtube_native_fallback.py` · `tests/unit/infrastructure/test_analysis_cookie_fallback.py` |
+| Contrato (pruebas) | `tests/unit/infrastructure/test_youtube_native_fallback.py` · `test_analysis_cookie_fallback.py` · `test_browser_session.py` · `test_session_status_ui.py` |

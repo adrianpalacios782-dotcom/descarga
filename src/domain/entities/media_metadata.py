@@ -6,6 +6,7 @@ from src.domain.entities.format_option import (
 )
 from src.domain.entities.subtitle import SubtitleTrack
 from src.domain.value_objects.media_id import MediaId
+from src.domain.value_objects.session_status import SessionStatus
 from src.domain.value_objects.url import Url
 
 
@@ -27,6 +28,7 @@ class MediaMetadata:
     formats: List[FormatOption] = field(default_factory=list)
     subtitles: List[SubtitleTrack] = field(default_factory=list)
     warning_message: Optional[str] = None
+    session_status: Optional[SessionStatus] = None
 
     def __post_init__(self) -> None:
         if not self.title or not self.title.strip():

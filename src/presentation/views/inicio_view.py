@@ -42,6 +42,7 @@ from src.domain.services.url_sanitizer import extract_clean_url, sanitize_single
 
 
 
+from src.domain.value_objects.session_status import SessionState, SessionStatus
 from src.domain.value_objects.time_range import TimeRange
 from src.domain.value_objects.url import Url
 from src.presentation.components.animations import fade_in
@@ -726,9 +727,46 @@ class InicioView(QWidget):
         self._audio_rows.clear()
         self.quality_container.update()
 
+    #: Nombres legibles de los navegadores para el indicador de sesion.
+    _BROWSER_DISPLAY_NAMES = {
+        "chrome": "Chrome",
+        "brave": "Brave",
+        "edge": "Edge",
+        "firefox": "Firefox",
+    }
+
+    @classmethod
+    def _session_hint_text(cls, status: SessionStatus) -> str:
+        """Texto del indicador automatico de estado de sesion.
+
+        Sustituye al banner que pedia un cookies.txt manual: el usuario ve si
+        la app esta usando su sesion del navegador, y por que no lo hace.
+        """
+        name = cls._BROWSER_DISPLAY_NAMES.get(status.browser, status.browser)
+        profile = f" (perfil {status.profile})" if status.profile else ""
+        if status.linked:
+            return (
+                f"🔗 Sesión vinculada automáticamente desde {name}{profile}. "
+                "Se están usando las calidades de tu sesión."
+            )
+        if status.state == SessionState.BLOCKED:
+            return (
+                f"⚠ No se pudo vincular la sesión de {name}{profile}: el navegador está abierto y Windows "
+                "bloquea su almacén de cookies. Ciérralo por completo para que la app use tu sesión "
+                "automáticamente."
+            )
+        if status.browser:
+            return (
+                f"ℹ No se pudo tomar la sesión de {name}{profile}: se muestran las calidades públicas. "
+                "Abre el navegador al menos una vez para que la app pueda vincular tu sesión."
+            )
+        return (
+            "ℹ No se encontró ningún navegador con sesión activa: se muestran las calidades públicas. "
+            "Abre Chrome, Brave, Edge o Firefox al menos una vez para que la app pueda vincular tu sesión."
+        )
+
     def _rebuild_quality_options(self, metadata: MediaMetadata) -> None:
         self._clear_format_rows()
-
         rows: List[FormatTableRow] = []
         if self._format_tab == TAB_AUDIO:
             rows = [FormatTableRow(af=af) for af in metadata.audio_formats]
@@ -769,9 +807,19 @@ class InicioView(QWidget):
                 first_row.radio.setChecked(True)
 
             warning_text = getattr(metadata, "warning_message", None)
+            session_status = getattr(metadata, "session_status", None)
             if warning_text and self._format_tab != TAB_AUDIO:
                 self.lbl_format_hint.setText(f"💡 {warning_text}")
                 self.btn_load_cookies.show()
+                self.lbl_format_hint.show()
+                self.hint_container.show()
+            elif session_status is not None and self._format_tab != TAB_AUDIO:
+                # Indicador automatico de estado de sesion: sustituye al banner
+                # "¿Esperabas calidades superiores? Cargar cookies.txt".
+                self.lbl_format_hint.setText(self._session_hint_text(session_status))
+                # El boton de cookies.txt queda como ULTIMO RECURSO: solo se
+                # ofrece cuando la sesion automatica no pudo aplicarse.
+                self.btn_load_cookies.setVisible(not session_status.linked)
                 self.lbl_format_hint.show()
                 self.hint_container.show()
             elif (

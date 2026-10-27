@@ -13,16 +13,31 @@ mas storyboards. yt-dlp resuelve esto con su mecanismo de fallback nativo:
 ``player_client`` acepta una LISTA de clientes que se prueban en orden dentro
 de una MISMA extraccion y cuyos formatos se fusionan.
 
-``player_skip`` evita las peticiones que devuelven la via degradada:
+Evidencia medida (yt-dlp 2026.08.19, video "TR3Vdo5etCQ", IP sin sesion)
+----------------------------------------------------------------------
+=============================== ============================ ==================
+configuracion                   ladder de alturas           resultado
+=============================== ============================ ==================
+``web_embedded``                144 240 360 480 720 1080    4K + 4 audios
+                                1440 2160                   separados
+``web_embedded`` + skip configs ERROR 152                  se pierde todo
+``web_embedded`` + skip webpage 144 ... 2160                equivalente
+``android ios web_creator web`` 360                         solo 360p
+=============================== ============================ ==================
 
-- ``webpage``: no descarga la pagina inicial (la que triggers el bot-check /
-  age-gate que produce la degradacion a 360p).
-- ``configs``: no descarga el ``ytcfg`` de cada cliente no-web. Es una request
-  menos por cliente de fallback => menos riesgo de HTTP 429.
+De ahi se derivan las dos decisiones de este modulo:
 
-Los saltos SOLO se aplican en la via anonima: con cookies la pagina inicial si
-aporta el ``player_response`` y el ``visitor_data`` de mayor calidad, asi que
-saltarla solo empeoraria el resultado.
+1. ``web_embedded`` (WEB_EMBEDDED_PLAYER) es el cliente que rompe el tope de
+   360p: NO exige PO token en NINGUN protocolo, a diferencia de ``web``,
+   ``android`` y ``web_creator``. Por eso va el PRIMERO en la lista.
+2. NO se salta nada del extractor. Saltar ``configs`` destruye el ladder
+   (error 152: YouTube rechaza el contexto de embed) y saltar ``webpage``
+   elimina el ``visitor_data`` que necesitan los clientes autenticados. El
+   salto se mantiene como capacidad configurable, pero por defecto es VACIO:
+   el ahorro de una request no compensa perder 4K.
+
+La lista de clientes cambia segun haya sesion o no: ``web_creator`` exige
+autenticacion (``REQUIRE_AUTH``), asi que solo es utilizable con cookies.
 """
 
 import logging
@@ -59,21 +74,57 @@ LEGACY_CLIENT_ALIASES: Dict[str, str] = {
 #:
 #: La seleccion se basa en la politica GVS de cada cliente (yt-dlp 2026.08.19):
 #:
-#: ============ ========== ======= ====== =====
-#: cliente       cookies     HTTPS   DASH   HLS
-#: ============ ========== ======= ====== =====
-#: ios           no          REQ     no     REQ
-#: tv_downgraded si          no      no     no
-#: tv_simply     no          REQ     REQ     rec
-#: web           si          REQ     REQ     rec
-#: ============ ========== ======= ====== =====
+#: ============ ========== ======= ====== ===== ==============
+#: cliente       cookies     HTTPS   DASH   HLS   requiere
+#:                                            sesion
+#: ============ ========== ======= ====== ===== ==============
+#: web_embedded  si          no      no     no    no
+#: ios           no          REQ     no     REQ   no
+#: android       no          REQ     REQ    REQ   no
+#: web           si          REQ     REQ    rec   no
+#: web_creator   si          REQ     REQ    rec   SI
+#: ============ ========== ======= ====== ===== ==============
 #:
+#: ``web_embedded`` va el primero porque es el unico que entrega el ladder
+#: completo (hasta 2160p) SIN PO token y SIN sesion: es el cliente que rompe
+#: el tope de 360p en visita anonima.
 #: ``ios`` aporta DASH (video-only de alta resolucion) sin PO token.
-#: ``tv_downgraded`` es el cliente de TV embebido: no exige PO token en NINGUN
-#: protocolo, asi que entrega el ladder DASH completo en visita anonima.
-#: ``tv_simply`` rinde al maximo cuando el usuario aporta un PO token.
-#: ``web`` queda como cierre: es el cliente mas restringido en anonimo.
-NATIVE_FALLBACK_CLIENTS: List[str] = ["ios", "tv_downgraded", "tv_simply", "web"]
+#: ``android`` y ``web`` cierran la lista: exigen PO token, pero si el usuario
+#: aporta uno o tiene cuenta Premium sus formatos no se descartan.
+ANONYMOUS_FALLBACK_CLIENTS: List[str] = ["web_embedded", "ios", "android", "web"]
+
+#: Lista de clientes cuando hay SESION (cookies del navegador o cookies.txt).
+#:
+#: Anade ``web_creator`` (WEB_CREATOR), que en yt-dlp 2026.x tiene
+#: ``REQUIRE_AUTH: True`` ("este cliente ahora exige iniciar sesion para cada
+#: video"): es el unico cliente de la lista que solo existe si hay sesion, y el
+#: que aporta las calidades de cuenta (Premium, contenido para miembros).
+AUTHENTICATED_FALLBACK_CLIENTS: List[str] = [
+    "web_embedded",
+    "ios",
+    "android",
+    "web",
+    "web_creator",
+]
+
+#: Alias historico: la lista de clientes del fallback nativo en via anonima.
+NATIVE_FALLBACK_CLIENTS: List[str] = ANONYMOUS_FALLBACK_CLIENTS
+
+
+def get_fallback_clients(authenticated: bool) -> List[str]:
+    """Devuelve la lista de player_client segun haya sesion o no.
+
+    Args:
+        authenticated: True si la extraccion lleva cookies (sesion del navegador
+            o cookies.txt), False en la via anonima.
+
+    Returns:
+        Una copia de la lista correspondiente, para que el llamante pueda
+        modificarla sin alterar la politica global.
+    """
+    if authenticated:
+        return list(AUTHENTICATED_FALLBACK_CLIENTS)
+    return list(ANONYMOUS_FALLBACK_CLIENTS)
 
 #: Saltos del extractor de YouTube aceptados por yt-dlp 2026.x:
 #:
@@ -86,8 +137,21 @@ NATIVE_FALLBACK_CLIENTS: List[str] = ["ios", "tv_downgraded", "tv_simply", "web"
 #: contra este conjunto para no propagar errores tipograficos.
 VALID_PLAYER_SKIP: Set[str] = {"webpage", "configs", "js", "initial_data"}
 
-#: Saltos aplicados por defecto en la via anonima.
-DEFAULT_PLAYER_SKIP: List[str] = ["webpage", "configs"]
+#: Saltos aplicados por defecto: NINGUNO.
+#:
+#: Medido (yt-dlp 2026.08.19, video "TR3Vdo5etCQ"):
+#:
+#: - con ``["configs"]`` el cliente ``web_embedded`` falla con "Error code: 152"
+#:   (YouTube rechaza el contexto de embed) y el ladder cae a ``[360]``.
+#: - con ``["webpage"]`` el ladder se mantiene, pero se pierde el
+#:   ``visitor_data`` que necesitan los clientes autenticados para resolver el
+#:   PO token.
+#:
+#: Ahorrar una request por cliente no compensa perder el ladder completo, asi
+#: que el salto queda disponible pero desactivado. El modulo mantiene la
+#: capacidad de activarlo (``player_skip`` explicito) por si el usuario
+#: necesita minimizar el trafico.
+DEFAULT_PLAYER_SKIP: List[str] = []
 
 # Cache perezoso de los player_client soportados por la version de yt-dlp
 # instalada. Permite descartar nombres obsoletos ANTES de gastar una request
@@ -175,17 +239,18 @@ def sanitize_player_skip(player_skip: Optional[Sequence[str]]) -> List[str]:
 def build_youtube_extractor_args(
     clients: Optional[Sequence[str]] = None,
     player_skip: Optional[Sequence[str]] = None,
-    anonymous: bool = True,
 ) -> Dict[str, Any]:
     """Construye el bloque ``extractor_args['youtube']`` que consume yt-dlp.
 
     Args:
         clients: lista de player_client a usar (fallback nativo). Si es None o
             queda vacia tras el filtrado, yt-dlp usa sus clientes por defecto.
-        player_skip: saltos del extractor. ``None`` usa ``DEFAULT_PLAYER_SKIP``.
-        anonymous: True en la via sin cookies. Los saltos del extractor solo se
-            aplican en esa via: con cookies la pagina inicial aporta el
-            player_response y el visitor_data de mayor calidad.
+        player_skip: saltos del extractor. ``None`` usa ``DEFAULT_PLAYER_SKIP``
+            (vacio: no se salta nada, ver la nota de evidencia del modulo).
+
+    La politica ya NO distingue la via anonima de la autenticada: con la
+    evidencia medida, saltarse la pagina inicial o el ``ytcfg`` degrada el
+    ladder en ambos casos.
     """
     args: Dict[str, Any] = {}
 
@@ -193,11 +258,10 @@ def build_youtube_extractor_args(
     if effective:
         args["player_client"] = effective
 
-    if anonymous:
-        skip = sanitize_player_skip(
-            DEFAULT_PLAYER_SKIP if player_skip is None else player_skip
-        )
-        if skip:
-            args["player_skip"] = skip
+    skip = sanitize_player_skip(
+        DEFAULT_PLAYER_SKIP if player_skip is None else player_skip
+    )
+    if skip:
+        args["player_skip"] = skip
 
     return args

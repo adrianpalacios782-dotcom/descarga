@@ -129,19 +129,19 @@ def _install(monkeypatch, behaviors: Dict[str, str]) -> List[str]:
 
 class TestAdapterDegenerateResponses:
 
-    def test_caso_c_storyboard_default_falls_back_to_tv_full_formats(self, monkeypatch) -> None:
+    def test_caso_c_storyboard_default_falls_back_to_embed_full_formats(self, monkeypatch) -> None:
         """CASO C (PARIS): el fallback nativo y los defaults responden solo
-        storyboards; tv_downgraded entrega DASH completo.
+        storyboards; web_embedded entrega DASH completo.
         El análisis DEBE terminar con calidades reales, no con tarjetas vacías."""
         calls = _install(monkeypatch, {
             NATIVE_KEY: "storyboards",
             "default": "storyboards",
-            "tv_downgraded": "full",
+            "web_embedded": "full",
         })
         adapter = YouTubeAdapter()
         metadata = adapter.analyze(Url("https://www.youtube.com/watch?v=eUX086mraqc"))
 
-        assert calls == [NATIVE_KEY, "default", "tv_downgraded"], "Debe intentar la siguiente estrategia al detectar storyboards"
+        assert calls == [NATIVE_KEY, "default", "web_embedded"], "Debe intentar la siguiente estrategia al detectar storyboards"
         heights = [v.height for v in metadata.video_quality_options]
         assert heights, "Deben existir opciones de calidad"
         assert 2160 in heights and 1440 in heights and 1080 in heights
@@ -153,8 +153,8 @@ class TestAdapterDegenerateResponses:
         calls = _install(monkeypatch, {
             NATIVE_KEY: "storyboards",
             "default": "storyboards",
-            "tv_downgraded": "storyboards",
-            "tv_simply": "storyboards",
+            "web_embedded": "storyboards",
+            "ios": "storyboards",
             "android": "storyboards",
             "mweb": "storyboards",
         })
@@ -195,13 +195,13 @@ class TestAdapterDegenerateResponses:
         calls = _install(monkeypatch, {
             NATIVE_KEY: "error",
             "default": "error",
-            "tv_downgraded": "error",
-            "tv_simply": "error",
+            "web_embedded": "error",
+            "ios": "error",
             "android": "capped",
         })
         adapter = YouTubeAdapter()
         metadata = adapter.analyze(Url("https://www.youtube.com/watch?v=F3tKutGo1Fo"))
-        assert calls == [NATIVE_KEY, "default", "tv_downgraded", "tv_simply", "android"]
+        assert calls == [NATIVE_KEY, "default", "web_embedded", "ios", "android"]
         labels = [o.label for o in metadata.video_quality_options]
         assert labels == ["360p"], "Solo hay una altura real: sin síntetica 'Mejor calidad'"
         assert metadata.video_quality_options[0].video_format_id == "18"
@@ -213,14 +213,14 @@ class TestAdapterDegenerateResponses:
         calls = _install(monkeypatch, {
             NATIVE_KEY: "audio",
             "default": "audio",
-            "tv_downgraded": "audio",
-            "tv_simply": "audio",
+            "web_embedded": "audio",
+            "ios": "audio",
             "android": "audio",
             "mweb": "audio",
         })
         adapter = YouTubeAdapter()
         metadata = adapter.analyze(Url("https://www.youtube.com/watch?v=eUX086mraqc"))
-        assert calls == [NATIVE_KEY, "default", "tv_downgraded", "tv_simply", "android", "mweb"], "Debe agotar estrategias buscando video"
+        assert calls == [NATIVE_KEY, "default", "web_embedded", "ios", "android", "mweb"], "Debe agotar estrategias buscando video"
         assert metadata.audio_formats, "Debe conservar las pistas de audio"
         assert not metadata.video_quality_options
 
@@ -228,8 +228,8 @@ class TestAdapterDegenerateResponses:
         _install(monkeypatch, {
             NATIVE_KEY: "storyboards",
             "default": "storyboards",
-            "tv_downgraded": "storyboards",
-            "tv_simply": "storyboards",
+            "web_embedded": "storyboards",
+            "ios": "storyboards",
             "android": "storyboards",
             "mweb": "storyboards",
         })

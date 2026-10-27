@@ -1,7 +1,6 @@
 import logging
 import os
 import re
-import shutil
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
@@ -31,13 +30,19 @@ from src.domain.services.error_classifier import ErrorClassifier
 from src.domain.services.format_normalizer import FormatNormalizer
 from src.domain.services.quality_validator import QualityValidator, QualityMatchStatus
 from src.infrastructure.adapters.media.ffmpeg_adapter import FFmpegProcessAdapter, CancelledOperationError
+from src.infrastructure.adapters.media.js_runtime_detector import detect_js_runtimes
 # Re-exportado como parte de la API pública del motor (lo usan las pruebas de subtítulos).
 from src.infrastructure.adapters.media.subtitle_extractor import extract_subtitle_tracks  # noqa: F401
-from src.infrastructure.adapters.platforms.browser_detector import get_first_available_browser
+from src.infrastructure.adapters.platforms.browser_detector import (
+    BrowserSession,
+    detect_active_browser_session,
+    get_first_available_browser,
+)
 from src.infrastructure.adapters.platforms.youtube_client_strategy import (
     NATIVE_FALLBACK_CLIENTS,
     YOUTUBE_NAMESPACE,
     build_youtube_extractor_args,
+    get_fallback_clients,
 )
 from src.infrastructure.event_bus.in_process_event_bus import InProcessEventBus
 
@@ -121,6 +126,48 @@ class YtDlpDownloadEngine(IDownloadEngine):
         self._pause_tokens: Dict[str, threading.Event] = {}
         self._threads: Dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
+        self._session: Optional[BrowserSession] = None
+        self._session_resolved: bool = False
+
+    def _automatic_session(self) -> Optional[BrowserSession]:
+        """Sesion de navegador disponible para vincular automaticamente.
+
+        La deteccion se cachea: leer el arbol de perfiles del navegador en cada
+        descarga es trabajo de disco innecesario.
+        """
+        if self._session_resolved:
+            return self._session
+        self._session_resolved = True
+        try:
+            self._session = detect_active_browser_session()
+        except Exception:  # noqa: BLE001 - deteccion opcional: nunca debe romper
+            logger.debug("No se pudo detectar la sesion del navegador.", exc_info=True)
+            self._session = None
+        return self._session
+
+    def _apply_js_runtimes(self, opts: Dict[str, Any]) -> None:
+        """Habilita los runtimes JS detectados (retos de firma de YouTube)."""
+        runtimes = detect_js_runtimes()
+        if runtimes:
+            opts["js_runtimes"] = runtimes
+
+    def _apply_cookie_source(self, opts: Dict[str, Any]) -> None:
+        """Define el origen de las cookies de la extraccion.
+
+        Prioridad: archivo cookies.txt > navegador configurado > sesion
+        automatica del navegador detectado (perfil activo y almacen legible).
+        """
+        if self.cookiefile and os.path.isfile(self.cookiefile):
+            opts["cookiefile"] = self.cookiefile
+            return
+        if self.cookies_from_browser:
+            opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
+            return
+        session = self._automatic_session()
+        if session is not None and session.usable:
+            opts["cookiesfrombrowser"] = (
+                (session.browser, session.profile) if session.profile else (session.browser,)
+            )
 
     def set_concurrent_fragments(self, fragments: int) -> None:
         """Actualiza el número de fragmentos concurrentes para descargas DASH/HLS (1 a 8)."""
@@ -152,20 +199,20 @@ class YtDlpDownloadEngine(IDownloadEngine):
     # hace el análisis (base_platform_adapter.CLIENT_STRATEGIES).
     #
     # La primera estrategia es el fallback NATIVO de yt-dlp: una sola extracción
-    # en la que yt-dlp prueba ios -> tv_downgraded -> tv_simply -> web y fusiona
+    # en la que yt-dlp prueba web_embedded -> ios -> android -> web y fusiona
     # sus formatos. Es la misma política que usa el análisis, de modo que la
     # descarga puede bajar exactamente las calidades que el análisis prometió.
     DOWNLOAD_CLIENT_STRATEGIES: List[Optional[List[str]]] = [
         NATIVE_FALLBACK_CLIENTS,  # fallback nativo: yt-dlp fusiona los formatos
         None,                     # defaults de yt-dlp
-        ["tv_downgraded"],         # cliente de TV embebido aislado (sin PO token)
-        ["android"],               # cliente Android
+        ["web_embedded"],         # cliente de embed (no exige PO token)
+        ["android"],              # cliente Android
     ]
 
     PROBE_CLIENT_STRATEGIES: List[Optional[List[str]]] = [
         NATIVE_FALLBACK_CLIENTS,
         None,
-        ["tv_downgraded"],
+        ["web_embedded"],
         ["android"],
         ["mweb"],
     ]
@@ -176,13 +223,16 @@ class YtDlpDownloadEngine(IDownloadEngine):
 
         Reutiliza exactamente la misma politica que el análisis
         (``youtube_client_strategy.build_youtube_extractor_args``): mismo
-        ``player_client`` y mismo ``player_skip``. En la vía anónima se saltan
-        la página inicial y el ytcfg por cliente, que son las peticiones que
-        devuelven la respuesta degradada a 360p; con cookies no se saltan,
-        porque la página aporta el player_response de mayor calidad.
+        ``player_client`` y mismo ``player_skip``.
+
+        Si las opciones llevan cookies, se usa la lista AUTENTICADA de clientes
+        (incluye ``web_creator``, que exige iniciar sesion) en lugar de la
+        anonima: es la lista con la que el analisis prometio las calidades.
         """
-        anonymous = not ("cookiefile" in opts or "cookiesfrombrowser" in opts)
-        youtube_args = build_youtube_extractor_args(clients, anonymous=anonymous)
+        if clients and clients == list(NATIVE_FALLBACK_CLIENTS):
+            if opts.get("cookiefile") or opts.get("cookiesfrombrowser"):
+                clients = get_fallback_clients(authenticated=True)
+        youtube_args = build_youtube_extractor_args(clients)
         if youtube_args:
             # Se construye un dict nuevo:(opts) es una copia superficial y
             # mutar el extractor_args compartido contaminaria el resto.
@@ -741,25 +791,8 @@ class YtDlpDownloadEngine(IDownloadEngine):
             "remote_components": ["ejs:github"],
             "ffmpeg_location": self.ffmpeg_adapter.get_ffmpeg_executable(),
         }
-        node_path = shutil.which("node")
-        if not node_path:
-            for candidate in [
-                r"C:\Program Files\nodejs\node.exe",
-                r"C:\Program Files (x86)\nodejs\node.exe",
-                os.path.expandvars(r"%LOCALAPPDATA%\Programs\node\node.exe"),
-            ]:
-                if os.path.exists(candidate):
-                    node_path = candidate
-                    break
-        if node_path:
-            base_opts["js_runtimes"] = {"node": {"path": node_path}}
-        elif shutil.which("deno"):
-            base_opts["js_runtimes"] = {"deno": {}}
-
-        if self.cookiefile and os.path.isfile(self.cookiefile):
-            base_opts["cookiefile"] = self.cookiefile
-        elif self.cookies_from_browser:
-            base_opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
+        self._apply_js_runtimes(base_opts)
+        self._apply_cookie_source(base_opts)
         first_error: Optional[Exception] = None
         for clients in self.PROBE_CLIENT_STRATEGIES:
             ydl = self._ydl_factory(self._apply_clients(dict(base_opts), clients))
@@ -862,28 +895,12 @@ class YtDlpDownloadEngine(IDownloadEngine):
             "postprocessor_hooks": [self._make_postprocessor_hook(task_id, cancel_token)],
             "remote_components": ["ejs:github"],
         }
-        node_path = shutil.which("node")
-        if not node_path:
-            for candidate in [
-                r"C:\Program Files\nodejs\node.exe",
-                r"C:\Program Files (x86)\nodejs\node.exe",
-                os.path.expandvars(r"%LOCALAPPDATA%\Programs\node\node.exe"),
-            ]:
-                if os.path.exists(candidate):
-                    node_path = candidate
-                    break
-        if node_path:
-            opts["js_runtimes"] = {"node": {"path": node_path}}
-        elif shutil.which("deno"):
-            opts["js_runtimes"] = {"deno": {}}
+        self._apply_js_runtimes(opts)
 
         if self.rate_limit_bytes and self.rate_limit_bytes > 0:
             opts["ratelimit"] = self.rate_limit_bytes
 
-        if self.cookiefile and os.path.isfile(self.cookiefile):
-            opts["cookiefile"] = self.cookiefile
-        elif self.cookies_from_browser:
-            opts["cookiesfrombrowser"] = (self.cookies_from_browser,)
+        self._apply_cookie_source(opts)
         return opts
 
     def _make_postprocessor_hook(

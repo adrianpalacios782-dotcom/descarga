@@ -237,6 +237,8 @@ class TestBrowserOpenDegradation:
         assert any(c["anonymous"] for c in calls), "Se reintentó sin cookies"
 
     def test_the_warning_explains_how_to_unlock_the_high_qualities(self, monkeypatch) -> None:
+        """El aviso debe explicar que la sesión se vincula sola: cerrar el
+        navegador es lo que desbloquea las calidades altas."""
         _install(monkeypatch, "cookie_read_error")
 
         metadata = YouTubeAdapter(cookies_from_browser="firefox").analyze(
@@ -244,8 +246,9 @@ class TestBrowserOpenDegradation:
         )
 
         warning = (metadata.warning_message or "").lower()
-        assert "cookies.txt" in warning
-        assert "1080p" in warning or "4k" in warning
+        assert "firefox" in warning
+        assert "navegador" in warning
+        assert "sesión" in warning or "sesion" in warning
 
 
 class TestFinalErrorMessage:

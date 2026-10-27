@@ -1,7 +1,6 @@
 import logging
 import os
-import shutil
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import yt_dlp
 import re
 
@@ -13,12 +12,19 @@ from src.domain.services.format_normalizer import FormatNormalizer
 from src.domain.exceptions.domain_exceptions import MediaAnalysisError
 from src.domain.ports.platform_adapter import IPlatformAdapter
 from src.domain.value_objects.media_id import MediaId
+from src.domain.value_objects.session_status import SessionState, SessionStatus
 from src.domain.value_objects.url import Url
+from src.infrastructure.adapters.media.js_runtime_detector import detect_js_runtimes
 from src.infrastructure.adapters.media.subtitle_extractor import extract_subtitle_tracks
-from src.infrastructure.adapters.platforms.browser_detector import get_first_available_browser
+from src.infrastructure.adapters.platforms.browser_detector import (
+    BrowserSession,
+    detect_active_browser_session,
+    get_first_available_browser,
+)
 from src.infrastructure.adapters.platforms.youtube_client_strategy import (
     NATIVE_FALLBACK_CLIENTS,
     YOUTUBE_NAMESPACE,
+    get_fallback_clients,
     get_supported_player_clients,
     resolve_player_clients,
 )
@@ -41,20 +47,18 @@ class BasePlatformAdapter(IPlatformAdapter):
     en una sola extracción yt-dlp prueba cada cliente en orden y fusiona sus
     formatos. Es preferible a N extracciones secuenciales (una por estrategia)
     porque cada extracción secuencial es una request extra a YouTube.
-    En la vía anónima se añaden los saltos del extractor (``player_skip``) que
-    evitan la respuesta degradada a 360p.
     Soporta cookies de navegador y archivos cookies.txt personalizados para contenido con restricción de edad.
     """
 
-    # Estrategia principal: fallback nativo de yt-dlp (ios -> tv_downgraded ->
-    # tv_simply -> web) en UNA extracción. Las siguientes son reintentos con un
+    # Estrategia principal: fallback nativo de yt-dlp (web_embedded -> ios ->
+    # android -> web) en UNA extracción. Las siguientes son reintentos con un
     # cliente aislado, por si la extracción multi-cliente falla entera
     # (p. ej. IP bloqueada).
     CLIENT_STRATEGIES: List[Optional[List[str]]] = [
         NATIVE_FALLBACK_CLIENTS,  # fallback nativo: yt-dlp fusiona los formatos
         None,                     # defaults de yt-dlp (visionos + web)
-        ["tv_downgraded"],        # cliente de TV embebido aislado (sin PO token)
-        ["tv_simply"],            # cliente TVHTML5_SIMPLY (exige PO token)
+        ["web_embedded"],         # cliente de embed (no exige PO token)
+        ["ios"],                  # cliente iOS: DASH sin PO token
         ["android"],              # cliente Android: contenido real aunque limitado (sin PO token)
         ["mweb"],                 # cliente web movil
     ]
@@ -65,6 +69,11 @@ class BasePlatformAdapter(IPlatformAdapter):
     #: ningún cliente lo resuelve y repetir la escalera solo multiplica la
     #: espera del usuario.
     COOKIE_RETRY_STRATEGIES: int = 1
+
+    #: Si es True, el adaptador vincula automaticamente la sesion del navegador
+    #: detectado cuando el usuario no ha configurado cookies. Solo YouTube lo
+    #: activa: la sesion automatica es la via para superar el tope de 360p.
+    AUTOMATIC_SESSION_ENABLED: bool = False
 
     def __init__(
         self,
@@ -81,6 +90,9 @@ class BasePlatformAdapter(IPlatformAdapter):
         )
         self.po_token: Optional[str] = po_token.strip() if po_token and po_token.strip() else None
         self.visitor_data: Optional[str] = visitor_data.strip() if visitor_data and visitor_data.strip() else None
+        self._session: Optional[BrowserSession] = None
+        self._session_resolved: bool = False
+        self._session_linked: bool = False
 
     def detect(self, url: Url) -> bool:
         """Determina si este adaptador puede procesar la URL (sobrescrito por adaptadores específicos)."""
@@ -106,6 +118,92 @@ class BasePlatformAdapter(IPlatformAdapter):
         Ver ``youtube_client_strategy.resolve_player_clients``.
         """
         return resolve_player_clients(player_clients)
+
+    @staticmethod
+    def _detect_js_runtimes() -> Dict[str, Dict[str, Any]]:
+        """Detecta los runtimes JavaScript disponibles para yt-dlp.
+
+        YouTube usa retos de firma (n-token) que yt-dlp solo puede resolver si
+        hay un runtime JS. Sin el, los clientes que exigen PO token descartan
+        sus formatos y la extraccion se queda en 360p.
+        """
+        return detect_js_runtimes()
+
+    def _resolve_session(self) -> Optional[BrowserSession]:
+        """Detecta (una sola vez) la sesion de navegador disponible.
+
+        La deteccion se cachea durante toda la vida del adaptador: leer el
+        arbol de perfiles del navegador en cada analisis es trabajo de disco
+        innecesario, y el usuario no va a cambiar de navegador entre analyses.
+        """
+        if self._session_resolved:
+            return self._session
+        self._session_resolved = True
+        try:
+            self._session = detect_active_browser_session()
+        except Exception:  # noqa: BLE001 - deteccion opcional: nunca debe romper
+            logger.debug("No se pudo detectar la sesion del navegador.", exc_info=True)
+            self._session = None
+        return self._session
+
+    def _resolve_cookie_source(
+        self,
+        disable_browser_cookies: bool = False,
+        browser_override: Optional[str] = None,
+    ) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[BrowserSession]]:
+        """Resuelve de donde salen las cookies de la extraccion.
+
+        Returns:
+            Tupla ``(cookiefile, browser, profile, session)`` donde ``browser``
+            y ``profile`` son los que se pasan a ``cookiesfrombrowser`` y
+            ``session`` es la sesion detectada (puede ser None).
+        """
+        if disable_browser_cookies:
+            return None, None, None, None
+        if self.cookiefile and os.path.isfile(self.cookiefile):
+            return self.cookiefile, None, None, None
+        if browser_override:
+            return None, browser_override, None, None
+        if self.cookies_from_browser:
+            return None, self.cookies_from_browser, None, None
+
+        session = self._resolve_session()
+        if not self.AUTOMATIC_SESSION_ENABLED or session is None:
+            return None, None, None, session
+        if not session.usable:
+            logger.info(
+                "La sesion de '%s' (perfil '%s') no se puede leer: el navegador esta abierto "
+                "y Windows bloquea su almacen de cookies.",
+                session.browser,
+                session.profile or "?",
+            )
+            return None, None, None, session
+
+        logger.info(
+            "Vinculando la sesion automaticamente desde '%s' (perfil '%s').",
+            session.browser,
+            session.profile or "?",
+        )
+        return None, session.browser, session.profile, session
+
+    def _client_strategies(
+        self,
+        disable_browser_cookies: bool = False,
+        browser_override: Optional[str] = None,
+    ) -> List[Optional[List[str]]]:
+        """Escalera de estrategias de cliente adaptada a la sesion disponible.
+
+        Con sesion se usa la lista autenticada (incluye ``web_creator``, que
+        exige iniciar sesion); sin sesion, la anonima.
+        """
+        strategies = list(self.CLIENT_STRATEGIES)
+        _, browser, _, _ = self._resolve_cookie_source(
+            disable_browser_cookies=disable_browser_cookies,
+            browser_override=browser_override,
+        )
+        if browser:
+            strategies[0] = get_fallback_clients(authenticated=True)
+        return strategies
 
     def _build_ydl_opts(
         self,
@@ -144,29 +242,29 @@ class BasePlatformAdapter(IPlatformAdapter):
         except Exception:
             pass
 
-        node_path = shutil.which("node")
-        if not node_path:
-            for candidate in [
-                r"C:\Program Files\nodejs\node.exe",
-                r"C:\Program Files (x86)\nodejs\node.exe",
-                os.path.expandvars(r"%LOCALAPPDATA%\Programs\node\node.exe"),
-            ]:
-                if os.path.exists(candidate):
-                    node_path = candidate
-                    break
-        if node_path:
-            ydl_opts["js_runtimes"] = {"node": {"path": node_path}}
-        elif shutil.which("deno"):
-            ydl_opts["js_runtimes"] = {"deno": {}}
+        js_runtimes = self._detect_js_runtimes()
+        if js_runtimes:
+            ydl_opts["js_runtimes"] = js_runtimes
 
-        if self.cookiefile and os.path.isfile(self.cookiefile):
-            ydl_opts["cookiefile"] = self.cookiefile
+        cookiefile, browser, profile, session = self._resolve_cookie_source(
+            disable_browser_cookies=disable_browser_cookies,
+            browser_override=browser_override,
+        )
+        if cookiefile:
+            ydl_opts["cookiefile"] = cookiefile
+            self._session_linked = False
+        elif browser:
+            # yt-dlp acepta (navegador, perfil, keyring, contenedor). Indicar el
+            # perfil evita que yt-dlp elija otro por su cuenta.
+            ydl_opts["cookiesfrombrowser"] = (browser, profile) if profile else (browser,)
+            self._session_linked = (
+                session is not None
+                and browser == session.browser
+                and browser_override is None
+                and not self.cookies_from_browser
+            )
         else:
-            browser = browser_override or self.cookies_from_browser
-            if disable_browser_cookies:
-                browser = None
-            if browser:
-                ydl_opts["cookiesfrombrowser"] = (browser,)
+            self._session_linked = False
 
         # La clase base es agnóstica de plataforma: solo aplica `player_client`
         # cuando la estrategia lo pide. La política completa de YouTube
@@ -258,6 +356,31 @@ class BasePlatformAdapter(IPlatformAdapter):
             return True
         return bool(self.cookies_from_browser)
 
+    def _build_session_status(self) -> SessionStatus:
+        """Describe el estado de la sesion para la interfaz.
+
+        La app vincula la sesion del navegador de forma automatica; este estado
+        es lo que la vista muestra en lugar de pedir un cookies.txt a mano.
+        """
+        session = self._resolve_session()
+        if self._session_linked and session is not None:
+            return SessionStatus(
+                state=SessionState.LINKED,
+                browser=session.browser,
+                profile=session.profile or "",
+            )
+        if session is not None:
+            return SessionStatus(
+                state=SessionState.BLOCKED if session.locked else SessionState.UNAVAILABLE,
+                browser=session.browser,
+                profile=session.profile or "",
+            )
+        if self.cookies_from_browser:
+            return SessionStatus(state=SessionState.BLOCKED, browser=self.cookies_from_browser)
+        if self.cookiefile and os.path.isfile(self.cookiefile):
+            return SessionStatus(state=SessionState.LINKED)
+        return SessionStatus(state=SessionState.UNAVAILABLE)
+
     @staticmethod
     def _is_cookie_recoverable(errors: List[str], plat_name: str) -> bool:
         """Indica si algún fallo se puede recuperar aportando una sesión con cookies.
@@ -291,13 +414,14 @@ class BasePlatformAdapter(IPlatformAdapter):
 
         Capas de recuperación, en orden:
 
-        1. **Estrategias de cliente** (fallback nativo de yt-dlp) con la
-           configuración de cookies actual.
+        1. **Sesión automática + estrategias de cliente**: si el usuario no ha
+           configurado cookies, se vincula automáticamente la sesión del
+           navegador detectado (perfil activo y almacén de cookies legible) y
+           se prueban las estrategias de cliente de YouTube.
         2. **Capa 2 (cookies automáticas)**: si el fallo es recuperable con
            cookies (bot-check, restricción de edad, "inicia sesión") y no hay
            ninguna cookie configurada, se reintenta con la sesión del
-           navegador detectado automáticamente. Es la misma lógica que ya
-           aplica el motor de descarga, aplicada también al análisis.
+           navegador detectado automáticamente.
         3. **Degradación**: si el navegador está abierto y su almacén de
            cookies no se puede leer, se reintenta sin cookies para no perder
            el contenido público.
@@ -312,7 +436,9 @@ class BasePlatformAdapter(IPlatformAdapter):
 
         plat_name = url.detect_platform()
         is_youtube = plat_name == "YouTube"
-        strategies: List[Optional[List[str]]] = self.CLIENT_STRATEGIES if is_youtube else [None]
+        strategies: List[Optional[List[str]]] = (
+            self._client_strategies() if is_youtube else [None]
+        )
 
         chosen = self._run_strategies(url, strategies, errors)
         if chosen is not None:
@@ -321,16 +447,22 @@ class BasePlatformAdapter(IPlatformAdapter):
         # --- Capa 2: reintento con la sesión del navegador detectado ---
         auto_browser: Optional[str] = None
         if not self._has_effective_cookies() and self._is_cookie_recoverable(errors, plat_name):
-            auto_browser = get_first_available_browser()
-            if auto_browser:
+            session = self._resolve_session()
+            auto_browser = session.browser if session else get_first_available_browser()
+            # Si la sesion automatica ya se aplico en la primera pasada, repetir
+            # con el mismo navegador solo duplica la espera.
+            if auto_browser and not self._session_linked:
                 logger.info(
                     "Reintentando el análisis con la sesión del navegador '%s' "
                     "(el fallo es recuperable con cookies).",
                     auto_browser,
                 )
+                retry_strategies: List[Optional[List[str]]] = (
+                    self._client_strategies(browser_override=auto_browser) if is_youtube else [None]
+                )
                 chosen = self._run_strategies(
                     url,
-                    strategies[: self.COOKIE_RETRY_STRATEGIES],
+                    retry_strategies[: self.COOKIE_RETRY_STRATEGIES],
                     errors,
                     browser_override=auto_browser,
                 )
@@ -341,18 +473,22 @@ class BasePlatformAdapter(IPlatformAdapter):
 
         # Si falló por bloqueo/encriptación del navegador de cookies, reintentar sin cookies del navegador
         # para no romper videos públicos si el usuario dejó Chrome/Edge seleccionado con el navegador abierto.
-        if has_cookie_err and self.cookies_from_browser:
+        if has_cookie_err and (self.cookies_from_browser or self._session_linked):
             retry_errors: List[str] = []
             retry_info = self._run_strategies(
                 url,
-                strategies,
+                self._client_strategies(disable_browser_cookies=True) if is_youtube else [None],
                 retry_errors,
                 disable_browser_cookies=True,
             )
             if retry_info is not None:
+                browser_used = self.cookies_from_browser or (
+                    self._session.browser if self._session else None
+                )
                 retry_info["_warning_message"] = (
-                    f"No se pudieron leer las cookies de '{self.cookies_from_browser}' (el navegador está abierto en Windows). "
-                    "Se muestran calidades públicas. Cierra el navegador por completo o utiliza un archivo cookies.txt para desbloquear 1080p y 4K."
+                    f"No se pudieron leer las cookies de '{browser_used}' (el navegador está abierto en Windows). "
+                    "Se muestran calidades públicas. Cierra el navegador por completo para que la app "
+                    "vincule tu sesión automáticamente."
                 )
                 return retry_info
 
@@ -365,7 +501,7 @@ class BasePlatformAdapter(IPlatformAdapter):
         if has_cookie_err and browser_used:
             clean_msg = (
                 f"No se pudieron leer las cookies de '{browser_used}' (el navegador está abierto o protegido por Windows). "
-                "Cierra el navegador por completo o utiliza un archivo cookies.txt en la pestaña Configuración."
+                "Cierra el navegador por completo para que la app vincule tu sesión automáticamente."
             )
         elif is_age_restricted:
             clean_msg = (
@@ -391,12 +527,12 @@ class BasePlatformAdapter(IPlatformAdapter):
         if auto_browser:
             return (
                 f"Se intentó usar automáticamente la sesión del navegador '{auto_browser}' y no fue suficiente. "
-                "Cierra el navegador por completo o carga un archivo cookies.txt en Configuración "
-                "(sección 'Avanzado (Sesión y Cookies)')."
+                "Cierra el navegador por completo (Windows bloquea su almacén de cookies mientras está abierto) "
+                "o carga un archivo cookies.txt en Configuración (sección 'Avanzado (Sesión y Cookies)')."
             )
         if not self._has_effective_cookies():
             return (
-                "No se encontró ningún navegador en el sistema del que tomar la sesión automáticamente: "
+                "No se encontró ningún navegador con perfil activo del que tomar la sesión automáticamente: "
                 "carga un archivo cookies.txt o selecciona tu navegador en Configuración "
                 "(sección 'Avanzado (Sesión y Cookies)')."
             )
@@ -446,6 +582,7 @@ class BasePlatformAdapter(IPlatformAdapter):
             formats=formats_list,
             subtitles=subtitles_list,
             warning_message=warning_msg,
+            session_status=self._build_session_status(),
         )
 
     def analyze_playlist(self, url: Url) -> PlaylistMetadata:

@@ -102,6 +102,30 @@ def pytest_sessionfinish(session: object, exitstatus: int) -> None:  # noqa: ARG
     _cleanup_qt_widgets()
 
 
+@pytest.fixture(autouse=True)
+def _no_automatic_browser_session(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Desactiva la detección automática de sesión del navegador.
+
+    La app vincula sola la sesión del navegador detectado (perfil activo y
+    almacén de cookies legible). Eso depende del estado de la MÁQUINA: si el
+    navegador del equipo está abierto, Windows bloquea su almacén y la app
+    degrada a la vía anónima; si está cerrado, lo vincula. Sin este parche,
+    la misma suite daría resultados distintos en cada equipo.
+
+    Los tests que sí necesitan la sesión la activan explícitamente con su
+    propio `monkeypatch.setattr`, que se aplica después y prevalece.
+    """
+    monkeypatch.setattr(
+        "src.infrastructure.adapters.platforms.base_platform_adapter.detect_active_browser_session",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "src.infrastructure.adapters.download.ytdlp_download_engine.detect_active_browser_session",
+        lambda *args, **kwargs: None,
+    )
+    yield
+
+
 @pytest.fixture(scope="session")
 def qapp() -> Iterator["object"]:
     """Instancia única de QApplication compartida por toda la sesión de pruebas."""

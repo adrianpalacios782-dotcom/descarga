@@ -13,6 +13,10 @@ from src.infrastructure.adapters.platforms.youtube_client_strategy import (
 class YouTubeAdapter(BasePlatformAdapter):
     """Adaptador de infraestructura específico para extraer contenido de YouTube."""
 
+    #: YouTube es la plataforma donde la sesion automatica es decisiva: sin ella
+    #: los clientes con PO token devuelven como maximo 360p.
+    AUTOMATIC_SESSION_ENABLED: bool = True
+
     def detect(self, url: Url) -> bool:
         return url.detect_platform() == "YouTube"
 
@@ -34,11 +38,12 @@ class YouTubeAdapter(BasePlatformAdapter):
            que yt-dlp prueba EN ORDEN dentro de una sola extracción y cuyos
            formatos fusiona. Sin esta lista, yt-dlp usa sus defaults
            (``visionos`` + ``web``), que exigen PO token y devuelven como
-           máximo 360p en visita anónima.
-        2. ``player_skip``: en la vía anónima se saltan la página inicial y el
-           ``ytcfg`` por cliente, que son las peticiones que devuelven la
-           respuesta degradada. Con cookies NO se saltan: la página aporta el
-           ``player_response`` y el ``visitor_data`` de mayor calidad.
+           máximo 360p en visita anónima. El cliente que rompe ese tope es
+           ``web_embedded``, que va el primero en la lista.
+        2. ``player_skip``: saltos del extractor. Por defecto NO se salta nada:
+           medido, saltarse el ``ytcfg`` destruye el ladder completo (error
+           152) y saltarse la página_initial elimina el ``visitor_data`` que
+           necesitan los clientes autenticados.
         3. ``po_token`` / ``visitor_data``: credenciales de sesión de YouTube.
            Sin ellos los clientes "web"/"tv" responden con storyboards en vez
            de DASH completo. Se inyectan como extractor_args, que es donde
@@ -53,8 +58,7 @@ class YouTubeAdapter(BasePlatformAdapter):
         extractor_args = dict(ydl_opts.get("extractor_args") or {})
         youtube_args = dict(extractor_args.get(YOUTUBE_NAMESPACE) or {})
 
-        anonymous = not ("cookiefile" in ydl_opts or "cookiesfrombrowser" in ydl_opts)
-        youtube_args.update(build_youtube_extractor_args(player_clients, anonymous=anonymous))
+        youtube_args.update(build_youtube_extractor_args(player_clients))
 
         if self.po_token:
             youtube_args["po_token"] = self._po_token_entries(player_clients)

@@ -32,12 +32,15 @@ from src.infrastructure.adapters.platforms.youtube_adapter import YouTubeAdapter
 
 class TestClientStrategies:
 
-    def test_ios_and_embedded_tv_clients_are_integrated(self) -> None:
+    def test_ios_and_embedded_clients_are_integrated(self) -> None:
         strategies = BasePlatformAdapter.CLIENT_STRATEGIES
         flat = [c for s in strategies for c in (s or [])]
         assert "ios" in flat, "El cliente iOS debe estar en las estrategias"
-        assert "tv_simply" in flat, "El cliente TV embebido (tv_simply) debe estar en las estrategias"
-        assert "tv_downgraded" in flat, "El cliente TV sin PO token (tv_downgraded) debe estar en las estrategias"
+        assert "web_embedded" in flat, (
+            "El cliente de embed (web_embedded) debe estar en las estrategias: "
+            "es el que entrega el ladder completo sin PO token"
+        )
+        assert "android" in flat, "El cliente Android debe estar en las estrategias"
         # "tv_embedded" no existe en yt-dlp 2026.x: no debe volver a colarse.
         assert "tv_embedded" not in flat
 

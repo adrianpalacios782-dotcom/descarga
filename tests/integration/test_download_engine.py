@@ -17,7 +17,6 @@ from src.domain.value_objects.media_id import MediaId
 from src.domain.value_objects.url import Url
 from src.infrastructure.adapters.download.ytdlp_download_engine import YtDlpDownloadEngine
 from src.infrastructure.adapters.platforms.youtube_client_strategy import (
-    DEFAULT_PLAYER_SKIP,
     NATIVE_FALLBACK_CLIENTS,
 )
 from src.infrastructure.event_bus.in_process_event_bus import InProcessEventBus
@@ -418,7 +417,8 @@ class TestYtDlpDownloadEngine:
         assert probe_opts["format"] == "all"
         probe_youtube = (probe_opts.get("extractor_args") or {}).get("youtube") or {}
         assert probe_youtube.get("player_client") == list(NATIVE_FALLBACK_CLIENTS)
-        assert probe_youtube.get("player_skip") == list(DEFAULT_PLAYER_SKIP)
+        # Medido: saltar configs/initial_data destruye el ladder de YouTube.
+        assert "player_skip" not in probe_youtube
 
     def test_360p_request(self, tmp_path) -> None:
         seen_opts = {}
@@ -853,7 +853,7 @@ class TestAntiBotClientFallback:
         engine.download(task)
 
         assert _wait_for(lambda: task.status == DownloadState.COMPLETED)
-        assert calls == [NATIVE_KEY, None, "tv_downgraded"]
+        assert calls == [NATIVE_KEY, None, "web_embedded"]
         assert os.path.exists(dest_file)
 
     def test_download_fails_after_all_client_strategies_exhausted(self, tmp_path, monkeypatch) -> None:
